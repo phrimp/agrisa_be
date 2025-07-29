@@ -1,7 +1,7 @@
 services:
   # Traefik API Gateway
   traefik:
-    image: traefik:3.3
+    image: traefik:latest
     container_name: agrisa-traefik
     restart: unless-stopped
     ports:
@@ -19,7 +19,10 @@ services:
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
-      # RabbitMQ Message Broker
+    networks:
+      - traefik-net
+
+  # RabbitMQ Message Broker
   rabbitmq:
     image: rabbitmq:3-management
     container_name: agrisa-rabbitmq
@@ -42,9 +45,6 @@ services:
       retries: 3
     labels:
       - "traefik.enable=false"
-
-    networks:
-      - traefik-net
 
   # MongoDB Service
   mongodb:
@@ -69,6 +69,37 @@ services:
       retries: 3
     labels:
       - "traefik.enable=false"
+
+  # MongoDB Express - Web-based MongoDB admin interface
+  mongo-express:
+    image: mongo-express:latest
+    container_name: agrisa-mongo-express
+    restart: unless-stopped
+    ports:
+      - "${MONGO_EXPRESS_PORT:-8081}:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USERNAME:-root}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PASSWORD:-example}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-example}@mongodb:27017/
+      ME_CONFIG_MONGODB_SERVER: mongodb
+      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USERNAME:-admin}
+      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD:-pass}
+      ME_CONFIG_SITE_BASEURL: ${MONGO_EXPRESS_BASEURL:-/}
+    networks:
+      - traefik-net
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mongo-express.rule=Host(`mongo-express.${DOMAIN:-localhost}`)"
+      - "traefik.http.routers.mongo-express.entrypoints=web"
+      - "traefik.http.services.mongo-express.loadbalancer.server.port=8081"
 
   # Redis Service
   redis:
@@ -96,7 +127,7 @@ services:
 
   # PostgreSQL with PostGIS extension
   postgres:
-    image: postgres/postgis:17-master
+    image: postgis/postgis:17-master
     container_name: agrisa-postgres
     restart: unless-stopped
     ports:
