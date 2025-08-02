@@ -1,0 +1,42 @@
+:80 {
+    @options method OPTIONS
+    @local_origin header Origin "http://localhost:8081"
+    @github_origin header Origin "https://thinhphoenix.github.io"
+    
+    # Handle OPTIONS requests first (before reverse proxy)
+    handle @options {
+        header @local_origin Access-Control-Allow-Origin "http://localhost:8081"
+        header @github_origin Access-Control-Allow-Origin "https://thinhphoenix.github.io"
+        header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS"
+        header Access-Control-Allow-Headers "Content-Type, Authorization, X-Requested-With"
+        header Access-Control-Allow-Credentials "true"
+        header Access-Control-Max-Age "86400"
+        header Vary "Origin"
+        respond 204
+    }
+    
+    # Set CORS headers for all responses
+    header @local_origin Access-Control-Allow-Origin "http://localhost:8081"
+    header @local_origin Access-Control-Allow-Credentials "true"
+    header @local_origin Vary "Origin"
+    
+    header @github_origin Access-Control-Allow-Origin "https://thinhphoenix.github.io"
+    header @github_origin Access-Control-Allow-Credentials "true"
+    header @github_origin Vary "Origin"
+    
+    # Reverse proxy routes
+    handle_path /packager* {
+        reverse_proxy packager:3000
+    }
+    handle_path /cloud* {
+        reverse_proxy cloud:7777
+    }
+    handle_path /* {
+        reverse_proxy server:8080
+    }
+    
+    log {
+        output stdout
+        format console
+    }
+}
