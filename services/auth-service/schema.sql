@@ -148,7 +148,7 @@ CREATE TABLE password_history (
 
 CREATE INDEX idx_users_phone ON users(phone_number);
 CREATE INDEX idx_users_email ON users(email);
-CREATE INDEX idx_users_vietnamese_id ON users(vietnamese_id);
+CREATE INDEX idx_users_national_id ON users(national_id);
 CREATE INDEX idx_users_status ON users(status);
 
 -- User roles indexes

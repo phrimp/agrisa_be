@@ -8,9 +8,17 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	_ "github.com/lib/pq"
 )
 
 func setupLogging() (*os.File, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Recovered from panic: %v\n", r)
+		}
+	}()
+
 	logDir := filepath.Join("/agrisa", "log", "auth_service")
 	err := os.MkdirAll(logDir, 0755)
 	if err != nil {
@@ -44,6 +52,6 @@ func main() {
 	db, err := postgres.ConnectAndCreateDB(cfg.PostgresCfg)
 	if err != nil {
 		log.Printf("error connect to database: %s", err)
-		go postgres.RetryConnectOnFailed(30*time.Second, db, cfg.PostgresCfg)
+		go postgres.RetryConnectOnFailed(30*time.Second, &db, cfg.PostgresCfg)
 	}
 }

@@ -7,6 +7,7 @@ type AuthServiceConfig struct {
 	PostgresCfg PostgresConfig
 	RabbitMQCfg RabbitMQConfig
 	AuthCfg     AuthConfig
+	RedisCfg    RedisConfig
 }
 
 type PostgresConfig struct {
@@ -23,8 +24,14 @@ type RabbitMQConfig struct {
 	Port     string
 }
 
+type RedisConfig struct {
+	Address  string
+	Password string
+	DB       int
+}
+
 type AuthConfig struct {
-	JWTSecrect string
+	JWTSecret string
 }
 
 func New() *AuthServiceConfig {
@@ -43,7 +50,7 @@ func New() *AuthServiceConfig {
 			Port:     os.Getenv("RABBITMQ_PORT"),
 		},
 		AuthCfg: AuthConfig{
-			JWTSecrect: os.Getenv("JWT_SECRECT"),
+			JWTSecret: os.Getenv("JWT_SECRECT"),
 		},
 	}
 }

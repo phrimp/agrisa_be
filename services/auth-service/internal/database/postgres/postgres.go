@@ -56,21 +56,25 @@ func ConnectAndCreateDB(cfg config.PostgresConfig) (*sqlx.DB, error) {
 	return db, nil
 }
 
-func RetryConnectOnFailed(wait_amount time.Duration, db *sqlx.DB, cfg config.PostgresConfig) {
+func RetryConnectOnFailed(wait_amount time.Duration, db **sqlx.DB, cfg config.PostgresConfig) {
 	if DB_Status {
 		log.Printf("false database lost connnection alert! abort retry")
 		return
 	}
-	err := db.Ping()
+	cur_db := *db
+	err := cur_db.Ping()
 	if err != nil {
 		log.Printf("failed to ping target database: %s, retry db connection\n", err)
 	}
 
-	db, err = ConnectAndCreateDB(cfg)
+	newDB, err := ConnectAndCreateDB(cfg)
 	if err == nil {
+		*db = newDB
 		log.Printf("database retry connection successfully\n")
 		return
 	}
 	log.Printf("failed to retry connect database: %s, next retry in %v\n", err, wait_amount)
 	time.Sleep(wait_amount)
+
+	RetryConnectOnFailed(wait_amount, db, cfg)
 }
