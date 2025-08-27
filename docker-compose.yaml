@@ -19,6 +19,9 @@ services:
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      # Global CORS middleware configuration
+      - --entrypoints.web.http.middlewares=global-cors@docker
+      - --entrypoints.websecure.http.middlewares=global-cors@docker
     networks:
       - traefik-net
 
@@ -44,7 +47,18 @@ services:
       timeout: 5s
       retries: 3
     labels:
-      - "traefik.enable=false"
+      - "traefik.enable=true"
+      # Global CORS middleware definition
+      - "traefik.http.middlewares.global-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
+      - "traefik.http.middlewares.global-cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.global-cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.global-cors.headers.accesscontrolmaxage=86400"
+      - "traefik.http.middlewares.global-cors.headers.addvaryheader=true"
+      # CORS preflight router for OPTIONS requests
+      - "traefik.http.routers.cors-preflight.rule=Method(`OPTIONS`)"
+      - "traefik.http.routers.cors-preflight.middlewares=global-cors"
+      - "traefik.http.routers.cors-preflight.entrypoints=web,websecure"
+      - "traefik.http.routers.cors-preflight.service=noop@internal"
 
   # MongoDB Service
   mongodb:
@@ -99,6 +113,7 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.mongo-express.rule=Host(`mongo-express.${DOMAIN:-localhost}`)"
       - "traefik.http.routers.mongo-express.entrypoints=web"
+      - "traefik.http.routers.mongo-express.middlewares=global-cors"
       - "traefik.http.services.mongo-express.loadbalancer.server.port=8081"
 
   # Redis Service
