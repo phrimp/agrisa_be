@@ -1,7 +1,7 @@
 package utils
 
 import (
-	"auth-service/internal/minio"
+	"auth-service/internal/database/minio"
 	"context"
 	"fmt"
 	"log"

@@ -2,7 +2,7 @@ package services
 
 import (
 	"auth-service/internal/config"
-	"auth-service/internal/minio"
+	"auth-service/internal/database/minio"
 	"auth-service/internal/models"
 	"auth-service/internal/repository"
 	"auth-service/utils"
