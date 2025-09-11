@@ -23,6 +23,8 @@ type IUserRepository interface {
 	VerifyPhone(userID string) error
 	DeleteUser(userID string) error
 	SoftDeleteUser(userID string) error
+	UpdateUserNationalID(userID string, nationalID string) error
+	UpdateUserFaceLiveness(userID string, faceLiveness string) error
 }
 
 type UserRepository struct {
@@ -271,4 +273,50 @@ func (r *UserRepository) hashPassword(password string) (string, error) {
 func (r *UserRepository) checkPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
+}
+
+func (r *UserRepository) UpdateUserNationalID(userID string, nationalID string) error {
+	query := `
+		UPDATE users
+		SET national_id = $1,
+		    updated_at = $2
+		WHERE id = $3
+	`
+	result, err := r.db.Exec(query, nationalID, time.Now(), userID)
+	if err != nil {
+		return fmt.Errorf("failed to update national_id for user %s: %w", userID, err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("no user found with id %s", userID)
+	}
+
+	return nil
+}
+
+func (r *UserRepository) UpdateUserFaceLiveness(userID string, faceLiveness string) error {
+	query := `
+		UPDATE users
+		SET face_liveness = $1,
+		    updated_at = now()
+		WHERE id = $2
+	`
+	result, err := r.db.Exec(query, faceLiveness, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update face_liveness for user %s: %w", userID, err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("no user found with id %s", userID)
+	}
+
+	return nil
 }

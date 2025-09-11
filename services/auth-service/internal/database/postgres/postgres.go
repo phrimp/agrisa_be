@@ -16,6 +16,11 @@ func ConnectAndCreateDB(cfg config.PostgresConfig) (*sqlx.DB, error) {
 	defaultConnStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=auth_service sslmode=disable",
 		cfg.Host, cfg.Port, cfg.Username, cfg.Password)
 
+	// Logging the connection string values (excluding password for security)
+	log.Printf("Connecting to PostgreSQL with: host=%s, port=%s, user=%s, dbname=auth_service, password=%s",
+
+		cfg.Host, cfg.Port, cfg.Username, cfg.Password)
+
 	defaultDB, err := sql.Open("postgres", defaultConnStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to default postgres db: %w", err)
@@ -61,10 +66,18 @@ func RetryConnectOnFailed(wait_amount time.Duration, db **sqlx.DB, cfg config.Po
 		log.Printf("false database lost connnection alert! abort retry")
 		return
 	}
-	cur_db := *db
-	err := cur_db.Ping()
-	if err != nil {
+
+	// Check if *db is nil before using it
+	if *db != nil {
+		cur_db := *db
+		err := cur_db.Ping()
+		if err == nil {
+			log.Printf("database connection is healthy, no retry needed")
+			return
+		}
 		log.Printf("failed to ping target database: %s, retry db connection\n", err)
+	} else {
+		log.Printf("database connection is nil, attempting to reconnect...")
 	}
 
 	newDB, err := ConnectAndCreateDB(cfg)
