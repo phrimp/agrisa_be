@@ -19,8 +19,28 @@ services:
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+      # Global CORS middleware applied to all services automatically
+      - --entrypoints.web.http.middlewares=global-cors@docker
+      - --entrypoints.websecure.http.middlewares=global-cors@docker
     networks:
       - traefik-net
+
+  # Global CORS Middleware Configuration Service
+  cors-middleware:
+    image: traefik/whoami
+    container_name: agrisa-cors-config
+    restart: unless-stopped
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=false"
+      # Global CORS middleware definition - applied automatically to all services
+      - "traefik.http.middlewares.global-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
+      - "traefik.http.middlewares.global-cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.global-cors.headers.accesscontrolalloworiginlist=*"
+      # - "traefik.http.middlewares.global-cors.headers.accesscontrolalloworiginlist=https://agrisa.phrimp.io.vn"
+      - "traefik.http.middlewares.global-cors.headers.accesscontrolmaxage=86400"
+      - "traefik.http.middlewares.global-cors.headers.addvaryheader=true"
 
   # RabbitMQ Message Broker
   rabbitmq:
@@ -28,7 +48,7 @@ services:
     container_name: agrisa-rabbitmq
     restart: unless-stopped
     ports:
-      - "${RABBITMQ_PORT:-5672}:5672"
+      - ":5672"
       - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
@@ -52,7 +72,7 @@ services:
     container_name: agrisa-mongodb
     restart: unless-stopped
     ports:
-      - "${MONGODB_PORT:-27017}:27017"
+      - ":27017"
     environment:
       MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME:-root}
       MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-example}
@@ -76,7 +96,7 @@ services:
     container_name: agrisa-mongo-express
     restart: unless-stopped
     ports:
-      - "${MONGO_EXPRESS_PORT:-8081}:8081"
+      - ":8081"
     environment:
       ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USERNAME:-root}
       ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PASSWORD:-example}
@@ -107,7 +127,7 @@ services:
     container_name: agrisa-redis
     restart: unless-stopped
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - ":6379"
     volumes:
       - redis_data:/data
       - ./logs/redis:/var/log/redis
@@ -131,7 +151,7 @@ services:
     container_name: agrisa-postgres
     restart: unless-stopped
     ports:
-      - "${POSTGRES_PORT:-9406}:9406"
+      - ":5432"
     environment:
       POSTGRES_DB: ${POSTGRES_DEFAULT_DB:-agrisa}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
