@@ -8,10 +8,13 @@ import (
 	"auth-service/utils"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"mime/multipart"
 	"net/http"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,6 +22,8 @@ import (
 )
 
 type IUserService interface {
+	RegisterNewUser(phone, email, password, nationalID string, phoneVerificationStatus bool) (*models.User, error)
+
 	GetUserEkycProgressByUserID(userID string) (*models.UserEkycProgress, error)
 	UploadToMinIO(c *gin.Context, file io.Reader, header *multipart.FileHeader, serviceName string) error
 	ProcessAndUploadFiles(files map[string][]*multipart.FileHeader, serviceName string, allowedExts []string, maxMB int64) ([]utils.FileInfo, error)
@@ -64,7 +69,8 @@ func (s *UserService) UploadToMinIO(c *gin.Context, file io.Reader, header *mult
 }
 
 func (s *UserService) ProcessAndUploadFiles(files map[string][]*multipart.FileHeader,
-	serviceName string, allowedExts []string, maxMB int64) ([]utils.FileInfo, error) {
+	serviceName string, allowedExts []string, maxMB int64,
+) ([]utils.FileInfo, error) {
 	return s.utils.ProcessFiles(s.minioClient, files, serviceName, allowedExts, maxMB)
 }
 
@@ -602,7 +608,7 @@ func (s *UserService) VerifyFaceLiveness(form *multipart.Form) (interface{}, err
 		}, nil
 	}
 
-	//getimage file
+	// getimage file
 	images := form.File["cmnd"]
 	if len(images) == 0 {
 		log.Printf("Error: failed to get cmnd file")
@@ -781,4 +787,99 @@ func (s *UserService) VerifyFaceLiveness(form *multipart.Form) (interface{}, err
 	}
 
 	return utils.CreateSuccessResponse(ekycProgressUpdated), nil
+}
+
+func (s *UserService) RegisterNewUser(phone, email, password, nationalID string, phoneVerificationStatus bool) (*models.User, error) {
+	email_regex_pattern := `^[a-zA-Z0-9!#$%&'*+/=?^_` + "`" + `{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_` + "`" + `{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$`
+
+	regex, err := regexp.Compile(email_regex_pattern)
+	if err != nil {
+		return nil, fmt.Errorf("error: compiling regex: %s", err)
+	}
+
+	if !regex.MatchString(email) {
+		return nil, fmt.Errorf("error: email format incorrect")
+	}
+
+	phone_regex_patterns := []string{
+		`^\+84[3-9]\d{8}$`, // +84 + mobile (9 digits total after +84)
+		`^\+84[1-8]\d{9}$`, // +84 + landline (10 digits total after +84)
+		`^0[1-9]\d{8,9}$`,  // Domestic format: 0 + 9-10 digits
+		`^84[3-9]\d{8}$`,   // 84 without + (mobile)
+		`^84[1-8]\d{9}$`,   // 84 without + (landline)
+	}
+	isValidPhone := false
+
+	for _, pattern := range phone_regex_patterns {
+		if matched, _ := regexp.MatchString(pattern, phone); matched {
+			isValidPhone = true
+			break
+		}
+	}
+	if !isValidPhone {
+		return nil, fmt.Errorf("error: phone number format incorrect")
+	}
+
+	passwordNumberRegex := regexp.MustCompile(`[0-9]`)
+	passwordLetterRegex := regexp.MustCompile(`[a-zA-Z]`)
+	passwordSpecialRegex := regexp.MustCompile(`[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~` + "`" + `]`)
+
+	if len(password) < 8 || !passwordNumberRegex.MatchString(password) || !passwordLetterRegex.MatchString(password) || !passwordSpecialRegex.MatchString(password) {
+		return nil, fmt.Errorf("error: password format incorrect")
+	}
+
+	if !isValidVietnameseCCCD(nationalID) {
+		return nil, fmt.Errorf("error: cccd format incorrect")
+	}
+
+	newUser := models.User{
+		PhoneNumber:   phone,
+		Email:         email,
+		PasswordHash:  password,
+		NationalID:    nationalID,
+		Status:        models.UserStatusPendingVerification,
+		PhoneVerified: phoneVerificationStatus,
+	}
+	err = s.userRepo.CreateUser(&newUser)
+	if err != nil {
+		return nil, fmt.Errorf("error creating new user: %s", err)
+	}
+	// event here
+	//
+	return &newUser, nil
+}
+
+func isValidVietnameseCCCD(cccd string) bool {
+	pattern := `^([0-9]{3})([0-9])([0-9]{2})([0-9]{6})$`
+
+	// Clean input and validate pattern
+	cleanCCCD := regexp.MustCompile(`[^\d]`).ReplaceAllString(cccd, "")
+	regex := regexp.MustCompile(pattern)
+	matches := regex.FindStringSubmatch(cleanCCCD)
+
+	if len(matches) != 5 {
+		return false
+	}
+
+	province, _ := strconv.Atoi(matches[1])
+	centuryGender, _ := strconv.Atoi(matches[2])
+	birthYear, _ := strconv.Atoi(matches[3])
+
+	// Validate province code (001-096)
+	if province < 1 || province > 96 {
+		return false
+	}
+
+	// Validate century/gender code (0-9)
+	if centuryGender < 0 || centuryGender > 9 {
+		return false
+	}
+
+	// Calculate full birth year and validate
+	centuryBase := 1900 + (centuryGender/2)*100
+	fullYear := centuryBase + birthYear
+	currentYear := time.Now().Year()
+
+	// Check birth year is reasonable and person is at least 14
+	return fullYear >= 1900 && fullYear <= currentYear && (currentYear-fullYear) >= 14
 }

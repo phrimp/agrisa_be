@@ -5,7 +5,6 @@ import (
 	"auth-service/utils"
 	"bytes"
 	"io"
-	"io/ioutil"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -13,9 +12,11 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var fptEkycApiKey = "QNTT3cYDOpRhkZzNu11DPSPaYWeF6PVI"
-var baseURLProduction = "https://api.fpt.ai/vision/ekyc-be/"
-var baseURLStaging = "https://api.fpt.ai/vision/ekyc/be-stag/"
+var (
+	fptEkycApiKey     = "QNTT3cYDOpRhkZzNu11DPSPaYWeF6PVI"
+	baseURLProduction = "https://api.fpt.ai/vision/ekyc-be/"
+	baseURLStaging    = "https://api.fpt.ai/vision/ekyc/be-stag/"
+)
 
 type UserHandler struct {
 	userService services.IUserService
@@ -46,7 +47,6 @@ func RegisterRoutes(router *gin.Engine, userHandler *UserHandler) {
 	// For testing API
 	router.POST("/api/v1/auth/testing/upload", userHandler.UploadFileTestHandler)
 	router.POST("/api/v1/auth/testing/upload-multiple", userHandler.UploadMultipleFilesTestHandler)
-
 }
 
 type InitSessionRequest struct {
@@ -80,7 +80,8 @@ func (h *UserHandler) SessionInitHandler(c *gin.Context) {
 		return
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("Failed to read API A response: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
@@ -188,13 +189,11 @@ func (h *UserHandler) OcrHandler(c *gin.Context) {
 	// Read response body
 	bodyResp, _ := io.ReadAll(resp.Body)
 	c.Data(resp.StatusCode, "application/json", bodyResp)
-
 }
 
 func (h *UserHandler) GetUserEkycProgressByUserID(c *gin.Context) {
 	userID := c.Param("i")
 	userEkycProgress, err := h.userService.GetUserEkycProgressByUserID(userID)
-
 	if err != nil {
 		log.Println("internal error:", err)
 		c.JSON(http.StatusInternalServerError, gin.H{

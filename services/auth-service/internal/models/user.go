@@ -6,10 +6,10 @@ import (
 
 type User struct {
 	ID            string     `json:"id" db:"id"`
-	PhoneNumber   *string    `json:"phone_number" db:"phone_number"`
-	Email         *string    `json:"email" db:"email"`
+	PhoneNumber   string     `json:"phone_number" db:"phone_number"`
+	Email         string     `json:"email" db:"email"`
 	PasswordHash  string     `json:"-" db:"password_hash"`
-	NationalID    *string    `json:"-" db:"national_id"`
+	NationalID    string     `json:"-" db:"national_id"`
 	Status        UserStatus `json:"status" db:"status"`
 	EmailVerified bool       `json:"email_verified" db:"email_verified"`
 	PhoneVerified bool       `json:"phone_verified" db:"phone_verified"`
