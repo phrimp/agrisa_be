@@ -786,6 +786,14 @@ func (s *UserService) VerifyFaceLiveness(form *multipart.Form) (interface{}, err
 		return utils.CreateErrorResponse("INTERNAL_ERROR", "Failed to get updated ekyc progress"), nil
 	}
 
+	if ekycProgressUpdated.IsOcrDone && ekycProgressUpdated.IsFaceVerified {
+		errorUpdateUserEkycStatus := s.userRepo.UpdateUserKycStatus(userID, true)
+		if errorUpdateUserEkycStatus != nil {
+			log.Printf("Failed to update user status: %v", errorUpdateUserEkycStatus)
+			return utils.CreateErrorResponse("INTERNAL_ERROR", "Failed to update user status"), nil
+		}
+	}
+
 	return utils.CreateSuccessResponse(ekycProgressUpdated), nil
 }
 
