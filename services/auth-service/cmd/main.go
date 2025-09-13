@@ -2,9 +2,9 @@ package main
 
 import (
 	"auth-service/internal/config"
+	"auth-service/internal/database/minio"
 	"auth-service/internal/database/postgres"
 	"auth-service/internal/handlers"
-	"auth-service/internal/database/minio"
 	"auth-service/internal/repository"
 	"auth-service/internal/services"
 	"auth-service/utils"

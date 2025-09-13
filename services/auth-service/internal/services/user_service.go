@@ -1,6 +1,7 @@
 package services
 
 import (
+	agrisa_utils "agrisa_utils"
 	"auth-service/internal/config"
 	"auth-service/internal/database/minio"
 	"auth-service/internal/models"
@@ -14,8 +15,8 @@ import (
 	"mime/multipart"
 	"net/http"
 	"regexp"
-	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,6 +24,7 @@ import (
 
 type IUserService interface {
 	RegisterNewUser(phone, email, password, nationalID string, phoneVerificationStatus bool) (*models.User, error)
+	Login(email, phone, password string) (*models.User, error)
 
 	GetUserEkycProgressByUserID(userID string) (*models.UserEkycProgress, error)
 	UploadToMinIO(c *gin.Context, file io.Reader, header *multipart.FileHeader, serviceName string) error
@@ -38,6 +40,10 @@ type UserService struct {
 	utils            *utils.Utils
 	userCardRepo     repository.IUserCardRepository
 	ekycProgressRepo repository.IUserEkycProgressRepository
+	sessionService   *SessionService
+
+	globalLoginAttempt map[string]int
+	mu                 *sync.Mutex
 }
 
 func NewUserService(userRepo repository.IUserRepository, minioClient *minio.MinioClient, cfg *config.AuthServiceConfig, utils *utils.Utils, userCardRepo repository.IUserCardRepository, ekycProgressRepo repository.IUserEkycProgressRepository) IUserService {
@@ -48,6 +54,7 @@ func NewUserService(userRepo repository.IUserRepository, minioClient *minio.Mini
 		utils:            utils,
 		userCardRepo:     userCardRepo,
 		ekycProgressRepo: ekycProgressRepo,
+		mu:               &sync.Mutex{},
 	}
 }
 
@@ -790,34 +797,12 @@ func (s *UserService) VerifyFaceLiveness(form *multipart.Form) (interface{}, err
 }
 
 func (s *UserService) RegisterNewUser(phone, email, password, nationalID string, phoneVerificationStatus bool) (*models.User, error) {
-	email_regex_pattern := `^[a-zA-Z0-9!#$%&'*+/=?^_` + "`" + `{|}~-]+(?:\.[a-zA-Z0-9!#$%&'*+/=?^_` + "`" + `{|}~-]+)*@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?\.)+[a-zA-Z0-9](?:[a-zA-Z0-9-]*[a-zA-Z0-9])?$`
-
-	regex, err := regexp.Compile(email_regex_pattern)
-	if err != nil {
-		return nil, fmt.Errorf("error: compiling regex: %s", err)
+	if isvalid, err := agrisa_utils.ValidateEmail(email); !isvalid {
+		return nil, fmt.Errorf("error validating email: %s", err)
 	}
 
-	if !regex.MatchString(email) {
-		return nil, fmt.Errorf("error: email format incorrect")
-	}
-
-	phone_regex_patterns := []string{
-		`^\+84[3-9]\d{8}$`, // +84 + mobile (9 digits total after +84)
-		`^\+84[1-8]\d{9}$`, // +84 + landline (10 digits total after +84)
-		`^0[1-9]\d{8,9}$`,  // Domestic format: 0 + 9-10 digits
-		`^84[3-9]\d{8}$`,   // 84 without + (mobile)
-		`^84[1-8]\d{9}$`,   // 84 without + (landline)
-	}
-	isValidPhone := false
-
-	for _, pattern := range phone_regex_patterns {
-		if matched, _ := regexp.MatchString(pattern, phone); matched {
-			isValidPhone = true
-			break
-		}
-	}
-	if !isValidPhone {
-		return nil, fmt.Errorf("error: phone number format incorrect")
+	if isvalid, err := agrisa_utils.ValidatePhone(phone); !isvalid {
+		return nil, fmt.Errorf("error validating phone: %s", err)
 	}
 
 	passwordNumberRegex := regexp.MustCompile(`[0-9]`)
@@ -828,7 +813,7 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 		return nil, fmt.Errorf("error: password format incorrect")
 	}
 
-	if !isValidVietnameseCCCD(nationalID) {
+	if !agrisa_utils.ValidateCCCD(nationalID) {
 		return nil, fmt.Errorf("error: cccd format incorrect")
 	}
 
@@ -840,7 +825,7 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 		Status:        models.UserStatusPendingVerification,
 		PhoneVerified: phoneVerificationStatus,
 	}
-	err = s.userRepo.CreateUser(&newUser)
+	err := s.userRepo.CreateUser(&newUser)
 	if err != nil {
 		return nil, fmt.Errorf("error creating new user: %s", err)
 	}
@@ -849,37 +834,40 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 	return &newUser, nil
 }
 
-func isValidVietnameseCCCD(cccd string) bool {
-	pattern := `^([0-9]{3})([0-9])([0-9]{2})([0-9]{6})$`
-
-	// Clean input and validate pattern
-	cleanCCCD := regexp.MustCompile(`[^\d]`).ReplaceAllString(cccd, "")
-	regex := regexp.MustCompile(pattern)
-	matches := regex.FindStringSubmatch(cleanCCCD)
-
-	if len(matches) != 5 {
-		return false
+func (s *UserService) Login(email, phone, password string) (*models.User, error) {
+	if email != "" && phone != "" {
+		log.Println("SUSPICIOUS ACTIVITY DETECTED : email & phone present reached service layer and blocked")
+		return nil, fmt.Errorf("action forbidden")
+	}
+	var login_attempt_user *models.User
+	var err error
+	if email != "" {
+		login_attempt_user, err = s.userRepo.GetUserByEmail(email)
+		if err != nil {
+			log.Printf("user searching failed: %s \n", err)
+			return nil, fmt.Errorf("user searching failed: %s", err)
+		}
+	}
+	if phone != "" {
+		login_attempt_user, err = s.userRepo.GetUserByPhone(phone)
+		if err != nil {
+			log.Printf("user searching failed: %s \n", err)
+			return nil, fmt.Errorf("user searching failed: %s", err)
+		}
+	}
+	if login_attempt_user == nil {
+		return nil, fmt.Errorf("UNEXPECTED ERROR : user found but still null")
 	}
 
-	province, _ := strconv.Atoi(matches[1])
-	centuryGender, _ := strconv.Atoi(matches[2])
-	birthYear, _ := strconv.Atoi(matches[3])
-
-	// Validate province code (001-096)
-	if province < 1 || province > 96 {
-		return false
+	if !s.userRepo.CheckPasswordHash(password, login_attempt_user.PasswordHash) {
+		if s.globalLoginAttempt[login_attempt_user.ID] > 5 {
+			// event to notification service to send email/phone of suspicious login activities
+		}
+		if s.globalLoginAttempt[login_attempt_user.ID] > 10 {
+			return nil, fmt.Errorf("too many login attempts")
+		}
+		s.globalLoginAttempt[login_attempt_user.ID]++
+		return nil, fmt.Errorf("invalid password")
 	}
-
-	// Validate century/gender code (0-9)
-	if centuryGender < 0 || centuryGender > 9 {
-		return false
-	}
-
-	// Calculate full birth year and validate
-	centuryBase := 1900 + (centuryGender/2)*100
-	fullYear := centuryBase + birthYear
-	currentYear := time.Now().Year()
-
-	// Check birth year is reasonable and person is at least 14
-	return fullYear >= 1900 && fullYear <= currentYear && (currentYear-fullYear) >= 14
+	return login_attempt_user, nil
 }

@@ -1,6 +1,10 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+)
 
 type UserSession struct {
 	ID               string    `json:"id" db:"id"`
@@ -31,4 +35,13 @@ type APIKeyPermission struct {
 	APIKeyID       int       `json:"api_key_id" db:"api_key_id"`
 	PermissionName string    `json:"permission_name" db:"permission_name"`
 	CreatedAt      time.Time `json:"created_at" db:"created_at"`
+}
+
+type Claims struct {
+	jwt.RegisteredClaims
+	Id     string
+	UserID string
+	Email  string
+	Phone  string
+	Roles  []string
 }

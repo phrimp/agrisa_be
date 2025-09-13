@@ -18,7 +18,7 @@ type User struct {
 	UpdatedAt     time.Time  `json:"updated_at" db:"updated_at"`
 	LastLogin     *time.Time `json:"last_login" db:"last_login"`
 	LoginAttempts int        `json:"login_attempts" db:"login_attempts"`
-	LockedUntil   *time.Time `json:"locked_until" db:"locked_until"`
+	LockedUntil   int64      `json:"locked_until" db:"locked_until"`
 }
 
 type UserStatus string

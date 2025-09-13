@@ -25,6 +25,7 @@ type IUserRepository interface {
 	SoftDeleteUser(userID string) error
 	UpdateUserNationalID(userID string, nationalID string) error
 	UpdateUserFaceLiveness(userID string, faceLiveness string) error
+	CheckPasswordHash(password, hash string) bool
 }
 
 type UserRepository struct {
@@ -270,7 +271,7 @@ func (r *UserRepository) hashPassword(password string) (string, error) {
 	return string(bytes), err
 }
 
-func (r *UserRepository) checkPasswordHash(password, hash string) bool {
+func (r *UserRepository) CheckPasswordHash(password, hash string) bool {
 	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
 	return err == nil
 }
