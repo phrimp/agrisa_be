@@ -195,14 +195,16 @@ func (h *UserHandler) GetUserEkycProgressByUserID(c *gin.Context) {
 	userID := c.Param("i")
 	userEkycProgress, err := h.userService.GetUserEkycProgressByUserID(userID)
 	if err != nil {
+		if err.Error() == "user ekyc progress not found" {
+			c.JSON(http.StatusNotFound, utils.CreateErrorResponse("NOT_FOUND", "User ekyc progress not found"))
+			return
+		}
+
 		log.Println("internal error:", err)
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "internal_error",
-			"message": err.Error(),
-		})
+		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("INTERNAL_ERROR", "Internal server error"))
 		return
 	}
-	c.JSON(http.StatusOK, userEkycProgress)
+	c.JSON(http.StatusOK, utils.CreateSuccessResponse(userEkycProgress))
 }
 
 func (h *UserHandler) UploadFileTestHandler(c *gin.Context) {
