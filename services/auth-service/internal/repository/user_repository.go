@@ -26,6 +26,7 @@ type IUserRepository interface {
 	UpdateUserNationalID(userID string, nationalID string) error
 	UpdateUserFaceLiveness(userID string, faceLiveness string) error
 	CheckPasswordHash(password, hash string) bool
+	UpdateUserKycStatus(userID string, kycVerified bool) error
 }
 
 type UserRepository struct {
@@ -309,6 +310,29 @@ func (r *UserRepository) UpdateUserFaceLiveness(userID string, faceLiveness stri
 	result, err := r.db.Exec(query, faceLiveness, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update face_liveness for user %s: %w", userID, err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("no user found with id %s", userID)
+	}
+
+	return nil
+}
+
+func (r *UserRepository) UpdateUserKycStatus(userID string, kycVerified bool) error {
+	query := `
+		UPDATE users
+		SET kyc_verified = $1,
+		    updated_at = NOW()
+		WHERE id = $2
+	`
+	result, err := r.db.Exec(query, kycVerified, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update kyc_verified for user %s: %w", userID, err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
