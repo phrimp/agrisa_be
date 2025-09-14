@@ -1,17 +1,19 @@
 # Build stage
-FROM golang:1.23.4-alpine AS builder
+FROM golang:1.25.1-alpine AS builder
 
 # Set working directory
 WORKDIR /app
 
+COPY shared/modules /shared/modules
+
 # Copy go mod files
-COPY go.mod go.sum ./
+COPY services/auth-service/go.mod services/auth-service/go.sum ./
 
 # Download dependencies
 RUN go mod download
 
 # Copy source code
-COPY . .
+COPY services/auth-service/ .
 
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/main.go
