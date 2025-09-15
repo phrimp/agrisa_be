@@ -27,6 +27,7 @@ type IUserRepository interface {
 	UpdateUserFaceLiveness(userID string, faceLiveness string) error
 	CheckPasswordHash(password, hash string) bool
 	UpdateUserKycStatus(userID string, kycVerified bool) error
+	UpdateUserStatus(userID string, status models.UserStatus, lockedUntil *int64) error
 }
 
 type UserRepository struct {
@@ -333,6 +334,31 @@ func (r *UserRepository) UpdateUserKycStatus(userID string, kycVerified bool) er
 	result, err := r.db.Exec(query, kycVerified, userID)
 	if err != nil {
 		return fmt.Errorf("failed to update kyc_verified for user %s: %w", userID, err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+	if rowsAffected == 0 {
+		return fmt.Errorf("no user found with id %s", userID)
+	}
+
+	return nil
+}
+
+// UpdateUserStatus updates user status and optional locked_until timestamp
+func (r *UserRepository) UpdateUserStatus(userID string, status models.UserStatus, lockedUntil *int64) error {
+	query := `
+		UPDATE users
+		SET status = $1,
+		    locked_until = $2,
+		    updated_at = NOW()
+		WHERE id = $3
+	`
+	result, err := r.db.Exec(query, status, lockedUntil, userID)
+	if err != nil {
+		return fmt.Errorf("failed to update status for user %s: %w", userID, err)
 	}
 
 	rowsAffected, err := result.RowsAffected()

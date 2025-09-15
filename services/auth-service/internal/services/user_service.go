@@ -27,6 +27,9 @@ type IUserService interface {
 	RegisterNewUser(phone, email, password, nationalID string, phoneVerificationStatus bool) (*models.User, error)
 	Login(email, phone, password string, deviceInfo, ipAddress *string) (*models.User, *models.UserSession, error)
 
+	BanUser(userID string, until int64) error
+	UnbanUser(userID string) error
+
 	GetUserEkycProgressByUserID(userID string) (*models.UserEkycProgress, error)
 	UploadToMinIO(c *gin.Context, file io.Reader, header *multipart.FileHeader, serviceName string) error
 	ProcessAndUploadFiles(files map[string][]*multipart.FileHeader, serviceName string, allowedExts []string, maxMB int64) ([]utils.FileInfo, error)
@@ -51,16 +54,17 @@ type UserService struct {
 
 func NewUserService(userRepo repository.IUserRepository, minioClient *minio.MinioClient, cfg *config.AuthServiceConfig, utils *utils.Utils, userCardRepo repository.IUserCardRepository, ekycProgressRepo repository.IUserEkycProgressRepository, sessionService *SessionService, jwtService *JWTService, roleService *RoleService) IUserService {
 	return &UserService{
-		userRepo:         userRepo,
-		minioClient:      minioClient,
-		cfg:              cfg,
-		utils:            utils,
-		userCardRepo:     userCardRepo,
-		ekycProgressRepo: ekycProgressRepo,
-		sessionService:   sessionService,
-		jwtService:       jwtService,
-		roleService:      roleService,
-		mu:               &sync.Mutex{},
+		userRepo:           userRepo,
+		minioClient:        minioClient,
+		cfg:                cfg,
+		utils:              utils,
+		userCardRepo:       userCardRepo,
+		ekycProgressRepo:   ekycProgressRepo,
+		sessionService:     sessionService,
+		jwtService:         jwtService,
+		roleService:        roleService,
+		globalLoginAttempt: make(map[string]int),
+		mu:                 &sync.Mutex{},
 	}
 }
 
@@ -859,14 +863,14 @@ func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress
 		login_attempt_user, err = s.userRepo.GetUserByEmail(email)
 		if err != nil {
 			log.Printf("user searching failed: %s \n", err)
-			return nil, nil, fmt.Errorf("user searching failed: %s", err)
+			return nil, nil, fmt.Errorf("email or password incorrect: %s", err)
 		}
 	}
 	if phone != "" {
 		login_attempt_user, err = s.userRepo.GetUserByPhone(phone)
 		if err != nil {
 			log.Printf("user searching failed: %s \n", err)
-			return nil, nil, fmt.Errorf("user searching failed: %s", err)
+			return nil, nil, fmt.Errorf("phone number or password incorrect: %s", err)
 		}
 	}
 	if login_attempt_user == nil {
@@ -874,16 +878,40 @@ func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress
 	}
 
 	if !s.userRepo.CheckPasswordHash(password, login_attempt_user.PasswordHash) {
-		if s.globalLoginAttempt[login_attempt_user.ID] > 5 {
+		if s.globalLoginAttempt[login_attempt_user.ID]%5 == 0 {
 			// event to notification service to send email/phone of suspicious login activities
 		}
-		if s.globalLoginAttempt[login_attempt_user.ID] > 10 {
+		if s.globalLoginAttempt[login_attempt_user.ID]%10 == 0 {
 			log.Println("account blocked due to too many failed login attempts")
 			// lock account
+			s.BanUser(login_attempt_user.ID, time.Now().Unix()+(int64(s.globalLoginAttempt[login_attempt_user.ID])*60))
 			return nil, nil, fmt.Errorf("account blocked due to too many failed login attempts")
 		}
+		s.mu.Lock()
 		s.globalLoginAttempt[login_attempt_user.ID]++
+		s.mu.Unlock()
 		return nil, nil, fmt.Errorf("invalid password")
+	}
+	if login_attempt_user.Status == models.UserStatusSuspended {
+		// Check if the ban period has expired
+		if login_attempt_user.LockedUntil > 0 && time.Now().Unix() > login_attempt_user.LockedUntil {
+			// Automatically unban the user
+			err := s.UnbanUser(login_attempt_user.ID)
+			if err != nil {
+				log.Printf("Failed to automatically unban user %s: %v", login_attempt_user.ID, err)
+				return nil, nil, fmt.Errorf("account blocked, check email for further information")
+			}
+			// Update the user object status for this login session
+			login_attempt_user.Status = models.UserStatusActive
+			login_attempt_user.LockedUntil = 0
+		} else {
+			// Still banned
+			return nil, nil, fmt.Errorf("account blocked, check email for further information")
+		}
+	}
+	if login_attempt_user.Status == models.UserStatusDeactivated {
+		// event to email for deactivated account
+		return nil, nil, fmt.Errorf("account blocked, check email for further information")
 	}
 
 	// get roles
@@ -912,7 +940,7 @@ func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress
 	if len(sessions) != 0 {
 		// process existing session
 		for _, session := range sessions {
-			if deviceInfo == session.DeviceInfo {
+			if *deviceInfo == *session.DeviceInfo {
 				finalSession = session
 				newSessionSignal = false
 				break
@@ -929,4 +957,50 @@ func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress
 	}
 
 	return login_attempt_user, finalSession, nil
+}
+
+// BanUser bans a user by setting status to suspended and locked_until timestamp
+func (s *UserService) BanUser(userID string, until int64) error {
+	if userID == "" {
+		return fmt.Errorf("user ID cannot be empty")
+	}
+
+	// Update user status to suspended with locked_until timestamp
+	err := s.userRepo.UpdateUserStatus(userID, models.UserStatusSuspended, &until)
+	if err != nil {
+		log.Printf("Failed to ban user %s: %v", userID, err)
+		return fmt.Errorf("failed to ban user: %w", err)
+	}
+
+	// Invalidate all user sessions to force re-authentication
+	err = s.sessionService.InvalidateUserSessions(context.Background(), userID)
+	if err != nil {
+		log.Printf("Failed to invalidate sessions for banned user %s: %v", userID, err)
+		// Don't fail the ban operation if session invalidation fails
+	}
+
+	log.Printf("User %s has been banned until %v", userID, time.Unix(until, 0))
+	return nil
+}
+
+// UnbanUser unbans a user by setting status back to active and clearing locked_until
+func (s *UserService) UnbanUser(userID string) error {
+	if userID == "" {
+		return fmt.Errorf("user ID cannot be empty")
+	}
+
+	// Update user status to active and clear locked_until timestamp
+	err := s.userRepo.UpdateUserStatus(userID, models.UserStatusActive, nil)
+	if err != nil {
+		log.Printf("Failed to unban user %s: %v", userID, err)
+		return fmt.Errorf("failed to unban user: %w", err)
+	}
+
+	// Clear failed login attempts
+	s.mu.Lock()
+	delete(s.globalLoginAttempt, userID)
+	s.mu.Unlock()
+
+	log.Printf("User %s has been unbanned and reactivated", userID)
+	return nil
 }

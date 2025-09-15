@@ -35,7 +35,8 @@ type RabbitMQConfig struct {
 }
 
 type RedisConfig struct {
-	Address  string
+	Host     string
+	Port     string
 	Password string
 	DB       int
 }
@@ -65,7 +66,8 @@ func New() *AuthServiceConfig {
 			FptEkycApiKey: getEnvOrDefault("FPT_EKYC_API_KEY", ""),
 		},
 		RedisCfg: RedisConfig{
-			Address:  getEnvOrDefault("REDIS_HOST", "localhost") + ":" + getEnvOrDefault("REDIS_PORT", "6379"),
+			Host:     getEnvOrDefault("REDIS_HOST", "localhost"),
+			Port:     getEnvOrDefault("REDIS_PORT", "6379"),
 			Password: getEnvOrDefault("REDIS_PASSWORD", ""),
 			DB:       0,
 		},

@@ -4,6 +4,7 @@ import (
 	"auth-service/internal/config"
 	"auth-service/internal/database/minio"
 	"auth-service/internal/database/postgres"
+	"auth-service/internal/database/redis"
 	"auth-service/internal/handlers"
 	"auth-service/internal/repository"
 	"auth-service/internal/services"
@@ -60,6 +61,13 @@ func setupLogging() (*os.File, error) {
 	return file, nil
 }
 
+func getEnvOrDefault(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 func main() {
 	logFile, err := setupLogging()
 	if err != nil {
@@ -77,7 +85,7 @@ func main() {
 		go postgres.RetryConnectOnFailed(30*time.Second, &db, cfg.PostgresCfg)
 	}
 
-	//minio client
+	// minio client
 	mc, err := minio.NewMinioClient(cfg.MinioCfg)
 	if err != nil {
 		log.Fatalf("Failed to initialize MinIO client: %v", err)
@@ -86,13 +94,24 @@ func main() {
 	// utils
 	utils := utils.NewUtils(mc, cfg)
 
+	// redis client - parse address to host:port
+	redisClient, err := redis.NewRedisClient(cfg.RedisCfg.Host, cfg.RedisCfg.Port, cfg.RedisCfg.Password, cfg.RedisCfg.DB)
+	if err != nil {
+		log.Fatalf("Failed to initialize Redis client: %v", err)
+	}
+
 	// repositories
 	userRepo := repository.NewUserRepository(db)
 	userCardRepo := repository.NewUserCardRepository(db)
 	ekycProgressRepo := repository.NewUserEkycProgressRepository(db)
+	roleRepo := repository.NewRoleRepository(db)
+	sessionRepo := repository.NewSessionRepository(redisClient.GetClient())
 
 	// services
-	userService := services.NewUserService(userRepo, mc, cfg, utils, userCardRepo, ekycProgressRepo)
+	jwtService := services.NewJWTService(cfg.AuthCfg.JWTSecret)
+	roleService := services.NewRoleService(roleRepo)
+	sessionService := services.NewSessionService(sessionRepo)
+	userService := services.NewUserService(userRepo, mc, cfg, utils, userCardRepo, ekycProgressRepo, sessionService, jwtService, roleService)
 	userHandler := handlers.NewUserHandler(userService)
 
 	// Setup Gin router
