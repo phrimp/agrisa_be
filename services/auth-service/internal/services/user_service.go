@@ -8,6 +8,7 @@ import (
 	"auth-service/internal/repository"
 	"auth-service/utils"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,7 +25,7 @@ import (
 
 type IUserService interface {
 	RegisterNewUser(phone, email, password, nationalID string, phoneVerificationStatus bool) (*models.User, error)
-	Login(email, phone, password string) (*models.User, error)
+	Login(email, phone, password string, deviceInfo, ipAddress *string) (*models.User, *models.UserSession, error)
 
 	GetUserEkycProgressByUserID(userID string) (*models.UserEkycProgress, error)
 	UploadToMinIO(c *gin.Context, file io.Reader, header *multipart.FileHeader, serviceName string) error
@@ -41,12 +42,14 @@ type UserService struct {
 	userCardRepo     repository.IUserCardRepository
 	ekycProgressRepo repository.IUserEkycProgressRepository
 	sessionService   *SessionService
+	roleService      *RoleService
+	jwtService       *JWTService
 
 	globalLoginAttempt map[string]int
 	mu                 *sync.Mutex
 }
 
-func NewUserService(userRepo repository.IUserRepository, minioClient *minio.MinioClient, cfg *config.AuthServiceConfig, utils *utils.Utils, userCardRepo repository.IUserCardRepository, ekycProgressRepo repository.IUserEkycProgressRepository) IUserService {
+func NewUserService(userRepo repository.IUserRepository, minioClient *minio.MinioClient, cfg *config.AuthServiceConfig, utils *utils.Utils, userCardRepo repository.IUserCardRepository, ekycProgressRepo repository.IUserEkycProgressRepository, sessionService *SessionService, jwtService *JWTService, roleService *RoleService) IUserService {
 	return &UserService{
 		userRepo:         userRepo,
 		minioClient:      minioClient,
@@ -54,6 +57,9 @@ func NewUserService(userRepo repository.IUserRepository, minioClient *minio.Mini
 		utils:            utils,
 		userCardRepo:     userCardRepo,
 		ekycProgressRepo: ekycProgressRepo,
+		sessionService:   sessionService,
+		jwtService:       jwtService,
+		roleService:      roleService,
 		mu:               &sync.Mutex{},
 	}
 }
@@ -842,10 +848,10 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 	return &newUser, nil
 }
 
-func (s *UserService) Login(email, phone, password string) (*models.User, error) {
+func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress *string) (*models.User, *models.UserSession, error) {
 	if email != "" && phone != "" {
 		log.Println("SUSPICIOUS ACTIVITY DETECTED : email & phone present reached service layer and blocked")
-		return nil, fmt.Errorf("action forbidden")
+		return nil, nil, fmt.Errorf("action forbidden")
 	}
 	var login_attempt_user *models.User
 	var err error
@@ -853,18 +859,18 @@ func (s *UserService) Login(email, phone, password string) (*models.User, error)
 		login_attempt_user, err = s.userRepo.GetUserByEmail(email)
 		if err != nil {
 			log.Printf("user searching failed: %s \n", err)
-			return nil, fmt.Errorf("user searching failed: %s", err)
+			return nil, nil, fmt.Errorf("user searching failed: %s", err)
 		}
 	}
 	if phone != "" {
 		login_attempt_user, err = s.userRepo.GetUserByPhone(phone)
 		if err != nil {
 			log.Printf("user searching failed: %s \n", err)
-			return nil, fmt.Errorf("user searching failed: %s", err)
+			return nil, nil, fmt.Errorf("user searching failed: %s", err)
 		}
 	}
 	if login_attempt_user == nil {
-		return nil, fmt.Errorf("UNEXPECTED ERROR : user found but still null")
+		return nil, nil, fmt.Errorf("UNEXPECTED ERROR : user found but still null")
 	}
 
 	if !s.userRepo.CheckPasswordHash(password, login_attempt_user.PasswordHash) {
@@ -872,10 +878,55 @@ func (s *UserService) Login(email, phone, password string) (*models.User, error)
 			// event to notification service to send email/phone of suspicious login activities
 		}
 		if s.globalLoginAttempt[login_attempt_user.ID] > 10 {
-			return nil, fmt.Errorf("too many login attempts")
+			log.Println("account blocked due to too many failed login attempts")
+			// lock account
+			return nil, nil, fmt.Errorf("account blocked due to too many failed login attempts")
 		}
 		s.globalLoginAttempt[login_attempt_user.ID]++
-		return nil, fmt.Errorf("invalid password")
+		return nil, nil, fmt.Errorf("invalid password")
 	}
-	return login_attempt_user, nil
+
+	// get roles
+	roles, err := s.roleService.GetUserRoles(login_attempt_user.ID, true)
+	if err != nil {
+		log.Println("error get user roles: ", err)
+		return nil, nil, fmt.Errorf("error get user roles: %s", err)
+	}
+	roleNames := []string{}
+	for _, role := range roles {
+		roleNames = append(roleNames, role.Name)
+	}
+
+	// gen token
+	token, err := s.jwtService.GenerateNewToken(roleNames, login_attempt_user.PhoneNumber, login_attempt_user.Email, login_attempt_user.ID)
+	if err != nil {
+		log.Println("error generating token: ", err)
+		return nil, nil, fmt.Errorf("error generating token: %s", err)
+	}
+
+	// gen Login Session
+	finalSession := &models.UserSession{}
+	// check exist sessions
+	sessions, err := s.sessionService.GetUserSessions(context.Background(), login_attempt_user.ID)
+	newSessionSignal := true
+	if len(sessions) != 0 {
+		// process existing session
+		for _, session := range sessions {
+			if deviceInfo == session.DeviceInfo {
+				finalSession = session
+				newSessionSignal = false
+				break
+			}
+		}
+	}
+
+	if newSessionSignal {
+		finalSession, err = s.sessionService.CreateSession(context.Background(), login_attempt_user.ID, token, &token, deviceInfo, ipAddress)
+		if err != nil {
+			log.Println("error creating new session: ", err)
+			return nil, nil, fmt.Errorf("error creating new session: %s", err)
+		}
+	}
+
+	return login_attempt_user, finalSession, nil
 }
