@@ -118,7 +118,7 @@ func main() {
 	r := gin.Default()
 
 	// Register routes
-	handlers.RegisterRoutes(r, userHandler)
+	userHandler.RegisterRoutes(r, userHandler)
 
 	// Start HTTP server
 	serverPort := os.Getenv("SERVER_PORT")

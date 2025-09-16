@@ -35,7 +35,7 @@ func (h *UserHandler) PingHandler(c *gin.Context) {
 }
 
 // RegisterRoutes registers all routes for the user handler
-func RegisterRoutes(router *gin.Engine, userHandler *UserHandler) {
+func (u *UserHandler) RegisterRoutes(router *gin.Engine, userHandler *UserHandler) {
 	// Add the ping route
 	router.GET("/api/v1/auth/ping", userHandler.PingHandler)
 	// Add the session init route
