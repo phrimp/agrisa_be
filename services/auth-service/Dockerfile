@@ -4,6 +4,8 @@ FROM golang:1.25.1-alpine AS builder
 # Set working directory
 WORKDIR /app
 
+RUN apk add --no-cache git
+
 COPY shared/modules /shared/modules
 
 # Copy go mod files
@@ -22,19 +24,23 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/main.g
 FROM alpine:latest
 
 # Install ca-certificates for HTTPS requests
-RUN apk --no-cache add ca-certificates
 
 # Create app directory
 WORKDIR /root/
+RUN apk add --no-cache tzdata
+RUN apk --no-cache add ca-certificates && \
+    addgroup -g 1001 appgroup && \
+    adduser -D -u 1001 -G appgroup appuser
 
 # Copy the binary from builder stage
 COPY --from=builder /app/main .
 
+RUN chown -R appuser:appgroup /app
+
 # Create log directory
 RUN mkdir -p /agrisa/log/auth_service
 
-# Expose port
-EXPOSE 8083
+USER appuser
 
 # Command to run
 CMD ["./main"]
