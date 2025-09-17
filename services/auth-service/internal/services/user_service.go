@@ -214,7 +214,7 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 	writer.Close()
 
 	// Step 4: Send OCR front request
-	req, err := http.NewRequest("POST", "https://api.fpt.ai/vision/idr/vnm", body)
+	req, err := http.NewRequest("POST", s.cfg.AuthCfg.FptOcrUrl, body)
 	if err != nil {
 		log.Printf("Failed to create OCR front request: %v", err)
 		return utils.ErrorResponse{
@@ -345,7 +345,7 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 	writerBack.Close()
 
 	// Step 9: Send OCR back request
-	reqBack, err := http.NewRequest("POST", "https://api.fpt.ai/vision/idr/vnm", bodyBack)
+	reqBack, err := http.NewRequest("POST", s.cfg.AuthCfg.FptOcrUrl, bodyBack)
 	if err != nil {
 		log.Printf("Error when creating back OCR request: %v", err)
 		return utils.ErrorResponse{
@@ -683,7 +683,7 @@ func (s *UserService) VerifyFaceLiveness(form *multipart.Form) (interface{}, err
 	}
 
 	// send API
-	url := "https://api.fpt.ai/dmp/liveness/v3"
+	url := s.cfg.AuthCfg.FptFaceLivenessUrl
 	var requestBody bytes.Buffer
 	writer := multipart.NewWriter(&requestBody)
 

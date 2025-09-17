@@ -199,6 +199,8 @@ services:
       - MINIO_SECURE=${MINIO_SECURE}
       - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
       - FPT_EKYC_API_KEY=${FPT_EKYC_API_KEY}
+      - FPT_OCR_URL=${FPT_OCR_URL}
+      - FPT_FACE_LIVENESS_URL=${FPT_FACE_LIVENESS_URL}
 
     volumes:
       - ./logs/auth-service:/agrisa/log/auth_service
