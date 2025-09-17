@@ -3,19 +3,10 @@ package handlers
 import (
 	"auth-service/internal/services"
 	"auth-service/utils"
-	"bytes"
-	"io"
 	"log"
-	"mime/multipart"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-)
-
-var (
-	fptEkycApiKey     = "QNTT3cYDOpRhkZzNu11DPSPaYWeF6PVI"
-	baseURLProduction = "https://api.fpt.ai/vision/ekyc-be/"
-	baseURLStaging    = "https://api.fpt.ai/vision/ekyc/be-stag/"
 )
 
 type UserHandler struct {
@@ -39,7 +30,6 @@ func RegisterRoutes(router *gin.Engine, userHandler *UserHandler) {
 	// Add the ping route
 	router.GET("/api/v1/auth/ping", userHandler.PingHandler)
 	// Add the session init route
-	router.POST("/api/v1/auth/session/init", userHandler.SessionInitHandler)
 	router.POST("/api/v1/auth/ocridcard", userHandler.OCRNationalIDCardHandler)
 	router.GET("/api/v1/auth/ekyc-progress/:i", userHandler.GetUserEkycProgressByUserID)
 	router.POST("/api/v1/auth/face-liveness", userHandler.VerifyFaceLiveness)
@@ -51,144 +41,6 @@ func RegisterRoutes(router *gin.Engine, userHandler *UserHandler) {
 
 type InitSessionRequest struct {
 	DeviceType string `json:"device-type"`
-}
-
-// SessionInitHandler handles POST /auth-service/session/init
-func (h *UserHandler) SessionInitHandler(c *gin.Context) {
-	var requestBody InitSessionRequest
-	if err := c.ShouldBindJSON(&requestBody); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid_request"})
-		return
-	}
-
-	url := baseURLProduction + "session/init"
-	req, err := http.NewRequest("POST", url, nil)
-	if err != nil {
-		log.Printf("Failed to create request: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
-		return
-	}
-	req.Header.Set("api-key", fptEkycApiKey)
-	req.Header.Set("device-type", requestBody.DeviceType)
-	req.Header.Set("only-engine", "1")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("Failed to call API A: %v", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "external_api_error"})
-		return
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("Failed to read API A response: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
-		return
-	}
-
-	c.Data(resp.StatusCode, "application/json", body)
-}
-
-func (h *UserHandler) OcrHandler(c *gin.Context) {
-	log.Println("Content-Type:", c.Request.Header.Get("Content-Type"))
-
-	deviceType := c.GetHeader("device-type")
-	documentType := c.GetHeader("document-type")
-	sessionID := c.GetHeader("session-id")
-	log.Printf("Device type: %s, Document type: %s, Session ID: %s", deviceType, documentType, sessionID)
-
-	cccdFront, err := c.FormFile("cccd_front")
-	if err != nil {
-		c.String(400, "Error when accessing file: %v", err)
-		log.Printf("Error when accessing file cccd_front: %v", err)
-		return
-	}
-
-	cccdBack, err := c.FormFile("cccd_back")
-	if err != nil {
-		c.String(400, "Error when accessing file: %v", err)
-		log.Printf("Error when accessing file cccd_back: %v", err)
-		return
-	}
-
-	// Create body for multipart form-data
-	var body bytes.Buffer
-	writer := multipart.NewWriter(&body)
-
-	// Add file cccdFront to field "files"
-	f1, err := cccdFront.Open()
-	if err != nil {
-		c.String(400, "Error when opening cccd_front: %v", err)
-		return
-	}
-	defer f1.Close()
-
-	part1, err := writer.CreateFormFile("files", cccdFront.Filename)
-	if err != nil {
-		c.String(500, "Error when creating form file: %v", err)
-		return
-	}
-	if _, err := io.Copy(part1, f1); err != nil {
-		c.String(500, "Error when copying file: %v", err)
-		return
-	}
-
-	// add file cccdBack to field "files"
-	f2, err := cccdBack.Open()
-	if err != nil {
-		c.String(400, "Error when opening cccd_back: %v", err)
-		return
-	}
-	defer f2.Close()
-
-	part2, err := writer.CreateFormFile("files", cccdBack.Filename)
-	if err != nil {
-		c.String(500, "Error when creating form file: %v", err)
-		return
-	}
-	if _, err := io.Copy(part2, f2); err != nil {
-		c.String(500, "Error when copying file: %v", err)
-		return
-	}
-
-	// end writer
-	if err := writer.Close(); err != nil {
-		c.String(500, "Error when closing writer: %v", err)
-		return
-	}
-
-	url := baseURLProduction + "ocr"
-	req, err := http.NewRequest("POST", url, &body)
-	if err != nil {
-		log.Printf("Failed to create request: %v", err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal_error"})
-		return
-	}
-
-	// set headers
-	req.Header.Set("api-key", fptEkycApiKey)
-	req.Header.Set("device-type", deviceType)
-	req.Header.Set("document-type", documentType)
-	req.Header.Set("session-id", sessionID)
-	log.Printf("Session id: %s", sessionID)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-
-	// add file to req
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Printf("Failed to call OCR API: %v", err)
-		c.JSON(http.StatusBadGateway, gin.H{"error": "external_api_error"})
-		return
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	bodyResp, _ := io.ReadAll(resp.Body)
-	c.Data(resp.StatusCode, "application/json", bodyResp)
 }
 
 func (h *UserHandler) GetUserEkycProgressByUserID(c *gin.Context) {

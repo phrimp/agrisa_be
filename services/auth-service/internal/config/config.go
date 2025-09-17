@@ -44,6 +44,8 @@ type RedisConfig struct {
 type AuthConfig struct {
 	JWTSecret     string
 	FptEkycApiKey string
+	FptOcrUrl     string
+	FptFaceLivenessUrl string
 }
 
 func New() *AuthServiceConfig {
@@ -64,6 +66,8 @@ func New() *AuthServiceConfig {
 		AuthCfg: AuthConfig{
 			JWTSecret:     getEnvOrDefault("JWT_SECRET", "default-secret"),
 			FptEkycApiKey: getEnvOrDefault("FPT_EKYC_API_KEY", ""),
+			FptOcrUrl:     getEnvOrDefault("FPT_OCR_URL", ""),
+			FptFaceLivenessUrl: getEnvOrDefault("FPT_FACE_LIVENESS_URL", ""),
 		},
 		RedisCfg: RedisConfig{
 			Host:     getEnvOrDefault("REDIS_HOST", "localhost"),
