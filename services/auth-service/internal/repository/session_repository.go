@@ -38,7 +38,6 @@ func NewSessionRepository(client *redis.Client) SessionRepository {
 	}
 }
 
-// CreateSession creates a new session in Redis
 func (r *sessionRepository) CreateSession(ctx context.Context, session *models.UserSession) error {
 	if session.ID == "" {
 		return fmt.Errorf("session ID cannot be empty")

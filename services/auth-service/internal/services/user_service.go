@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/redis/go-redis/v9"
 )
 
 type IUserService interface {
@@ -50,9 +51,24 @@ type UserService struct {
 
 	globalLoginAttempt map[string]int
 	mu                 *sync.Mutex
+	redisClient        *redis.Client
 }
 
 func NewUserService(userRepo repository.IUserRepository, minioClient *minio.MinioClient, cfg *config.AuthServiceConfig, utils *utils.Utils, userCardRepo repository.IUserCardRepository, ekycProgressRepo repository.IUserEkycProgressRepository, sessionService *SessionService, jwtService *JWTService, roleService *RoleService) IUserService {
+	// Initialize Redis client
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     fmt.Sprintf("%s:%s", cfg.RedisCfg.Host, cfg.RedisCfg.Port),
+		Password: cfg.RedisCfg.Password,
+		DB:       cfg.RedisCfg.DB,
+	})
+
+	// Test Redis connection
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Printf("Warning: Redis connection failed: %v", err)
+	}
+
 	return &UserService{
 		userRepo:           userRepo,
 		minioClient:        minioClient,
@@ -65,6 +81,7 @@ func NewUserService(userRepo repository.IUserRepository, minioClient *minio.Mini
 		roleService:        roleService,
 		globalLoginAttempt: make(map[string]int),
 		mu:                 &sync.Mutex{},
+		redisClient:        rdb,
 	}
 }
 
@@ -859,18 +876,30 @@ func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress
 	}
 	var login_attempt_user *models.User
 	var err error
+
+	// Try cache first, then database
 	if email != "" {
-		login_attempt_user, err = s.userRepo.GetUserByEmail(email)
-		if err != nil {
-			log.Printf("user searching failed: %s \n", err)
-			return nil, nil, fmt.Errorf("email or password incorrect: %s", err)
+		login_attempt_user = s.getCachedUserByEmail(email)
+		if login_attempt_user == nil {
+			login_attempt_user, err = s.userRepo.GetUserByEmail(email)
+			if err != nil {
+				log.Printf("user searching failed: %s \n", err)
+				return nil, nil, fmt.Errorf("email or password incorrect: %s", err)
+			}
+			// Cache the user for future requests
+			s.cacheUser(login_attempt_user)
 		}
 	}
 	if phone != "" {
-		login_attempt_user, err = s.userRepo.GetUserByPhone(phone)
-		if err != nil {
-			log.Printf("user searching failed: %s \n", err)
-			return nil, nil, fmt.Errorf("phone number or password incorrect: %s", err)
+		login_attempt_user = s.getCachedUserByPhone(phone)
+		if login_attempt_user == nil {
+			login_attempt_user, err = s.userRepo.GetUserByPhone(phone)
+			if err != nil {
+				log.Printf("user searching failed: %s \n", err)
+				return nil, nil, fmt.Errorf("phone number or password incorrect: %s", err)
+			}
+			// Cache the user for future requests
+			s.cacheUser(login_attempt_user)
 		}
 	}
 	if login_attempt_user == nil {
@@ -878,18 +907,18 @@ func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress
 	}
 
 	if !s.userRepo.CheckPasswordHash(password, login_attempt_user.PasswordHash) {
-		if s.globalLoginAttempt[login_attempt_user.ID]%5 == 0 {
+		attemptCount := s.incrementLoginAttempts(login_attempt_user.ID)
+
+		if attemptCount%5 == 0 {
 			// event to notification service to send email/phone of suspicious login activities
+			log.Printf("Suspicious login activity detected for user %s: %d attempts", login_attempt_user.ID, attemptCount)
 		}
-		if s.globalLoginAttempt[login_attempt_user.ID]%10 == 0 {
+		if attemptCount%10 == 0 {
 			log.Println("account blocked due to too many failed login attempts")
 			// lock account
-			s.BanUser(login_attempt_user.ID, time.Now().Unix()+(int64(s.globalLoginAttempt[login_attempt_user.ID])*60))
+			s.BanUser(login_attempt_user.ID, time.Now().Unix()+(int64(attemptCount)*60))
 			return nil, nil, fmt.Errorf("account blocked due to too many failed login attempts")
 		}
-		s.mu.Lock()
-		s.globalLoginAttempt[login_attempt_user.ID]++
-		s.mu.Unlock()
 		return nil, nil, fmt.Errorf("invalid password")
 	}
 	if login_attempt_user.Status == models.UserStatusSuspended {
@@ -956,7 +985,115 @@ func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress
 		}
 	}
 
+	// Reset login attempts on successful login
+	s.resetLoginAttempts(login_attempt_user.ID)
+
 	return login_attempt_user, finalSession, nil
+}
+
+// Cache helper methods
+func (s *UserService) getCachedUserByEmail(email string) *models.User {
+	if s.redisClient == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	key := fmt.Sprintf("user:email:%s", email)
+	val, err := s.redisClient.Get(ctx, key).Result()
+	if err != nil {
+		return nil // Cache miss or error
+	}
+
+	var user models.User
+	if err := json.Unmarshal([]byte(val), &user); err != nil {
+		return nil
+	}
+	return &user
+}
+
+func (s *UserService) getCachedUserByPhone(phone string) *models.User {
+	if s.redisClient == nil {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	key := fmt.Sprintf("user:phone:%s", phone)
+	val, err := s.redisClient.Get(ctx, key).Result()
+	if err != nil {
+		return nil // Cache miss or error
+	}
+
+	var user models.User
+	if err := json.Unmarshal([]byte(val), &user); err != nil {
+		return nil
+	}
+	return &user
+}
+
+func (s *UserService) cacheUser(user *models.User) {
+	if s.redisClient == nil || user == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	userJSON, err := json.Marshal(user)
+	if err != nil {
+		return
+	}
+
+	// Cache for 15 minutes
+	ttl := 15 * time.Minute
+	s.redisClient.Set(ctx, fmt.Sprintf("user:email:%s", user.Email), userJSON, ttl)
+	s.redisClient.Set(ctx, fmt.Sprintf("user:phone:%s", user.PhoneNumber), userJSON, ttl)
+}
+
+func (s *UserService) incrementLoginAttempts(userID string) int {
+	if s.redisClient == nil {
+		// Fallback to in-memory with proper locking
+		s.mu.Lock()
+		s.globalLoginAttempt[userID]++
+		attempts := s.globalLoginAttempt[userID]
+		s.mu.Unlock()
+		return attempts
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	key := fmt.Sprintf("login_attempts:%s", userID)
+	count, err := s.redisClient.Incr(ctx, key).Result()
+	if err != nil {
+		// Fallback to in-memory
+		s.mu.Lock()
+		s.globalLoginAttempt[userID]++
+		attempts := s.globalLoginAttempt[userID]
+		s.mu.Unlock()
+		return attempts
+	}
+
+	// Set TTL for 24 hours on first attempt
+	if count == 1 {
+		s.redisClient.Expire(ctx, key, 24*time.Hour)
+	}
+
+	return int(count)
+}
+
+func (s *UserService) resetLoginAttempts(userID string) {
+	if s.redisClient != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		key := fmt.Sprintf("login_attempts:%s", userID)
+		s.redisClient.Del(ctx, key)
+	}
+
+	// Also clear in-memory
+	s.mu.Lock()
+	delete(s.globalLoginAttempt, userID)
+	s.mu.Unlock()
 }
 
 // BanUser bans a user by setting status to suspended and locked_until timestamp
@@ -997,9 +1134,7 @@ func (s *UserService) UnbanUser(userID string) error {
 	}
 
 	// Clear failed login attempts
-	s.mu.Lock()
-	delete(s.globalLoginAttempt, userID)
-	s.mu.Unlock()
+	s.resetLoginAttempts(userID)
 
 	log.Printf("User %s has been unbanned and reactivated", userID)
 	return nil
