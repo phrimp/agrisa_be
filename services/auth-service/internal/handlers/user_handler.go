@@ -21,7 +21,7 @@ func NewUserHandler(userService services.IUserService) *UserHandler {
 
 func (h *UserHandler) PingHandler(c *gin.Context) {
 	// Simulate a successful response
-	response := gin.H{"message": "pong"}
+	response := utils.CreateSuccessResponse("pong")
 	c.JSON(http.StatusOK, response)
 }
 
