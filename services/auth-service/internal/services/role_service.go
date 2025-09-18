@@ -37,7 +37,7 @@ func (s *RoleService) CreateRole(name, displayName, description string) (*models
 	role := &models.Role{
 		Name:        name,
 		DisplayName: displayName,
-		Description: &description,
+		Description: description,
 		IsActive:    true,
 	}
 
@@ -114,7 +114,7 @@ func (s *RoleService) CreatePermission(name, resource, action, description strin
 		Name:        name,
 		Resource:    resource,
 		Action:      action,
-		Description: &description,
+		Description: description,
 	}
 
 	err := s.roleRepo.CreatePermission(permission)

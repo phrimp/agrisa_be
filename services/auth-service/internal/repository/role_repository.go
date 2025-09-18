@@ -436,6 +436,7 @@ func (r *roleRepository) HasPermission(roleID int, resource, action string) (boo
 
 // AssignRoleToUser assigns a role to a user
 func (r *roleRepository) AssignRoleToUser(userID string, roleID int, assignedBy *string, expiresAt *time.Time) error {
+	expiresAtInt := expiresAt.Unix()
 	query := `
 		INSERT INTO user_roles (user_id, role_id, assigned_by, expires_at)
 		VALUES ($1, $2, $3, $4)
@@ -445,7 +446,7 @@ func (r *roleRepository) AssignRoleToUser(userID string, roleID int, assignedBy 
 			expires_at = EXCLUDED.expires_at,
 			is_active = true`
 
-	_, err := r.db.Exec(query, userID, roleID, assignedBy, expiresAt)
+	_, err := r.db.Exec(query, userID, roleID, assignedBy, expiresAtInt)
 	if err != nil {
 		return fmt.Errorf("failed to assign role to user: %w", err)
 	}

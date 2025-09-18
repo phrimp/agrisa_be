@@ -15,27 +15,29 @@ import (
 
 type AuthHandler struct {
 	userService services.IUserService
+	roleService services.RoleService
 }
 
-func NewAuthHandler(userService services.IUserService) *AuthHandler {
+func NewAuthHandler(userService services.IUserService, roleService services.RoleService) *AuthHandler {
 	return &AuthHandler{
 		userService: userService,
+		roleService: roleService,
 	}
 }
 
-func (a *AuthHandler) RegisterRoutes(router *gin.Engine, authHandler *AuthHandler) {
+func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
 	authGrPub := router.Group("/api/v2/auth/public")
 
 	// Public routes
-	authGrPub.POST("/register", authHandler.Register)
-	authGrPub.POST("/login", authHandler.Login)
+	authGrPub.POST("/register", a.Register)
+	authGrPub.POST("/login", a.Login)
 
 	authGrPro := router.Group("/api/v2/auth/protected")
 	sessionGr := authGrPro.Group("/session")
 	// User manage their own session
-	sessionGr.GET("/me", authHandler.GetMySession)
+	sessionGr.GET("/me", a.GetMySession)
 	// Admin manage all sessions
-	sessionGr.GET("/all", authHandler.GetAllSessions)
+	sessionGr.GET("/all", a.GetAllSessions)
 }
 
 // Login handles user authentication
