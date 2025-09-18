@@ -26,14 +26,14 @@ FROM alpine:latest
 # Install ca-certificates for HTTPS requests
 
 # Create app directory
-WORKDIR /root/
+WORKDIR /app
 RUN apk add --no-cache tzdata
 RUN apk --no-cache add ca-certificates && \
     addgroup -g 1001 appgroup && \
     adduser -D -u 1001 -G appgroup appuser
 
 # Copy the binary from builder stage
-COPY --from=builder /app/main .
+COPY --from=builder /app/main /app/
 
 RUN chown -R appuser:appgroup /app
 
