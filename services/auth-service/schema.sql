@@ -15,6 +15,7 @@ CREATE TABLE users (
     last_login TIMESTAMP,
     login_attempts INTEGER DEFAULT 0,
     locked_until TIMESTAMP,
+    face_liveness varchar
     
     -- Constraints
     CONSTRAINT users_contact_required CHECK (phone_number IS NOT NULL OR email IS NOT NULL)
@@ -57,6 +58,40 @@ CREATE TABLE permissions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     UNIQUE(resource, action)
+);
+
+-- user_ekyc_progress
+CREATE TABLE user_ekyc_progress (
+    user_id VARCHAR(36) PRIMARY KEY, -- UUID
+    cic_no VARCHAR NOT NULL,         -- CMND/CCCD number
+    is_ocr_done BOOLEAN DEFAULT FALSE,
+    ocr_done_at TIMESTAMPTZ,
+    is_face_verified BOOLEAN DEFAULT FALSE,
+    face_verified_at TIMESTAMPTZ
+);
+
+-- user_card
+CREATE TABLE user_card (
+    national_id   VARCHAR(36) PRIMARY KEY, -- số CCCD/CMND, dùng varchar(36) cho UUID/chuỗi
+    name VARCHAR,
+    dob VARCHAR,
+    sex VARCHAR,
+    nationality VARCHAR,
+    home VARCHAR,
+    address VARCHAR,
+    doe VARCHAR,
+    number_of_name_lines VARCHAR,
+    features VARCHAR,
+    issue_date VARCHAR,
+    mrz VARCHAR,
+    issue_loc VARCHAR,
+    image_front   VARCHAR,                 
+    image_back    VARCHAR,
+    user_id VARCHAR(50) unique,
+    
+    CONSTRAINT fk_user_card_users FOREIGN KEY (user_id) 
+        REFERENCES users(id)
+        ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- Many-to-many relationship between roles and permissions
