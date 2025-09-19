@@ -43,5 +43,4 @@ type Claims struct {
 	UserID string
 	Email  string
 	Phone  string
-	Roles  []string
 }

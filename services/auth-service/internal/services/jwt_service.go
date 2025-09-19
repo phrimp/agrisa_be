@@ -30,7 +30,6 @@ func (jwt_s *JWTService) GenerateNewToken(roles []string, phone, email, userID s
 		UserID: userID,
 		Phone:  phone,
 		Email:  email,
-		Roles:  roles,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claim)
 	tokenString, err := token.SignedString([]byte(jwt_s.JWTSecret))

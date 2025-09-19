@@ -26,13 +26,13 @@ func NewAuthHandler(userService services.IUserService, roleService services.Role
 }
 
 func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
-	authGrPub := router.Group("/api/v2/auth/public")
+	authGrPub := router.Group("/auth/public/api/v2")
 
 	// Public routes
 	authGrPub.POST("/register", a.Register)
 	authGrPub.POST("/login", a.Login)
 
-	authGrPro := router.Group("/api/v2/auth/protected")
+	authGrPro := router.Group("/auth/protected/api/v2")
 	sessionGr := authGrPro.Group("/session")
 	// User manage their own session
 	sessionGr.GET("/me", a.GetMySession)

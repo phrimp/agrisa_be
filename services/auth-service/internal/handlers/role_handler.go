@@ -19,8 +19,8 @@ func NewRoleHandler(roleService services.RoleService) *RoleHandler {
 }
 
 func (r *RoleHandler) RegisterRoutes(router *gin.Engine) {
-	_ = router.Group("/api/v2/auth/public/role")
-	_ = router.Group("/api/v2/auth/protected/role")
+	_ = router.Group("/auth/public/api/v2/role")
+	_ = router.Group("/auth/protected/api/v2/role")
 }
 
 func (r *RoleHandler) InitDefaultRole() error {
