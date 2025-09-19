@@ -24,12 +24,16 @@ func NewMiddleware(jwtService *services.JWTService, sessionService *services.Ses
 }
 
 func (m *Middleware) RegisterRoutes(routes *gin.Engine) {
-	routes.GET("/auth/validate")
+	routes.GET("/auth/validate", m.ValidateToken)
 }
 
 func (m *Middleware) ValidateToken(c *gin.Context) {
+	log.Printf("ValidateToken called - Method: %s, Path: %s", c.Request.Method, c.Request.URL.Path)
+
 	// Check for Authorization header
 	authHeader := c.GetHeader("Authorization")
+	log.Printf("Authorization header: %s", authHeader)
+
 	if authHeader == "" {
 		c.JSON(http.StatusUnauthorized, utils.ErrorResponse{
 			Success: false,
