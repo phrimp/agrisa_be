@@ -15,10 +15,10 @@ import (
 
 type AuthHandler struct {
 	userService services.IUserService
-	roleService services.RoleService
+	roleService *services.RoleService
 }
 
-func NewAuthHandler(userService services.IUserService, roleService services.RoleService) *AuthHandler {
+func NewAuthHandler(userService services.IUserService, roleService *services.RoleService) *AuthHandler {
 	return &AuthHandler{
 		userService: userService,
 		roleService: roleService,

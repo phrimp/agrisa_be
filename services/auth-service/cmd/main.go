@@ -112,13 +112,20 @@ func main() {
 	roleService := services.NewRoleService(roleRepo)
 	sessionService := services.NewSessionService(sessionRepo)
 	userService := services.NewUserService(userRepo, mc, cfg, utils, userCardRepo, ekycProgressRepo, sessionService, jwtService, roleService)
+	// handlers
 	userHandler := handlers.NewUserHandler(userService)
+	authHandler := handlers.NewAuthHandler(userService, roleService)
+	middlewareHandler := handlers.NewMiddleware(jwtService, sessionService)
+	roleHandler := handlers.NewRoleHandler(roleService)
 
 	// Setup Gin router
 	r := gin.Default()
 
 	// Register routes
 	userHandler.RegisterRoutes(r, userHandler)
+	authHandler.RegisterRoutes(r)
+	middlewareHandler.RegisterRoutes(r)
+	roleHandler.RegisterRoutes(r)
 
 	// Start HTTP server
 	serverPort := os.Getenv("SERVER_PORT")
