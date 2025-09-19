@@ -13,9 +13,7 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP,
-    login_attempts INTEGER DEFAULT 0,
-    locked_until TIMESTAMP,
-    face_liveness varchar
+    locked_until BIGINT,
     
     -- Constraints
     CONSTRAINT users_contact_required CHECK (phone_number IS NOT NULL OR email IS NOT NULL)
@@ -42,7 +40,7 @@ CREATE TABLE user_roles (
     role_id INTEGER REFERENCES roles(id) ON DELETE CASCADE,
     assigned_by VARCHAR(50) REFERENCES users(id),
     assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at TIMESTAMP,
+    expires_at BIGINT,
     is_active BOOLEAN DEFAULT TRUE,
     
     UNIQUE(user_id, role_id)
@@ -62,7 +60,7 @@ CREATE TABLE permissions (
 
 -- user_ekyc_progress
 CREATE TABLE user_ekyc_progress (
-    user_id VARCHAR(36) PRIMARY KEY, -- UUID
+    user_id VARCHAR(50) PRIMARY KEY, -- UUID
     cic_no VARCHAR NOT NULL,         -- CMND/CCCD number
     is_ocr_done BOOLEAN DEFAULT FALSE,
     ocr_done_at TIMESTAMPTZ,
@@ -72,7 +70,7 @@ CREATE TABLE user_ekyc_progress (
 
 -- user_card
 CREATE TABLE user_card (
-    national_id   VARCHAR(36) PRIMARY KEY, -- số CCCD/CMND, dùng varchar(36) cho UUID/chuỗi
+    national_id   VARCHAR(12) PRIMARY KEY, -- số CCCD/CMND
     name VARCHAR,
     dob VARCHAR,
     sex VARCHAR,
