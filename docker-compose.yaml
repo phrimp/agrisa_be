@@ -33,7 +33,7 @@ services:
     networks:
       - traefik-net
     labels:
-      - "traefik.enable=false"
+      - "traefik.enable=true"
       # Global CORS middleware definition - applied automatically to all services
       - "traefik.http.middlewares.global-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
       - "traefik.http.middlewares.global-cors.headers.accesscontrolallowheaders=*"
