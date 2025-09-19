@@ -223,7 +223,7 @@ services:
     - "traefik.http.routers.auth-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/protected`)"
     - "traefik.http.routers.auth-protected.entrypoints=web"
     - "traefik.http.routers.auth-protected.service=auth-service"
-    - "traefik.http.routers.auth-protected.middlewares=global-cors, auth-middleware"
+    - "traefik.http.routers.auth-protected.middlewares=global-cors,auth-middleware"
 
     - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
     - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"

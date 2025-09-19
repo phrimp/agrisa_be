@@ -26,7 +26,7 @@ func NewAuthHandler(userService services.IUserService, roleService *services.Rol
 }
 
 func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
-	authGrPub := router.Group("/auth/public/api/v2")
+	authGrPub := router.Group("/auth/public")
 
 	// Public routes
 	authGrPub.POST("/register", a.Register)
