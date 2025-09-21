@@ -48,9 +48,9 @@ func (u *UserRepository) CreateUser(user *models.User) error {
 
 	query := `
 		INSERT INTO users (id, phone_number, email, password_hash, national_id, status, 
-		                  email_verified, phone_verified, kyc_verified, created_at, updated_at)
+		                  email_verified, phone_verified, kyc_verified, created_at, updated_at, locked_until, face_liveness)
 		VALUES (:id, :phone_number, :email, :password_hash, :national_id, :status,
-		        :email_verified, :phone_verified, :kyc_verified, :created_at, :updated_at)
+		        :email_verified, :phone_verified, :kyc_verified, :created_at, :updated_at, :locked_until, :face_liveness)
 	`
 
 	user.PasswordHash = hashedPassword
