@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	agrisa_utils "agrisa_utils"
+
 	"github.com/jmoiron/sqlx"
 )
 
@@ -12,6 +14,7 @@ type IUserEkycProgressRepository interface {
 	UpdateOCRDone(userID string, ocrDone bool, nationalID string) error
 	GetUserEkycProgressByUserID(userID string) (*models.UserEkycProgress, error)
 	UpdateFaceLivenessDone(userID string, isFaceLivenessDone bool) error
+	CreateUserEkycProgress(progress *models.UserEkycProgress) error
 }
 
 type UserEkycProgressRepository struct {
@@ -84,4 +87,26 @@ func (u *UserEkycProgressRepository) UpdateFaceLivenessDone(userID string, isFac
 		return fmt.Errorf("no rows updated for user_id: %s", userID)
 	}
 	return nil
+}
+
+func (u *UserEkycProgressRepository) CreateUserEkycProgress(progress *models.UserEkycProgress) error {
+	query := `
+		INSERT INTO user_ekyc_progress (
+			user_id,
+			cic_no,
+			is_ocr_done,
+			ocr_done_at,
+			is_face_verified,
+			face_verified_at
+		) VALUES ($1, $2, $3, $4, $5, $6)
+	`
+	return agrisa_utils.ExecWithCheck(u.db, query, agrisa_utils.ExecInsert,
+		progress.UserID,
+		progress.CicNo,
+		progress.IsOcrDone,
+		progress.OcrDoneAt,
+		progress.IsFaceVerified,
+		progress.FaceVerifiedAt,
+	)
+
 }

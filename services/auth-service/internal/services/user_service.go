@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -853,6 +854,7 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 	}
 
 	newUser := models.User{
+		ID:            uuid.New().String(),
 		PhoneNumber:   phone,
 		Email:         email,
 		PasswordHash:  password,
@@ -864,8 +866,20 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 	if err != nil {
 		return nil, fmt.Errorf("error creating new user: %s", err)
 	}
-	// event here
-	//
+	// create ekyc progress
+	ekycProgress := models.UserEkycProgress{
+		UserID:         newUser.ID,
+		CicNo:          nationalID,
+		IsOcrDone:      false,
+		OcrDoneAt:      nil,
+		IsFaceVerified: false,
+		FaceVerifiedAt: nil,
+	}
+	err = s.ekycProgressRepo.CreateUserEkycProgress(&ekycProgress)
+	if err != nil {
+		log.Printf("error creating ekyc progress for user %s: %s", newUser.ID, err)
+		return nil, err
+	}
 	return &newUser, nil
 }
 
