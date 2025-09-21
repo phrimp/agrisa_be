@@ -28,15 +28,16 @@ func (h *UserHandler) PingHandler(c *gin.Context) {
 // RegisterRoutes registers all routes for the user handler
 func (u *UserHandler) RegisterRoutes(router *gin.Engine, userHandler *UserHandler) {
 	// Add the ping route
-	router.GET("/api/v1/auth/ping", userHandler.PingHandler)
+	userAuthGrPub := router.Group("/auth/protected/api/v2/")
+	userAuthGrPub.GET("/ping", userHandler.PingHandler)
 	// Add the session init route
-	router.POST("/api/v1/auth/ocridcard", userHandler.OCRNationalIDCardHandler)
-	router.GET("/api/v1/auth/ekyc-progress/:i", userHandler.GetUserEkycProgressByUserID)
-	router.POST("/api/v1/auth/face-liveness", userHandler.VerifyFaceLiveness)
+	userAuthGrPub.POST("/ocridcard", userHandler.OCRNationalIDCardHandler)
+	userAuthGrPub.GET("/ekyc-progress/:i", userHandler.GetUserEkycProgressByUserID)
+	userAuthGrPub.POST("/face-liveness", userHandler.VerifyFaceLiveness)
 
 	// For testing API
-	router.POST("/api/v1/auth/testing/upload", userHandler.UploadFileTestHandler)
-	router.POST("/api/v1/auth/testing/upload-multiple", userHandler.UploadMultipleFilesTestHandler)
+	userAuthGrPub.POST("/testing/upload", userHandler.UploadFileTestHandler)
+	userAuthGrPub.POST("/testing/upload-multiple", userHandler.UploadMultipleFilesTestHandler)
 }
 
 type InitSessionRequest struct {
