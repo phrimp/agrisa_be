@@ -861,6 +861,7 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 		NationalID:    nationalID,
 		Status:        models.UserStatusPendingVerification,
 		PhoneVerified: phoneVerificationStatus,
+		LockedUntil:   0,
 	}
 	err := s.userRepo.CreateUser(&newUser)
 	if err != nil {
