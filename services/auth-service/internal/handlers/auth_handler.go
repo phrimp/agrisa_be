@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"auth-service/internal/config"
 	"auth-service/internal/models"
 	"auth-service/internal/services"
 	"auth-service/utils"
@@ -38,6 +39,11 @@ func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
 	sessionGr.GET("/me", a.GetMySession)
 	// Admin manage all sessions
 	sessionGr.GET("/all", a.GetAllSessions)
+}
+
+func (a *AuthHandler) InitDefaultUser(cfg config.AuthServiceConfig) error {
+	_, err := a.userService.RegisterNewUser("NOPHONE", "NOEMAIL", cfg.AuthCfg.AdminPWD, "NOID", true, true)
+	return err
 }
 
 // Login handles user authentication
@@ -294,7 +300,7 @@ func (a *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// Attempt registration
-	user, err := a.userService.RegisterNewUser(req.Phone, req.Email, req.Password, req.NationalID, false)
+	user, err := a.userService.RegisterNewUser(req.Phone, req.Email, req.Password, req.NationalID, false, false)
 	if err != nil {
 		log.Printf("Registration failed for user %s/%s: %v", req.Email, req.Phone, err)
 

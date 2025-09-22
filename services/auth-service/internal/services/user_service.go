@@ -25,7 +25,7 @@ import (
 )
 
 type IUserService interface {
-	RegisterNewUser(phone, email, password, nationalID string, phoneVerificationStatus bool) (*models.User, error)
+	RegisterNewUser(phone, email, password, nationalID string, phoneVerificationStatus, isDefault bool) (*models.User, error)
 	Login(email, phone, password string, deviceInfo, ipAddress *string) (*models.User, *models.UserSession, error)
 
 	BanUser(userID string, until int64) error
@@ -831,7 +831,27 @@ func (s *UserService) VerifyFaceLiveness(form *multipart.Form) (interface{}, err
 	return utils.CreateSuccessResponse(ekycProgressUpdated), nil
 }
 
-func (s *UserService) RegisterNewUser(phone, email, password, nationalID string, phoneVerificationStatus bool) (*models.User, error) {
+func (s *UserService) RegisterNewUser(phone, email, password, nationalID string, phoneVerificationStatus, isDefault bool) (*models.User, error) {
+	if isDefault {
+		newUser := models.User{
+			ID:            "UC" + agrisa_utils.GenerateRandomStringWithLength(8),
+			PhoneNumber:   phone,
+			Email:         email,
+			PasswordHash:  password,
+			NationalID:    nationalID,
+			Status:        models.UserStatusPendingVerification,
+			PhoneVerified: phoneVerificationStatus,
+			LockedUntil:   0,
+			FaceLiveness:  "",
+		}
+		err := s.userRepo.CreateUser(&newUser)
+		if err != nil {
+			return nil, fmt.Errorf("error creating new default user: %s", err)
+		}
+		return &newUser, nil
+
+	}
+
 	if isvalid, err := agrisa_utils.ValidateEmail(email); !isvalid {
 		return nil, fmt.Errorf("error validating email: %s", err)
 	}
