@@ -21,7 +21,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -854,7 +853,7 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 	}
 
 	newUser := models.User{
-		ID:            uuid.New().String(),
+		ID:            "UC" + agrisa_utils.GenerateRandomStringWithLength(8),
 		PhoneNumber:   phone,
 		Email:         email,
 		PasswordHash:  password,
