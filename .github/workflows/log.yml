@@ -1,0 +1,18 @@
+name: Telegram Notification
+on: [push, pull_request]
+jobs:
+  telegram:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.TELEGRAM_TOKEN }}
+          parse_mode: "Markdown"
+          message: |
+            Thằng ${{ github.actor }} vừa đẩy code lên
+            Repository: ${{ github.repository }}
+            Event: ${{ github.event_name }}
+            Nhánh: ${{ github.ref }}
+            Commit: ${{ github.sha }}
+            Message: ${{ github.event.head_commit.message }}
