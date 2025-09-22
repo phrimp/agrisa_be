@@ -9,6 +9,7 @@ import (
 	"auth-service/utils"
 	"bytes"
 	"context"
+	"encoding/gob"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -1035,13 +1036,16 @@ func (s *UserService) getCachedUserByEmail(email string) *models.User {
 	defer cancel()
 
 	key := fmt.Sprintf("user:email:%s", email)
-	val, err := s.redisClient.Get(ctx, key).Result()
+	val, err := s.redisClient.Get(ctx, key).Bytes()
 	if err != nil {
 		return nil // Cache miss or error
 	}
 
+	buf := bytes.NewBuffer(val)
+	decoder := gob.NewDecoder(buf)
 	var user models.User
-	if err := json.Unmarshal([]byte(val), &user); err != nil {
+	if err := decoder.Decode(&user); err != nil {
+		log.Println("error decoding cached user")
 		return nil
 	}
 	return &user
@@ -1055,13 +1059,16 @@ func (s *UserService) getCachedUserByPhone(phone string) *models.User {
 	defer cancel()
 
 	key := fmt.Sprintf("user:phone:%s", phone)
-	val, err := s.redisClient.Get(ctx, key).Result()
+	val, err := s.redisClient.Get(ctx, key).Bytes()
 	if err != nil {
 		return nil // Cache miss or error
 	}
 
+	buf := bytes.NewBuffer(val)
+	decoder := gob.NewDecoder(buf)
 	var user models.User
-	if err := json.Unmarshal([]byte(val), &user); err != nil {
+	if err := decoder.Decode(&user); err != nil {
+		log.Println("error decoding cached user")
 		return nil
 	}
 	return &user
@@ -1074,15 +1081,17 @@ func (s *UserService) cacheUser(user *models.User) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
-	userJSON, err := json.Marshal(user)
-	if err != nil {
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(user); err != nil {
+		log.Println("error encoding user caching")
 		return
 	}
 
 	// Cache for 15 minutes
 	ttl := 15 * time.Minute
-	s.redisClient.Set(ctx, fmt.Sprintf("user:email:%s", user.Email), userJSON, ttl)
-	s.redisClient.Set(ctx, fmt.Sprintf("user:phone:%s", user.PhoneNumber), userJSON, ttl)
+	s.redisClient.Set(ctx, fmt.Sprintf("user:email:%s", user.Email), buf.Bytes(), ttl)
+	s.redisClient.Set(ctx, fmt.Sprintf("user:phone:%s", user.PhoneNumber), buf.Bytes(), ttl)
 }
 
 func (s *UserService) incrementLoginAttempts(userID string) int {

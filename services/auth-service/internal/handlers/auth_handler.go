@@ -117,7 +117,7 @@ func (a *AuthHandler) Login(c *gin.Context) {
 		"access_token": session.TokenHash,
 	}
 
-	log.Printf("Successful login for user %s", user.ID)
+	log.Printf("Successful login for user %s/%s", user.ID, user.Email)
 	c.JSON(http.StatusOK, utils.SuccessResponse{
 		Success: true,
 		Data:    responseData,
