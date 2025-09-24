@@ -13,6 +13,19 @@ class Settings(BaseSettings):
     host: str = Field(default="0.0.0.0", env="HOST")
     port: int = Field(default=8000, env="PORT")
     
+    # Database Configuration
+    database_url: str = Field(
+        default="postgresql+asyncpg://postgres:postgres@postgres:9406/agrisa",
+        env="DATABASE_URL"
+    )
+    
+    # MinIO Configuration
+    minio_endpoint: str = Field(default="localhost:9000", env="MINIO_ENDPOINT")
+    minio_access_key: str = Field(default="minioadmin", env="MINIO_ACCESS_KEY")
+    minio_secret_key: str = Field(default="minioadmin", env="MINIO_SECRET_KEY")
+    minio_secure: bool = Field(default=False, env="MINIO_SECURE")
+    minio_bucket_name: str = Field(default="satellite-data", env="MINIO_BUCKET_NAME")
+    
     # Google Earth Engine Configuration
     # Service account key file path (for authentication)
     gee_service_account_key: Optional[str] = Field(default=None, env="GEE_SERVICE_ACCOUNT_KEY")
@@ -37,7 +50,7 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
     
     class Config:
-        env_file = None  # Explicitly no env file as requested
+        env_file = None
         case_sensitive = False
 
 

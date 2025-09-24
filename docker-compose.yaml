@@ -201,6 +201,8 @@ services:
       - FPT_EKYC_API_KEY=${FPT_EKYC_API_KEY}
       - FPT_OCR_URL=${FPT_OCR_URL}
       - FPT_FACE_LIVENESS_URL=${FPT_FACE_LIVENESS_URL}
+      - JWT_SECRET=${JWT_SECRET}
+      - ADMIN_PWD=${ADMIN_PWD}
 
     volumes:
       - ./logs/auth-service:/agrisa/log/auth_service

@@ -2,10 +2,12 @@
 .env
 .env.local
 .env.*.local
+.envrc
 
 # Logs
 logs/
 *.log
+*.log.*
 
 # Runtime data
 pids
@@ -18,6 +20,105 @@ data/
 backups/
 ssl/
 
+# Python specific
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+.env/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# PEP 582
+__pypackages__/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Alembic
+alembic.ini
+
 # OS generated files
 .DS_Store
 .DS_Store?
@@ -26,17 +127,113 @@ ssl/
 .Trashes
 ehthumbs.db
 Thumbs.db
+desktop.ini
 
 # IDE files
 .vscode/
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 .idea/
 *.swp
 *.swo
 *~
+.vim/
+.netrwhist
+
+# JetBrains
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Atom
+.atom/
+
+# Emacs
+*~
+\#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
+.\#*
 
 # Temporary files
 tmp/
 temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.orig
 
+# Archive files
+*.zip
+*.tar.gz
+*.rar
 
+# Docker
+.dockerignore
+
+# Node.js (for any frontend tooling)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Security
 secrets/*
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+service-account-key.json
+
+# MinIO data (if running locally)
+minio-data/
+
+# PostgreSQL dumps
+*.sql
+*.dump
+
+# Redis dumps
+dump.rdb
+
+# Local development
+.local/
+local/
+
+# Test artifacts
+.pytest_cache/
+test-results/
+test_*.py
+
+# Coverage reports
+htmlcov/
+.coverage
+
+# Documentation builds
+docs/_build/
+
+# Terraform
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Kubernetes
+*.kubeconfig
+
+# Monitoring
+prometheus_data/
+grafana_data/
+
+.claude
