@@ -19,28 +19,16 @@ services:
       - --entrypoints.web.address=:80
       - --entrypoints.websecure.address=:443
       - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
-      # Global CORS middleware applied to all services automatically
-      - --entrypoints.web.http.middlewares=global-cors@docker
-      - --entrypoints.websecure.http.middlewares=global-cors@docker
-    networks:
-      - traefik-net
-
-  # Global CORS Middleware Configuration Service
-  cors-middleware:
-    image: traefik/whoami
-    container_name: agrisa-cors-config
-    restart: unless-stopped
     networks:
       - traefik-net
     labels:
       - "traefik.enable=true"
-      # Global CORS middleware definition - applied automatically to all services
-      - "traefik.http.middlewares.global-cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
-      - "traefik.http.middlewares.global-cors.headers.accesscontrolallowheaders=*"
-      - "traefik.http.middlewares.global-cors.headers.accesscontrolalloworiginlist=*"
-      # - "traefik.http.middlewares.global-cors.headers.accesscontrolalloworiginlist=https://agrisa.phrimp.io.vn"
-      - "traefik.http.middlewares.global-cors.headers.accesscontrolmaxage=86400"
-      - "traefik.http.middlewares.global-cors.headers.addvaryheader=true"
+      # Define global CORS middleware that can be referenced by all services
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
+      - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=*"
+      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=*"
+      - "traefik.http.middlewares.cors.headers.accesscontrolmaxage=86400"
+      - "traefik.http.middlewares.cors.headers.addvaryheader=true"
 
   # RabbitMQ Message Broker
   rabbitmq:
@@ -220,16 +208,63 @@ services:
     - "traefik.http.routers.auth-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/public`)"
     - "traefik.http.routers.auth-public.entrypoints=web"
     - "traefik.http.routers.auth-public.service=auth-service"
-    - "traefik.http.routers.auth-public.middlewares=global-cors"
+    - "traefik.http.routers.auth-public.middlewares=cors"
 
     - "traefik.http.routers.auth-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/protected`)"
     - "traefik.http.routers.auth-protected.entrypoints=web"
     - "traefik.http.routers.auth-protected.service=auth-service"
-    - "traefik.http.routers.auth-protected.middlewares=global-cors,auth-middleware"
+    - "traefik.http.routers.auth-protected.middlewares=cors,auth-middleware"
 
     - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
     - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
     - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
+
+  # Satellite Data Service
+  satellite-data-service:
+    build:
+      context: ./
+      dockerfile: services/satellite-data-service/Dockerfile
+    container_name: agrisa-satellite-data-service
+    restart: unless-stopped
+    ports:
+      - "${SATELLITE_DATA_SERVICE_PORT:-8084}:8000"
+    environment:
+      - APP_NAME=Agrisa Satellite Data Service
+      - APP_VERSION=${SATELLITE_DATA_SERVICE_VERSION:-1.0.0}
+      - DEBUG=false
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:${POSTGRES_PORT:-9406}/${POSTGRES_DEFAULT_DB:-agrisa}
+      - MINIO_ENDPOINT=${MINIO_URL}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_SECURE=${MINIO_SECURE}
+      - MINIO_BUCKET_NAME=${SATELLITE_BUCKET_NAME:-satellite-data}
+      - GEE_SERVICE_ACCOUNT_KEY=/app/secrets/agrisa_keys.json
+      - GEE_PROJECT_ID=${GEE_PROJECT_ID}
+      - DEFAULT_IMAGE_SCALE=30
+      - MAX_IMAGE_PIXELS=10000000
+      - CACHE_EXPIRY_HOURS=24
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./logs/satellite-data-service:/app/log
+      - ./${GEE_SERVICE_ACCOUNT_KEY_LOCATION}:/app/secrets/agrisa_keys.json:ro
+    networks:
+      - traefik-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.satellite-data-service.loadbalancer.server.port=8000"
+      - "traefik.http.routers.satellite-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/satellite/public`)"
+      - "traefik.http.routers.satellite-public.entrypoints=web"
+      - "traefik.http.routers.satellite-public.service=satellite-data-service"
+      - "traefik.http.routers.satellite-public.middlewares=cors"
+      - "traefik.http.routers.satellite-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/satellite/protected`)"
+      - "traefik.http.routers.satellite-protected.entrypoints=web"
+      - "traefik.http.routers.satellite-protected.service=satellite-data-service"
+      - "traefik.http.routers.satellite-protected.middlewares=cors,auth-middleware"
 
 
 networks:
