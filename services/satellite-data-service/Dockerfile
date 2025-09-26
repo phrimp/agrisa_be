@@ -25,13 +25,13 @@ FROM python:3.11-slim as runtime
 # Set timezone to Asia/Ho_Chi_Minh
 ENV TZ=Asia/Ho_Chi_Minh
 
-# Install only runtime dependencies
+# Install only runtime dependencies using generic names (more future-proof)
 RUN apt-get update && apt-get install -y \
     tzdata \
     libpq5 \
     libgeos-c1v5 \
-    libproj25 \
-    libgdal32 \
+    libproj-dev \
+    gdal-bin \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
     && echo $TZ > /etc/timezone \
     && rm -rf /var/lib/apt/lists/*
