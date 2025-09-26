@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy and install Python dependencies
-COPY requirements.txt .
+COPY services/satellite-data-service/requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
 FROM python:3.11-slim as runtime
@@ -45,8 +45,8 @@ WORKDIR /app
 # Copy Python packages from builder stage
 COPY --from=builder /root/.local /home/app/.local
 
-# Copy application code
-COPY --chown=app:app app/ ./app/
+# Copy application code - Fixed path
+COPY --chown=app:app services/satellite-data-service/app/ ./app/
 
 # Switch to non-root user
 USER app
