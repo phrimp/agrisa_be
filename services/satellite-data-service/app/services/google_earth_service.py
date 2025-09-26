@@ -56,30 +56,16 @@ class GoogleEarthEngineService:
             max_cloud_cover: Maximum cloud coverage percentage (0-100)
             
         Returns:
-            Dictionary containing complete satellite image information:
-            - image_info: Full image metadata and properties
-            - geometry: Farm boundary geometry
-            - image_id: Google Earth Engine image ID
-            - acquisition_date: Image acquisition date
-            - cloud_cover: Cloud coverage percentage
-            - bands: Available spectral bands information
-            - download_url: URL for downloading the clipped image
-            - statistics: Image statistics for the farm area
-            - projection_info: Original and output projection information
-        
-        Raises:
-            ValueError: If coordinates are invalid or no images found
-            Exception: If Google Earth Engine API call fails
+            Dictionary containing complete satellite image information
         """
         try:
             logger.info(f"Getting satellite image for farm boundary from {start_date} to {end_date}")
             logger.info(f"Input coordinates CRS: {coordinate_crs}")
             
             # Step 1: Create Earth Engine geometry with specified CRS
-            # GEE will automatically handle coordinate system conversion
             farm_geometry = ee.Geometry.Polygon(
                 coords=[coordinates], 
-                proj=coordinate_crs,  # Specify input coordinate system
+                proj=coordinate_crs,
                 geodesic=False
             )
             
@@ -116,11 +102,17 @@ class GoogleEarthEngineService:
             image_info = best_image.getInfo()
             image_properties = best_image.toDictionary().getInfo()
             
+            # Debug: Log the structure of image_info to understand the data
+            logger.info(f"Image info type: {type(image_info)}")
+            logger.info(f"Image info keys: {list(image_info.keys()) if isinstance(image_info, dict) else 'Not a dict'}")
+            if isinstance(image_info, dict) and 'bands' in image_info:
+                logger.info(f"Bands type: {type(image_info['bands'])}")
+                logger.info(f"Bands content: {image_info['bands']}")
+            
             # Get native projection information
             native_projection = best_image.projection().getInfo()
             
             # Step 6: Calculate statistics for the farm area
-            # Let GEE handle the coordinate conversion automatically
             stats = best_image.reduceRegion(
                 reducer=ee.Reducer.mean().combine(
                     ee.Reducer.stdDev(), sharedInputs=True
@@ -137,33 +129,59 @@ class GoogleEarthEngineService:
             
             download_url = clipped_image.getDownloadURL({
                 'scale': self.settings.default_image_scale,
-                'crs': coordinate_crs,  # Output in same CRS as input
+                'crs': coordinate_crs,
                 'region': farm_geometry,
                 'format': 'GEO_TIFF'
             })
             
-            # Step 8: Compile complete response
+            # Step 8: Safely extract band information
+            bands_info = image_info.get('bands', []) if isinstance(image_info, dict) else []
+            
+            # Handle both dict and list formats for bands
+            if isinstance(bands_info, dict):
+                band_names = list(bands_info.keys())
+                band_info = bands_info
+            elif isinstance(bands_info, list):
+                # If bands is a list of band objects
+                band_names = []
+                band_info = {}
+                for i, band in enumerate(bands_info):
+                    if isinstance(band, dict) and 'id' in band:
+                        band_name = band['id']
+                        band_names.append(band_name)
+                        band_info[band_name] = band
+                    else:
+                        # Fallback for unknown band structure
+                        band_name = f"band_{i}"
+                        band_names.append(band_name)
+                        band_info[band_name] = band
+            else:
+                logger.warning(f"Unknown bands format: {type(bands_info)}")
+                band_names = []
+                band_info = {}
+            
+            # Step 9: Compile complete response
             result = {
                 'image_info': {
-                    'id': image_info.get('id'),
-                    'type': image_info.get('type'),
-                    'version': image_info.get('version', 0),
+                    'id': image_info.get('id') if isinstance(image_info, dict) else None,
+                    'type': image_info.get('type') if isinstance(image_info, dict) else None,
+                    'version': image_info.get('version', 0) if isinstance(image_info, dict) else 0,
                     'properties': image_properties,
-                    'bands': image_info.get('bands', {})
+                    'bands_raw': bands_info  # Include raw bands for debugging
                 },
                 'geometry': {
                     'type': 'Polygon',
                     'coordinates': [coordinates],
                     'crs': coordinate_crs
                 },
-                'image_id': image_info.get('id'),
+                'image_id': image_info.get('id') if isinstance(image_info, dict) else 'unknown',
                 'satellite': satellite,
                 'collection': collection_id,
                 'acquisition_date': image_properties.get('DATE_ACQUIRED') or 
                                   image_properties.get('SENSING_TIME', '').split('T')[0] if 'SENSING_TIME' in image_properties else None,
                 'cloud_cover': image_properties.get('CLOUD_COVER', 0),
-                'bands': list(image_info.get('bands', {}).keys()) if 'bands' in image_info else [],
-                'band_info': image_info.get('bands', {}),
+                'bands': band_names,
+                'band_info': band_info,
                 'download_url': download_url,
                 'statistics': stats,
                 'projection_info': {

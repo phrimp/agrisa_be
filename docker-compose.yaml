@@ -248,7 +248,7 @@ services:
       - LOG_LEVEL=INFO
     volumes:
       - ./logs/satellite-data-service:/app/log
-      - ./${GEE_SERVICE_ACCOUNT_KEY_LOCATION}:/app/secrets/agrisa_keys.json:ro
+      - ./${GEE_SERVICE_ACCOUNT_KEY_LOCATION}:/app/secrets/agrisa_keys.json
     networks:
       - traefik-net
     depends_on:

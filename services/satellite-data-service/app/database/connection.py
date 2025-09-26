@@ -1,5 +1,6 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base
+from sqlalchemy import text
 from app.config.settings import get_settings
 
 settings = get_settings()
@@ -36,7 +37,7 @@ async def get_db():
 async def init_db():
     """Initialize database tables."""
     async with engine.begin() as conn:
-        # Create PostGIS extension if not exists
-        await conn.execute("CREATE EXTENSION IF NOT EXISTS postgis")
+        # Create PostGIS extension if not exists (wrapped in text())
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
         # Create all tables
         await conn.run_sync(Base.metadata.create_all)
