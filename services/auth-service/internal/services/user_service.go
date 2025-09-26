@@ -1003,9 +1003,11 @@ func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress
 	sessions, err := s.sessionService.GetUserSessions(context.Background(), login_attempt_user.ID)
 	newSessionSignal := true
 	if len(sessions) != 0 {
+		log.Printf("User %s session exists: %v", login_attempt_user.ID, len(sessions))
 		// process existing session
 		for _, session := range sessions {
 			if *deviceInfo == *session.DeviceInfo {
+				log.Printf("New login in the same device, retrieve old session (user id: %s --- session id: %s)", login_attempt_user.ID, session.ID)
 				finalSession = session
 				newSessionSignal = false
 				break
@@ -1019,6 +1021,7 @@ func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress
 			log.Println("error creating new session: ", err)
 			return nil, nil, fmt.Errorf("error creating new session: %s", err)
 		}
+		log.Printf("New session created (user id: %s --- session id: %s)", login_attempt_user.ID, finalSession.ID)
 	}
 
 	// Reset login attempts on successful login

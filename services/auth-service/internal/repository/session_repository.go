@@ -2,8 +2,9 @@ package repository
 
 import (
 	"auth-service/internal/models"
+	"bytes"
 	"context"
-	"encoding/json"
+	"encoding/gob"
 	"fmt"
 	"time"
 
@@ -50,15 +51,16 @@ func (r *sessionRepository) CreateSession(ctx context.Context, session *models.U
 	session.ExpiresAt = time.Now().Add(r.expiration)
 	session.IsActive = true
 
-	// Serialize session to JSON
-	sessionData, err := json.Marshal(session)
-	if err != nil {
-		return fmt.Errorf("failed to marshal session: %w", err)
+	// Serialize session using gob
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(session); err != nil {
+		return fmt.Errorf("failed to encode session: %w", err)
 	}
 
 	// Store session in Redis with expiration
 	sessionKey := r.getSessionKey(session.ID)
-	if err := r.client.Set(ctx, sessionKey, sessionData, r.expiration).Err(); err != nil {
+	if err := r.client.Set(ctx, sessionKey, buf.Bytes(), r.expiration).Err(); err != nil {
 		return fmt.Errorf("failed to store session: %w", err)
 	}
 
@@ -91,9 +93,12 @@ func (r *sessionRepository) GetSession(ctx context.Context, sessionID string) (*
 		return nil, fmt.Errorf("failed to get session: %w", err)
 	}
 
+	// Deserialize session using gob
+	buf := bytes.NewBuffer([]byte(sessionData))
+	decoder := gob.NewDecoder(buf)
 	var session models.UserSession
-	if err := json.Unmarshal([]byte(sessionData), &session); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal session: %w", err)
+	if err := decoder.Decode(&session); err != nil {
+		return nil, fmt.Errorf("failed to decode session: %w", err)
 	}
 
 	// Check if session is expired
@@ -187,10 +192,11 @@ func (r *sessionRepository) RenewSession(ctx context.Context, sessionID string) 
 	// Update expiration time
 	session.ExpiresAt = time.Now().Add(r.expiration)
 
-	// Serialize updated session
-	sessionData, err := json.Marshal(session)
-	if err != nil {
-		return fmt.Errorf("failed to marshal session: %w", err)
+	// Serialize updated session using gob
+	var buf bytes.Buffer
+	encoder := gob.NewEncoder(&buf)
+	if err := encoder.Encode(session); err != nil {
+		return fmt.Errorf("failed to encode session: %w", err)
 	}
 
 	// Update session in Redis with new expiration
@@ -198,7 +204,7 @@ func (r *sessionRepository) RenewSession(ctx context.Context, sessionID string) 
 	userSessionsKey := r.getUserSessionsKey(session.UserID)
 
 	pipe := r.client.Pipeline()
-	pipe.Set(ctx, sessionKey, sessionData, r.expiration)
+	pipe.Set(ctx, sessionKey, buf.Bytes(), r.expiration)
 	pipe.Expire(ctx, userSessionsKey, r.expiration)
 
 	_, err = pipe.Exec(ctx)
