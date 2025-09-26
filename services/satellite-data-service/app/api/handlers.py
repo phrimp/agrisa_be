@@ -16,11 +16,11 @@ async def test_gee_image() -> Dict[str, Any]:
     try:
         # Hardcoded test coordinates (small area in Vietnam - WGS84)
         test_coordinates = [
-            [105.8342, 21.0285],  # Hanoi area
-            [105.8442, 21.0285],
-            [105.8442, 21.0385],
-            [105.8342, 21.0385],
-            [105.8342, 21.0285]   # Close the polygon
+            [106.6660, 11.8778],  # 11°52'40.1"N 106°39'57.6"E
+            [106.6633, 11.8781],  # 11°52'41.1"N 106°39'48.0"E
+            [106.6633, 11.8772],  # 11°52'37.9"N 106°39'47.8"E
+            [106.6662, 11.8770],  # 11°52'37.1"N 106°39'58.3"E
+            [106.6660, 11.8778]   # Close the polygon
         ]
         
         # Initialize service
