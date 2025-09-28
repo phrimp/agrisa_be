@@ -7,6 +7,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+
 @router.get("/satellite/public/gee/image_test")
 async def test_gee_image() -> Dict[str, Any]:
     """
@@ -20,33 +21,30 @@ async def test_gee_image() -> Dict[str, Any]:
             [106.6633, 11.8781],  # 11°52'41.1"N 106°39'48.0"E
             [106.6633, 11.8772],  # 11°52'37.9"N 106°39'47.8"E
             [106.6662, 11.8770],  # 11°52'37.1"N 106°39'58.3"E
-            [106.6660, 11.8778]   # Close the polygon
+            [106.6660, 11.8778],  # Close the polygon
         ]
-        
+
         # Initialize service
         gee_service = GoogleEarthEngineService()
-        
+
         # Call service with test parameters
-        result = gee_service.get_satellite_image_for_farm(
-            coordinates=test_coordinates,
-            coordinate_crs="EPSG:4326",  # WGS84
-            start_date="2025-01-01",
-            end_date="2025-01-31",
-            satellite="LANDSAT_8",
-            max_cloud_cover=10.0
+        result = gee_service.get_farm_thumbnails(
+            test_coordinates,
+            "EPSG:4326",
+            "2025-01-01",
+            "2025-01-31",
+            "LANDSAT_8",
+            max_cloud_cover=10,
         )
-        
+
         return {
             "status": "success",
             "message": "Google Earth Engine service test completed",
-            "data": result
+            "data": result,
         }
-        
+
     except Exception as e:
         logger.error(f"GEE test failed: {e}")
         raise HTTPException(
-            status_code=500,
-            detail=f"Google Earth Engine test failed: {str(e)}"
+            status_code=500, detail=f"Google Earth Engine test failed: {str(e)}"
         )
-
-

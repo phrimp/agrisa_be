@@ -11,14 +11,12 @@ engine = create_async_engine(
     echo=settings.debug,
     pool_size=10,
     max_overflow=20,
-    pool_pre_ping=True
+    pool_pre_ping=True,
 )
 
 # Create async session maker
 AsyncSessionLocal = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False
+    engine, class_=AsyncSession, expire_on_commit=False
 )
 
 # Create declarative base
