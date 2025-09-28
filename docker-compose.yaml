@@ -99,7 +99,15 @@ services:
       mongodb:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8081"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://localhost:8081",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -154,7 +162,11 @@ services:
     networks:
       - traefik-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DEFAULT_DB:-agrisa} -p 9406"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DEFAULT_DB:-agrisa} -p 9406",
+        ]
       interval: 10s
       timeout: 5s
       retries: 3
@@ -202,22 +214,22 @@ services:
       redis:
         condition: service_healthy
     labels:
-    - "traefik.enable=true"
-    - "traefik.http.services.auth-service.loadbalancer.server.port=8083"
+      - "traefik.enable=true"
+      - "traefik.http.services.auth-service.loadbalancer.server.port=8083"
 
-    - "traefik.http.routers.auth-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/public`)"
-    - "traefik.http.routers.auth-public.entrypoints=web"
-    - "traefik.http.routers.auth-public.service=auth-service"
-    - "traefik.http.routers.auth-public.middlewares=cors"
+      - "traefik.http.routers.auth-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/public`)"
+      - "traefik.http.routers.auth-public.entrypoints=web"
+      - "traefik.http.routers.auth-public.service=auth-service"
+      - "traefik.http.routers.auth-public.middlewares=cors"
 
-    - "traefik.http.routers.auth-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/protected`)"
-    - "traefik.http.routers.auth-protected.entrypoints=web"
-    - "traefik.http.routers.auth-protected.service=auth-service"
-    - "traefik.http.routers.auth-protected.middlewares=cors,auth-middleware"
+      - "traefik.http.routers.auth-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/protected`)"
+      - "traefik.http.routers.auth-protected.entrypoints=web"
+      - "traefik.http.routers.auth-protected.service=auth-service"
+      - "traefik.http.routers.auth-protected.middlewares=cors,auth-middleware"
 
-    - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
-    - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
-    - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
+      - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
+      - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
+      - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
 
   # Satellite Data Service
   satellite-data-service:
@@ -266,6 +278,43 @@ services:
       - "traefik.http.routers.satellite-protected.service=satellite-data-service"
       - "traefik.http.routers.satellite-protected.middlewares=cors,auth-middleware"
 
+  # Payment Service
+  payment-service:
+    build:
+      context: ./
+      dockerfile: services/payment-service/Dockerfile
+    container_name: agrisa-payment-service
+    restart: unless-stopped
+    ports:
+      - "${PAYMENT_SERVICE_PORT:-8085}:3000"
+    environment:
+      - BUN_ENV=production
+      - PAYOS_CLIENT_ID=${PAYOS_CLIENT_ID}
+      - PAYOS_API_KEY=${PAYOS_API_KEY}
+      - PAYOS_CHECKSUM_KEY=${PAYOS_CHECKSUM_KEY}
+      - DB_HOST=${DB_HOST}
+      - DB_PORT=${DB_PORT}
+      - DB_USERNAME=${DB_USERNAME}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME:-payment_service}
+    volumes:
+      - ./logs/payment-service:/app/log
+    networks:
+      - traefik-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.payment-service.loadbalancer.server.port=3000"
+      - "traefik.http.routers.payment-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/payment/public`)"
+      - "traefik.http.routers.payment-public.entrypoints=web"
+      - "traefik.http.routers.payment-public.service=payment-service"
+      - "traefik.http.routers.payment-public.middlewares=cors"
+      - "traefik.http.routers.payment-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/payment/protected`)"
+      - "traefik.http.routers.payment-protected.entrypoints=web"
+      - "traefik.http.routers.payment-protected.service=payment-service"
+      - "traefik.http.routers.payment-protected.middlewares=cors,auth-middleware"
 
 networks:
   traefik-net:
