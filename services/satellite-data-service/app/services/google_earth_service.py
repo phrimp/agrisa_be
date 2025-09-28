@@ -317,6 +317,7 @@ class GoogleEarthEngineService:
             logger.error(f"Error getting simple satellite data: {e}")
             raise
 
+
     def get_farm_thumbnails(
         self,
         coordinates: List[List[float]],
@@ -324,219 +325,304 @@ class GoogleEarthEngineService:
         start_date: str = "2024-01-01",
         end_date: str = "2024-12-31",
         satellite: str = "LANDSAT_8",
-        max_cloud_cover: float = 30.0,
+        max_cloud_cover: float = 30.0
     ) -> Dict[str, Any]:
         """
         Generate multiple thumbnail images for Vietnamese farms.
-        Returns direct image URLs that can be used in web/mobile apps.
-
+        Supports both Landsat 8 and Sentinel-2 satellites.
+        
         Args:
             coordinates: List of [x, y] coordinates forming a closed polygon
             coordinate_crs: Coordinate Reference System
             start_date: Start date in 'YYYY-MM-DD' format
             end_date: End date in 'YYYY-MM-DD' format
-            satellite: Satellite collection name
+            satellite: Satellite collection name ("LANDSAT_8" or "SENTINEL_2")
             max_cloud_cover: Maximum cloud coverage percentage
-
+            
         Returns:
             Dictionary containing multiple thumbnail URLs and metadata
         """
         try:
-            logger.info("Generating farm thumbnail images")
-
+            logger.info(f"Generating {satellite} farm thumbnail images")
+            
             # Step 1: Create farm geometry
             farm_geometry = ee.Geometry.Polygon(
-                coords=[coordinates], proj=coordinate_crs, geodesic=False
+                coords=[coordinates], 
+                proj=coordinate_crs,
+                geodesic=False
             )
-
-            # Step 2: Get satellite collection
+            
+            # Step 2: Configure satellite-specific parameters
             if satellite == "LANDSAT_8":
                 collection_id = "LANDSAT/LC08/C02/T1_L2"
+                cloud_cover_prop = "CLOUD_COVER"
+                
+                # Landsat band configurations
+                band_configs = {
+                    'rgb': {
+                        'bands': ['SR_B4', 'SR_B3', 'SR_B2'],
+                        'min': 0.0, 'max': 0.3,
+                        'description': 'Natural color (30m resolution)'
+                    },
+                    'nir': {
+                        'bands': ['SR_B5', 'SR_B4', 'SR_B3'],
+                        'min': 0.0, 'max': 0.3, 'gamma': [0.95, 1.1, 1.0],
+                        'description': 'False color - vegetation appears red (30m resolution)'
+                    },
+                    'ndvi': {
+                        'bands': ['SR_B5', 'SR_B4'],
+                        'description': 'NDVI vegetation health (30m resolution)'
+                    },
+                    'agriculture': {
+                        'bands': ['SR_B6', 'SR_B5', 'SR_B2'],
+                        'min': 0.0, 'max': 0.3,
+                        'description': 'Agriculture composite (30m resolution)'
+                    }
+                }
+                
+                # Metadata field names for Landsat
+                metadata_fields = {
+                    'image_id': 'LANDSAT_PRODUCT_ID',
+                    'date': 'DATE_ACQUIRED',
+                    'cloud': 'CLOUD_COVER',
+                    'sun_elevation': 'SUN_ELEVATION'
+                }
+                
             elif satellite == "SENTINEL_2":
                 collection_id = "COPERNICUS/S2_SR_HARMONIZED"
-            else:
-                raise ValueError(f"Unsupported satellite: {satellite}")
-
-            # Step 3: Filter and get best image
-            image_collection = (
-                ee.ImageCollection(collection_id)
-                .filterBounds(farm_geometry)
-                .filterDate(start_date, end_date)
-                .filter(ee.Filter.lt("CLOUD_COVER", max_cloud_cover))
-                .sort("CLOUD_COVER")
-            )
-
-            image_count = image_collection.size().getInfo()
-            if image_count == 0:
-                raise ValueError("No images found for the specified criteria")
-
-            best_image = ee.Image(image_collection.first())
-
-            # Step 4: Apply scaling for Landsat if needed
-            if satellite == "LANDSAT_8":
-                optical_bands = best_image.select("SR_B.").multiply(0.0000275).add(-0.2)
-                best_image = best_image.addBands(optical_bands, None, True)
-
-            # Step 5: Create different thumbnail visualizations
-            thumbnails = {}
-
-            # Natural Color (RGB) Thumbnail
-            if satellite == "LANDSAT_8":
-                rgb_bands = ["SR_B4", "SR_B3", "SR_B2"]  # Red, Green, Blue
-                rgb_image = best_image.select(rgb_bands)
-                thumbnails["natural_color"] = {
-                    "url": rgb_image.getThumbURL(
-                        {
-                            "bands": rgb_bands,
-                            "min": 0.0,
-                            "max": 0.3,
-                            "dimensions": 512,
-                            "region": farm_geometry,
-                            "format": "png",
-                        }
-                    ),
-                    "description": "Natural color (as seen by human eye)",
-                    "bands": rgb_bands,
-                }
-
-                # False Color (NIR) Thumbnail - vegetation appears red
-                nir_bands = ["SR_B5", "SR_B4", "SR_B3"]  # NIR, Red, Green
-                nir_image = best_image.select(nir_bands)
-                thumbnails["false_color"] = {
-                    "url": nir_image.getThumbURL(
-                        {
-                            "bands": nir_bands,
-                            "min": 0.0,
-                            "max": 0.3,
-                            "gamma": [0.95, 1.1, 1.0],
-                            "dimensions": 512,
-                            "region": farm_geometry,
-                            "format": "png",
-                        }
-                    ),
-                    "description": "False color - healthy vegetation appears bright red",
-                    "bands": nir_bands,
-                }
-
-                # NDVI Thumbnail (vegetation health)
-                ndvi = best_image.normalizedDifference(["SR_B5", "SR_B4"])
-                thumbnails["ndvi"] = {
-                    "url": ndvi.getThumbURL(
-                        {
-                            "min": -1,
-                            "max": 1,
-                            "palette": [
-                                "FFFFFF",
-                                "CE7E45",
-                                "DF923D",
-                                "F1B555",
-                                "FCD163",
-                                "99B718",
-                                "74A901",
-                                "66A000",
-                                "529400",
-                                "3E8601",
-                                "207401",
-                                "056201",
-                                "004C00",
-                                "023B01",
-                                "012E01",
-                                "011D01",
-                                "011301",
-                            ],
-                            "dimensions": 512,
-                            "region": farm_geometry,
-                            "format": "png",
-                        }
-                    ),
-                    "description": "NDVI vegetation health (green = healthy, brown = stressed)",
-                    "bands": ["SR_B5", "SR_B4"],
-                    "interpretation": {
-                        "high_values": "Healthy vegetation (0.6 to 1.0)",
-                        "medium_values": "Moderate vegetation (0.2 to 0.6)",
-                        "low_values": "Bare soil/water (-1.0 to 0.2)",
+                cloud_cover_prop = "CLOUDY_PIXEL_PERCENTAGE"
+                
+                # Sentinel-2 band configurations
+                band_configs = {
+                    'rgb': {
+                        'bands': ['B4', 'B3', 'B2'],
+                        'min': 0, 'max': 3000,
+                        'description': 'Natural color (10m resolution)'
                     },
+                    'nir': {
+                        'bands': ['B8', 'B4', 'B3'],
+                        'min': 0, 'max': 3000, 'gamma': [0.95, 1.1, 1.0],
+                        'description': 'False color - vegetation appears red (10m resolution)'
+                    },
+                    'ndvi': {
+                        'bands': ['B8', 'B4'],
+                        'description': 'NDVI vegetation health (10m resolution)'
+                    },
+                    'agriculture': {
+                        'bands': ['B11', 'B8', 'B2'],
+                        'min': 0, 'max': 3000,
+                        'description': 'Agriculture composite (20m/10m resolution)'
+                    }
                 }
-
-                # Agriculture Composite (SWIR for crop analysis)
-                agri_bands = ["SR_B6", "SR_B5", "SR_B2"]  # SWIR1, NIR, Blue
-                agri_image = best_image.select(agri_bands)
-                thumbnails["agriculture"] = {
-                    "url": agri_image.getThumbURL(
-                        {
-                            "bands": agri_bands,
-                            "min": 0.0,
-                            "max": 0.3,
-                            "dimensions": 512,
-                            "region": farm_geometry,
-                            "format": "png",
-                        }
-                    ),
-                    "description": "Agriculture composite optimized for crop analysis",
-                    "bands": agri_bands,
+                
+                # Metadata field names for Sentinel-2
+                metadata_fields = {
+                    'image_id': 'PRODUCT_ID',
+                    'date': 'PRODUCT_ID',  # Date extracted from PRODUCT_ID
+                    'cloud': 'CLOUDY_PIXEL_PERCENTAGE',
+                    'sun_elevation': 'MEAN_SOLAR_ZENITH_ANGLE'
                 }
-
+                
+            else:
+                raise ValueError(f"Unsupported satellite: {satellite}. Use 'LANDSAT_8' or 'SENTINEL_2'")
+            
+            # Step 3: Filter and get best image
+            image_collection = (ee.ImageCollection(collection_id)
+                              .filterBounds(farm_geometry)
+                              .filterDate(start_date, end_date)
+                              .filter(ee.Filter.lt(cloud_cover_prop, max_cloud_cover))
+                              .sort(cloud_cover_prop))
+            
+            image_count = image_collection.size().getInfo()
+            logger.info(f"Found {image_count} {satellite} images matching criteria")
+            
+            if image_count == 0:
+                raise ValueError(f"No {satellite} images found for the specified criteria. "
+                               f"Try increasing cloud cover threshold or expanding date range.")
+            
+            best_image = ee.Image(image_collection.first())
+            
+            # Step 4: Apply satellite-specific preprocessing
+            if satellite == "LANDSAT_8":
+                # Apply scaling factors for Landsat Collection 2 Level-2
+                optical_bands = best_image.select('SR_B.').multiply(0.0000275).add(-0.2)
+                best_image = best_image.addBands(optical_bands, None, True)
+            # Sentinel-2 doesn't need scaling - surface reflectance values are already scaled
+            
+            # Step 5: Create thumbnail visualizations
+            thumbnails = {}
+            
+            # Natural Color (RGB) Thumbnail
+            rgb_config = band_configs['rgb']
+            rgb_image = best_image.select(rgb_config['bands'])
+            thumbnails['natural_color'] = {
+                'url': rgb_image.getThumbURL({
+                    'bands': rgb_config['bands'],
+                    'min': rgb_config['min'],
+                    'max': rgb_config['max'],
+                    'dimensions': 512,
+                    'region': farm_geometry,
+                    'format': 'png'
+                }),
+                'description': rgb_config['description'],
+                'bands': rgb_config['bands']
+            }
+            
+            # False Color (NIR) Thumbnail
+            nir_config = band_configs['nir']
+            nir_image = best_image.select(nir_config['bands'])
+            nir_params = {
+                'bands': nir_config['bands'],
+                'min': nir_config['min'],
+                'max': nir_config['max'],
+                'dimensions': 512,
+                'region': farm_geometry,
+                'format': 'png'
+            }
+            if 'gamma' in nir_config:
+                nir_params['gamma'] = nir_config['gamma']
+                
+            thumbnails['false_color'] = {
+                'url': nir_image.getThumbURL(nir_params),
+                'description': nir_config['description'],
+                'bands': nir_config['bands']
+            }
+            
+            # NDVI Thumbnail (vegetation health)
+            ndvi_config = band_configs['ndvi']
+            ndvi = best_image.normalizedDifference(ndvi_config['bands'])
+            thumbnails['ndvi'] = {
+                'url': ndvi.getThumbURL({
+                    'min': -1,
+                    'max': 1,
+                    'palette': [
+                        'FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163',
+                        '99B718', '74A901', '66A000', '529400', '3E8601',
+                        '207401', '056201', '004C00', '023B01', '012E01',
+                        '011D01', '011301'
+                    ],
+                    'dimensions': 512,
+                    'region': farm_geometry,
+                    'format': 'png'
+                }),
+                'description': ndvi_config['description'],
+                'bands': ndvi_config['bands'],
+                'interpretation': {
+                    'high_values': 'Healthy vegetation (0.6 to 1.0)',
+                    'medium_values': 'Moderate vegetation (0.2 to 0.6)', 
+                    'low_values': 'Bare soil/water (-1.0 to 0.2)'
+                }
+            }
+            
+            # Agriculture Composite
+            agri_config = band_configs['agriculture']
+            agri_image = best_image.select(agri_config['bands'])
+            thumbnails['agriculture'] = {
+                'url': agri_image.getThumbURL({
+                    'bands': agri_config['bands'],
+                    'min': agri_config['min'],
+                    'max': agri_config['max'],
+                    'dimensions': 512,
+                    'region': farm_geometry,
+                    'format': 'png'
+                }),
+                'description': agri_config['description'],
+                'bands': agri_config['bands']
+            }
+            
             # Step 6: Get image metadata
             image_properties = best_image.toDictionary().getInfo()
-
-            # Step 7: Create farm boundary thumbnail (just the shape)
-            boundary_image = (
-                ee.Image()
-                .byte()
-                .paint(
-                    featureCollection=ee.FeatureCollection([ee.Feature(farm_geometry)]),
-                    color=1,
-                    width=3,
-                )
+            
+            # Extract metadata using satellite-specific field names
+            image_id = image_properties.get(metadata_fields['image_id'], 'unknown')
+            
+            # Handle date extraction
+            if satellite == "SENTINEL_2" and metadata_fields['date'] == 'PRODUCT_ID':
+                # Extract date from Sentinel-2 PRODUCT_ID format
+                product_id = image_properties.get('PRODUCT_ID', '')
+                if len(product_id) > 15:
+                    try:
+                        date_part = product_id.split('_')[2]  # YYYYMMDD format
+                        acquisition_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
+                    except:
+                        acquisition_date = None
+                else:
+                    acquisition_date = None
+            else:
+                acquisition_date = image_properties.get(metadata_fields['date'])
+            
+            cloud_cover = image_properties.get(metadata_fields['cloud'], 0)
+            sun_elevation = image_properties.get(metadata_fields['sun_elevation'], 0)
+            
+            # Convert solar zenith to elevation for Sentinel-2
+            if satellite == "SENTINEL_2" and sun_elevation > 0:
+                sun_elevation = 90 - sun_elevation  # Convert zenith to elevation
+            
+            # Step 7: Create farm boundary thumbnail
+            boundary_image = ee.Image().byte().paint(
+                featureCollection=ee.FeatureCollection([ee.Feature(farm_geometry)]),
+                color=1,
+                width=3
             )
-
-            thumbnails["farm_boundary"] = {
-                "url": boundary_image.getThumbURL(
-                    {
-                        "palette": ["FF0000"],  # Red boundary
-                        "dimensions": 512,
-                        "region": farm_geometry,
-                        "format": "png",
-                    }
-                ),
-                "description": "Farm boundary outline",
-                "bands": ["constant"],
+            
+            thumbnails['farm_boundary'] = {
+                'url': boundary_image.getThumbURL({
+                    'palette': ['FF0000'],  # Red boundary
+                    'dimensions': 512,
+                    'region': farm_geometry,
+                    'format': 'png'
+                }),
+                'description': 'Farm boundary outline',
+                'bands': ['constant']
             }
-
-            # Step 8: Compile response
+            
+            # Step 8: Calculate farm area with error margin
+            try:
+                area_hectares = farm_geometry.area(maxError=1).divide(10000).getInfo()
+            except Exception as area_error:
+                logger.warning(f"Could not calculate area: {area_error}")
+                area_hectares = None
+            
+            # Step 9: Compile response
             result = {
-                "farm_info": {
-                    "coordinates": coordinates,
-                    "crs": coordinate_crs,
-                    "area_approx_hectares": farm_geometry.area()
-                    .divide(10000)
-                    .getInfo(),
+                'farm_info': {
+                    'coordinates': coordinates,
+                    'crs': coordinate_crs,
+                    'area_approx_hectares': area_hectares
                 },
-                "image_info": {
-                    "satellite": satellite,
-                    "image_id": image_properties.get("LANDSAT_PRODUCT_ID", "unknown"),
-                    "acquisition_date": image_properties.get("DATE_ACQUIRED"),
-                    "cloud_cover": image_properties.get("CLOUD_COVER", 0),
-                    "sun_elevation": image_properties.get("SUN_ELEVATION", 0),
+                'image_info': {
+                    'satellite': satellite,
+                    'collection_id': collection_id,
+                    'image_id': image_id,
+                    'acquisition_date': acquisition_date,
+                    'cloud_cover': cloud_cover,
+                    'sun_elevation': sun_elevation
                 },
-                "thumbnails": thumbnails,
-                "usage_instructions": {
-                    "web_display": "Use thumbnail URLs directly in <img> tags",
-                    "mobile_display": "Load URLs in ImageView/Image components",
-                    "caching": "URLs are temporary - cache images if needed for offline use",
-                    "dimensions": "All thumbnails are 512px (largest dimension)",
-                    "format": "PNG with transparency support",
+                'thumbnails': thumbnails,
+                'satellite_comparison': {
+                    'landsat_8': '30m resolution, 16-day revisit, good regional coverage',
+                    'sentinel_2': '10m resolution, 5-day revisit, excellent detail',
+                    'current_satellite': f"{satellite} - {band_configs['rgb']['description'].split('(')[1]}"
                 },
-                "processing_info": {
-                    "date_range": f"{start_date} to {end_date}",
-                    "images_found": image_count,
-                    "max_cloud_cover": max_cloud_cover,
+                'usage_instructions': {
+                    'web_display': 'Use thumbnail URLs directly in <img> tags',
+                    'mobile_display': 'Load URLs in ImageView/Image components',
+                    'caching': 'URLs are temporary - cache images if needed for offline use',
+                    'dimensions': 'All thumbnails are 512px (largest dimension)',
+                    'format': 'PNG with transparency support'
                 },
+                'processing_info': {
+                    'date_range': f"{start_date} to {end_date}",
+                    'images_found': image_count,
+                    'max_cloud_cover': max_cloud_cover,
+                    'cloud_filter_property': cloud_cover_prop
+                }
             }
-
-            logger.info(f"Generated {len(thumbnails)} thumbnail images")
+            
+            logger.info(f"Generated {len(thumbnails)} {satellite} thumbnail images")
             return result
-
+            
         except Exception as e:
-            logger.error(f"Error generating thumbnails: {e}")
+            logger.error(f"Error generating {satellite} thumbnails: {e}")
             raise
+        

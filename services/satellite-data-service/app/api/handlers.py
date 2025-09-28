@@ -17,11 +17,11 @@ async def test_gee_image() -> Dict[str, Any]:
     try:
         # Hardcoded test coordinates (small area in Vietnam - WGS84)
         test_coordinates = [
-            [106.6660, 11.8778],  # 11°52'40.1"N 106°39'57.6"E
-            [106.6633, 11.8781],  # 11°52'41.1"N 106°39'48.0"E
-            [106.6633, 11.8772],  # 11°52'37.9"N 106°39'47.8"E
-            [106.6662, 11.8770],  # 11°52'37.1"N 106°39'58.3"E
-            [106.6660, 11.8778],  # Close the polygon
+            [105.47811, 9.96866],   # 9°58'07.2"N 105°28'41.2"E
+            [105.44447, 9.99925],   # 9°59'57.3"N 105°26'40.1"E
+            [105.42661, 9.96794],   # 9°58'04.6"N 105°25'35.8"E
+            [105.43919, 9.96033],   # 9°57'37.2"N 105°26'21.1"E
+            [105.47811, 9.96866] 
         ]
 
         # Initialize service
@@ -31,10 +31,10 @@ async def test_gee_image() -> Dict[str, Any]:
         result = gee_service.get_farm_thumbnails(
             test_coordinates,
             "EPSG:4326",
-            "2025-01-01",
-            "2025-01-31",
-            "LANDSAT_8",
-            max_cloud_cover=10,
+            "2025-02-01",
+            "2025-02-28",
+            "SENTINEL_2",
+            max_cloud_cover=90,
         )
 
         return {
