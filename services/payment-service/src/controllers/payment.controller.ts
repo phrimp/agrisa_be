@@ -66,8 +66,10 @@ export class PaymentController {
       }
       const expiredAt = new Date(Date.now() + durationSeconds * 1000);
 
+      const paymentId = generateRandomString();
+
       await this.paymentService.create({
-        id: generateRandomString(),
+        id: paymentId,
         order_code: orderCode.toString(),
         amount: parsed.data.amount,
         description: parsed.data.description,
@@ -83,7 +85,16 @@ export class PaymentController {
         expired_at: expiredAt,
       };
 
-      return this.payosService.createPaymentLink(payosPayload);
+      const payosResponse =
+        await this.payosService.createPaymentLink(payosPayload);
+
+      if (payosResponse.error === 0 && payosResponse.data?.checkout_url) {
+        await this.paymentService.update(paymentId, {
+          checkout_url: payosResponse.data.checkout_url,
+        });
+      }
+
+      return payosResponse;
     } catch (error) {
       this.logger.error('Failed to create payment', error);
       return {
