@@ -1,0 +1,136 @@
+{
+  "info": {
+    "name": "Payment Service API",
+    "description": "API collection for the Payment Service microservice",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Ping",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/ping",
+          "host": ["{{base_url}}"],
+          "path": ["ping"]
+        }
+      }
+    },
+    {
+      "name": "Create Payment Link",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"orderCode\": \"ADS213ASD\",\n  \"amount\": 100000,\n  \"description\": \"Test payment\",\n  \"returnUrl\": \"https://example.com/success\",\n  \"cancelUrl\": \"https://example.com/cancel\",\n  \"userId\": \"user123\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payment/link",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "link"]
+        }
+      }
+    },
+    {
+      "name": "Get Payment Link Info",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/payment/link/:orderId",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "link", ":orderId"],
+          "variable": [
+            {
+              "key": "orderId",
+              "value": "ADS213ASD"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Cancel Payment Link",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cancellationReason\": \"User cancelled\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payment/link/:orderId/cancel",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "link", ":orderId", "cancel"],
+          "variable": [
+            {
+              "key": "orderId",
+              "value": "ADS213ASD"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Verify Webhook",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payment/webhook/verify",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "webhook", "verify"]
+        }
+      }
+    },
+    {
+      "name": "Confirm Webhook",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"webhookUrl\": \"https://example.com/webhook\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payment/webhook/confirm",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "webhook", "confirm"]
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ]
+}

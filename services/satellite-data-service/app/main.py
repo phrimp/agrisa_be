@@ -8,8 +8,7 @@ from app.api.handlers import router
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -22,9 +21,11 @@ async def lifespan(app: FastAPI):
     """Handle application startup and shutdown."""
     # Startup
     logger.info(f"Initializing {settings.app_name} infrastructure")
-    logger.info(f"Database URL: {settings.database_url.split('@')[1] if '@' in settings.database_url else 'Not configured'}")
+    logger.info(
+        f"Database URL: {settings.database_url.split('@')[1] if '@' in settings.database_url else 'Not configured'}"
+    )
     logger.info(f"MinIO Endpoint: {settings.minio_endpoint}")
-    
+
     try:
         # Initialize database
         await init_db()
@@ -33,19 +34,15 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
         raise
-    
+
     yield
-    
+
     # Shutdown
     logger.info(f"Shutting down {settings.app_name} infrastructure")
 
 
 # Create FastAPI app
-app = FastAPI(
-    title=settings.app_name,
-    version=settings.app_version,
-    lifespan=lifespan
-)
+app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
 
 # Include API routes
 app.include_router(router)
@@ -60,7 +57,7 @@ async def health_check():
 # For development/testing only - DON'T use this in production
 if __name__ == "__main__":
     import uvicorn
-    
+
     logger.info("Starting FastAPI server for development...")
     # Use uvicorn.run() directly without asyncio.run()
     uvicorn.run(
@@ -68,5 +65,5 @@ if __name__ == "__main__":
         host=settings.host,
         port=settings.port,
         reload=settings.debug,
-        log_level=settings.log_level.lower()
+        log_level=settings.log_level.lower(),
     )
