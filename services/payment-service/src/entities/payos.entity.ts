@@ -2,36 +2,36 @@ import { z } from 'zod';
 
 export const paymentLinkSchema = z.object({
   bin: z.string().nullable().optional(),
-  checkoutUrl: z.string().url().nullable().optional(),
-  accountNumber: z.string().nullable().optional(),
-  accountName: z.string().nullable().optional(),
+  checkout_url: z.string().url().nullable().optional(),
+  account_number: z.string().nullable().optional(),
+  account_name: z.string().nullable().optional(),
   amount: z.number().nullable().optional(),
   description: z.string().nullable().optional(),
-  orderCode: z.union([z.string(), z.number()]).nullable().optional(),
-  qrCode: z.string().nullable().optional(),
+  order_code: z.union([z.string(), z.number()]).nullable().optional(),
+  qr_code: z.string().nullable().optional(),
 });
 
 export type PaymentLinkDto = z.infer<typeof paymentLinkSchema>;
 
 export const createPaymentLinkSchema = z.object({
-  orderCode: z.number(),
+  order_code: z.number().optional(),
   amount: z.number(),
   description: z.string(),
-  returnUrl: z.url(),
-  cancelUrl: z.url(),
+  return_url: z.string().url().optional(),
+  cancel_url: z.string().url().optional(),
 });
 
 export type CreatePaymentLinkData = z.infer<typeof createPaymentLinkSchema>;
 
 export const paymentLinkResponseSchema = z.object({
   bin: z.string().nullable().optional(),
-  checkoutUrl: z.url().nullable().optional(),
-  accountNumber: z.string().nullable().optional(),
-  accountName: z.string().nullable().optional(),
+  checkout_url: z.string().url().nullable().optional(),
+  account_number: z.string().nullable().optional(),
+  account_name: z.string().nullable().optional(),
   amount: z.number().nullable().optional(),
   description: z.string().nullable().optional(),
-  orderCode: z.number().nullable().optional(),
-  qrCode: z.string().nullable().optional(),
+  order_code: z.number().nullable().optional(),
+  qr_code: z.string().nullable().optional(),
 });
 
 export type PaymentLinkResponse = z.infer<typeof paymentLinkResponseSchema>;

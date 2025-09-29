@@ -14,6 +14,7 @@ import {
 import type { CreatePaymentLinkData } from '../entities/payos.entity';
 import type { PayosService } from '../services/payos.service';
 import type { PaymentService } from '../services/payment.service';
+import { generateRandomString } from 'src/libs/utils';
 
 @Controller('payment')
 export class PaymentController {
@@ -26,11 +27,15 @@ export class PaymentController {
 
   @Post('link')
   async createPaymentLink(
-    @Body() body: CreatePaymentLinkData & { userId: string },
+    @Body() body: CreatePaymentLinkData & { user_id: string },
   ) {
-    const { userId, ...payosData } = body;
+    const { user_id, ...payosData } = body;
 
-    const parsed = createPaymentLinkSchema.safeParse(payosData);
+    const cleanedPayosData = Object.fromEntries(
+      Object.entries(payosData).filter(([, value]) => value !== undefined),
+    );
+
+    const parsed = createPaymentLinkSchema.safeParse(cleanedPayosData);
     if (!parsed.success) {
       this.logger.warn(
         'Invalid createPaymentLink payload',
@@ -44,15 +49,24 @@ export class PaymentController {
     }
 
     try {
+      const orderCode =
+        parsed.data.order_code ?? Math.floor(Math.random() * 1000000);
       await this.paymentService.create({
-        id: parsed.data.orderCode.toString(),
+        id: generateRandomString(10),
+        order_code: orderCode.toString(),
         amount: parsed.data.amount,
         description: parsed.data.description,
-        userId: userId,
-        status: 'pending',
+        user_id: user_id,
       });
 
-      return this.payosService.createPaymentLink(parsed.data);
+      const payosPayload = {
+        ...parsed.data,
+        order_code: orderCode,
+        return_url: parsed.data.return_url,
+        cancel_url: parsed.data.cancel_url,
+      };
+
+      return this.payosService.createPaymentLink(payosPayload);
     } catch (error) {
       this.logger.error('Failed to create payment', error);
       return {
@@ -63,25 +77,25 @@ export class PaymentController {
     }
   }
 
-  @Get('link/:orderId')
-  async getPaymentLinkInfo(@Param('orderId') orderId: string) {
-    return this.payosService.getPaymentLinkInfo(orderId);
+  @Get('link/:order_id')
+  async getPaymentLinkInfo(@Param('order_id') order_id: string) {
+    return this.payosService.getPaymentLinkInfo(order_id);
   }
 
-  @Post('link/:orderId/cancel')
+  @Post('link/:order_id/cancel')
   async cancelPaymentLink(
-    @Param('orderId') orderId: string,
-    @Body('cancellationReason') cancellationReason: string,
+    @Param('order_id') order_id: string,
+    @Body('cancellation_reason') cancellation_reason: string,
   ) {
-    if (!cancellationReason) {
+    if (!cancellation_reason) {
       return {
         error: -1,
-        message: 'Vui lòng cung cấp cancellationReason',
+        message: 'Vui lòng cung cấp cancellation_reason',
         data: null,
       };
     }
 
-    return this.payosService.cancelPaymentLink(orderId, cancellationReason);
+    return this.payosService.cancelPaymentLink(order_id, cancellation_reason);
   }
 
   @Post('webhook/verify')
@@ -114,15 +128,15 @@ export class PaymentController {
   }
 
   @Post('webhook/confirm')
-  async confirmWebhook(@Body('webhookUrl') webhookUrl: string) {
-    if (!webhookUrl) {
+  async confirmWebhook(@Body('webhook_url') webhook_url: string) {
+    if (!webhook_url) {
       return {
         error: -1,
-        message: 'webhookUrl is required',
+        message: 'webhook_url is required',
         data: null,
       };
     }
 
-    return this.payosService.confirmWebhook(webhookUrl);
+    return this.payosService.confirmWebhook(webhook_url);
   }
 }
