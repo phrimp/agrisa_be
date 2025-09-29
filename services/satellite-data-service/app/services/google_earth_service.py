@@ -1,10 +1,10 @@
 import ee
 import logging
+from datetime import datetime
 from typing import Dict, List, Any, Optional
 from app.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
-
 
 class GoogleEarthEngineService:
     """Service for interacting with Google Earth Engine API."""
@@ -325,11 +325,15 @@ class GoogleEarthEngineService:
         start_date: str = "2024-01-01",
         end_date: str = "2024-12-31",
         satellite: str = "LANDSAT_8",
-        max_cloud_cover: float = 30.0
+        max_cloud_cover: float = 30.0,
+        force_sar_backup: bool = False  # NEW: Manual override for SAR
     ) -> Dict[str, Any]:
         """
-        Generate multiple thumbnail images for Vietnamese farms.
-        Supports both Landsat 8 and Sentinel-2 satellites.
+        Generate farm thumbnail images with cloud-adaptive vegetation monitoring.
+        
+        Vegetation Index Strategy:
+        - cloud_cover < 30%: Use Sentinel-2 NDVI (optical, high accuracy)
+        - cloud_cover >= 30%: Use Sentinel-1 RVI (radar, all-weather)
         
         Args:
             coordinates: List of [x, y] coordinates forming a closed polygon
@@ -338,12 +342,13 @@ class GoogleEarthEngineService:
             end_date: End date in 'YYYY-MM-DD' format
             satellite: Satellite collection name ("LANDSAT_8" or "SENTINEL_2")
             max_cloud_cover: Maximum cloud coverage percentage
+            force_sar_backup: Force use of Sentinel-1 RVI regardless of clouds
             
         Returns:
-            Dictionary containing multiple thumbnail URLs and metadata
+            Dictionary containing thumbnail URLs with cloud-adaptive vegetation index
         """
         try:
-            logger.info(f"Generating {satellite} farm thumbnail images")
+            logger.info(f"Generating {satellite} farm thumbnail images with cloud-adaptive VI")
             
             # Step 1: Create farm geometry
             farm_geometry = ee.Geometry.Polygon(
@@ -357,7 +362,6 @@ class GoogleEarthEngineService:
                 collection_id = "LANDSAT/LC08/C02/T1_L2"
                 cloud_cover_prop = "CLOUD_COVER"
                 
-                # Landsat band configurations
                 band_configs = {
                     'rgb': {
                         'bands': ['SR_B4', 'SR_B3', 'SR_B2'],
@@ -380,7 +384,6 @@ class GoogleEarthEngineService:
                     }
                 }
                 
-                # Metadata field names for Landsat
                 metadata_fields = {
                     'image_id': 'LANDSAT_PRODUCT_ID',
                     'date': 'DATE_ACQUIRED',
@@ -392,7 +395,6 @@ class GoogleEarthEngineService:
                 collection_id = "COPERNICUS/S2_SR_HARMONIZED"
                 cloud_cover_prop = "CLOUDY_PIXEL_PERCENTAGE"
                 
-                # Sentinel-2 band configurations
                 band_configs = {
                     'rgb': {
                         'bands': ['B4', 'B3', 'B2'],
@@ -415,10 +417,9 @@ class GoogleEarthEngineService:
                     }
                 }
                 
-                # Metadata field names for Sentinel-2
                 metadata_fields = {
                     'image_id': 'PRODUCT_ID',
-                    'date': 'PRODUCT_ID',  # Date extracted from PRODUCT_ID
+                    'date': 'PRODUCT_ID',
                     'cloud': 'CLOUDY_PIXEL_PERCENTAGE',
                     'sun_elevation': 'MEAN_SOLAR_ZENITH_ANGLE'
                 }
@@ -426,7 +427,7 @@ class GoogleEarthEngineService:
             else:
                 raise ValueError(f"Unsupported satellite: {satellite}. Use 'LANDSAT_8' or 'SENTINEL_2'")
             
-            # Step 3: Filter and get best image
+            # Step 3: Filter and get best optical image
             image_collection = (ee.ImageCollection(collection_id)
                               .filterBounds(farm_geometry)
                               .filterDate(start_date, end_date)
@@ -444,15 +445,20 @@ class GoogleEarthEngineService:
             
             # Step 4: Apply satellite-specific preprocessing
             if satellite == "LANDSAT_8":
-                # Apply scaling factors for Landsat Collection 2 Level-2
                 optical_bands = best_image.select('SR_B.').multiply(0.0000275).add(-0.2)
                 best_image = best_image.addBands(optical_bands, None, True)
-            # Sentinel-2 doesn't need scaling - surface reflectance values are already scaled
             
-            # Step 5: Create thumbnail visualizations
+            # Step 5: Get cloud cover of best image for adaptive VI selection
+            image_properties = best_image.toDictionary().getInfo()
+            cloud_cover = image_properties.get(metadata_fields['cloud'], 0)
+            
+            # === CLOUD-ADAPTIVE VEGETATION INDEX LOGIC ===
+            use_sar_backup = force_sar_backup or cloud_cover >= 30.0
+            
             thumbnails = {}
             
-            # Natural Color (RGB) Thumbnail
+            # Generate RGB, NIR, and Agriculture thumbnails (unchanged)
+            # ... [RGB thumbnail code - same as original]
             rgb_config = band_configs['rgb']
             rgb_image = best_image.select(rgb_config['bands'])
             thumbnails['natural_color'] = {
@@ -468,7 +474,7 @@ class GoogleEarthEngineService:
                 'bands': rgb_config['bands']
             }
             
-            # False Color (NIR) Thumbnail
+            # ... [NIR thumbnail code - same as original]
             nir_config = band_configs['nir']
             nir_image = best_image.select(nir_config['bands'])
             nir_params = {
@@ -488,33 +494,7 @@ class GoogleEarthEngineService:
                 'bands': nir_config['bands']
             }
             
-            # NDVI Thumbnail (vegetation health)
-            ndvi_config = band_configs['ndvi']
-            ndvi = best_image.normalizedDifference(ndvi_config['bands'])
-            thumbnails['ndvi'] = {
-                'url': ndvi.getThumbURL({
-                    'min': -1,
-                    'max': 1,
-                    'palette': [
-                        'FFFFFF', 'CE7E45', 'DF923D', 'F1B555', 'FCD163',
-                        '99B718', '74A901', '66A000', '529400', '3E8601',
-                        '207401', '056201', '004C00', '023B01', '012E01',
-                        '011D01', '011301'
-                    ],
-                    'dimensions': 512,
-                    'region': farm_geometry,
-                    'format': 'png'
-                }),
-                'description': ndvi_config['description'],
-                'bands': ndvi_config['bands'],
-                'interpretation': {
-                    'high_values': 'Healthy vegetation (0.6 to 1.0)',
-                    'medium_values': 'Moderate vegetation (0.2 to 0.6)', 
-                    'low_values': 'Bare soil/water (-1.0 to 0.2)'
-                }
-            }
-            
-            # Agriculture Composite
+            # ... [Agriculture thumbnail code - same as original]
             agri_config = band_configs['agriculture']
             agri_image = best_image.select(agri_config['bands'])
             thumbnails['agriculture'] = {
@@ -530,19 +510,245 @@ class GoogleEarthEngineService:
                 'bands': agri_config['bands']
             }
             
-            # Step 6: Get image metadata
-            image_properties = best_image.toDictionary().getInfo()
+            # === IMPROVED VEGETATION INDEX THUMBNAIL ===
+            if not use_sar_backup:
+                # PRIMARY: Use Sentinel-2/Landsat NDVI (cloud_cover < 30%)
+                logger.info(f"Using optical NDVI (cloud cover: {cloud_cover:.1f}%)")
+                
+                ndvi_config = band_configs['ndvi']
+                ndvi = best_image.normalizedDifference(ndvi_config['bands'])
+                
+                # Apply histogram stretch for maximum contrast
+                # This makes boundaries between fields much more visible
+                ndvi_stretched = ndvi.unitScale(-0.2, 0.9).clamp(0, 1)
+                
+                # OPTION 1: Bold Discrete Zones (Best for boundary detection)
+                # Uses distinct color blocks - human eyes excel at detecting color boundaries
+                discrete_palette = [
+                    '000000',  # Black: Water bodies
+                    '8B4513',  # Brown: Bare soil/no vegetation
+                    'FFFF00',  # Bright Yellow: Sparse/stressed crops
+                    '00FF00',  # Bright Green: Healthy crops
+                    '006400'   # Dark Green: Very dense vegetation
+                ]
+                
+                # OPTION 2: High-Contrast Agricultural (Good for crop type identification)
+                # More gradual but maintains strong boundaries
+                agricultural_palette = [
+                    '0000FF',  # Blue: Water
+                    'A52A2A',  # Brown: Bare soil
+                    'FFD700',  # Gold: Early growth
+                    'ADFF2F',  # Yellow-green: Developing crops
+                    '32CD32',  # Lime green: Healthy crops
+                    '228B22',  # Forest green: Peak health
+                    '006400'   # Dark green: Very dense
+                ]
+                
+                # OPTION 3: Rainbow High-Contrast (Best overall visibility)
+                # Maximum color differentiation for human perception
+                rainbow_palette = [
+                    '000080',  # Navy: Water/very low
+                    '0000FF',  # Blue: Bare soil
+                    '00FFFF',  # Cyan: Poor vegetation
+                    '00FF00',  # Green: Moderate vegetation
+                    'FFFF00',  # Yellow: Good vegetation
+                    'FF8C00',  # Orange: Healthy crops
+                    'FF0000'   # Red: Very healthy/dense
+                ]
+                
+                # OPTION 4: Inverted (Healthy = Cool colors, ideal for quick scanning)
+                inverted_palette = [
+                    'FF0000',  # Red: Water/bare
+                    'FF8C00',  # Orange: Poor vegetation
+                    'FFFF00',  # Yellow: Moderate
+                    '00FF00',  # Green: Good
+                    '00FFFF',  # Cyan: Healthy
+                    '0000FF',  # Blue: Very healthy
+                    '000080'   # Navy: Dense canopy
+                ]
+                
+                # SELECT PALETTE (change this to test different options)
+                selected_palette = discrete_palette  # Change to: agricultural_palette, rainbow_palette, inverted_palette
+                palette_name = "Discrete Zones"  # Update name when changing
+                
+                thumbnails['vegetation_index'] = {
+                    'url': ndvi_stretched.getThumbURL({
+                        'min': 0,      # After stretch, range is 0-1
+                        'max': 1,
+                        'palette': selected_palette,
+                        'dimensions': 512,
+                        'region': farm_geometry,
+                        'format': 'png'
+                    }),
+                    'description': f'NDVI - Optical vegetation health ({ndvi_config["description"]})',
+                    'bands': ndvi_config['bands'],
+                    'index_type': 'NDVI',
+                    'data_source': satellite,
+                    'cloud_cover': cloud_cover,
+                    'palette_type': palette_name,
+                    'interpretation': {
+                        'black_blue': 'Water bodies / Non-vegetation',
+                        'brown': 'Bare soil / Recently planted',
+                        'yellow': 'Sparse vegetation / Stressed crops',
+                        'green': 'Healthy growing crops',
+                        'dark_green': 'Peak health / Dense canopy'
+                    },
+                    'visual_notes': 'Histogram stretched + discrete colors for maximum boundary visibility',
+                    'alternative_palettes': {
+                        'discrete_palette': 'Best for boundary detection (5 distinct zones)',
+                        'agricultural_palette': 'Good for crop type identification (7 zones)',
+                        'rainbow_palette': 'Maximum color differentiation (7 zones)',
+                        'inverted_palette': 'Healthy crops = cool colors (7 zones)'
+                    }
+                }
+                
+            else:
+                # BACKUP: Use Sentinel-1 RVI (cloud_cover >= 30% or forced)
+                logger.info(f"Using SAR RVI backup (cloud cover: {cloud_cover:.1f}% or forced)")
+                
+                # Fetch Sentinel-1 SAR data (all-weather radar)
+                sar_collection_id = "COPERNICUS/S1_GRD"  # Ground Range Detected
+                
+                sar_collection = (ee.ImageCollection(sar_collection_id)
+                                .filterBounds(farm_geometry)
+                                .filterDate(start_date, end_date)
+                                .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VV'))
+                                .filter(ee.Filter.listContains('transmitterReceiverPolarisation', 'VH'))
+                                .filter(ee.Filter.eq('instrumentMode', 'IW'))  # Interferometric Wide swath
+                                .filter(ee.Filter.eq('orbitProperties_pass', 'DESCENDING'))
+                                .sort('system:time_start', False))  # Get most recent
+                
+                sar_count = sar_collection.size().getInfo()
+                logger.info(f"Found {sar_count} Sentinel-1 SAR images")
+                
+                if sar_count == 0:
+                    raise ValueError("No Sentinel-1 SAR images found. Cannot generate RVI backup.")
+                
+                sar_image = ee.Image(sar_collection.first())
+                
+                # Calculate RVI (Radar Vegetation Index)
+                # RVI = (4 * VH) / (VV + VH)
+                # Range: 0 (bare soil) to ~2+ (dense vegetation)
+                vv = sar_image.select('VV')
+                vh = sar_image.select('VH')
+                rvi = vh.multiply(4).divide(vv.add(vh))
+                
+                # Apply histogram stretch for maximum contrast
+                rvi_stretched = rvi.unitScale(0.0, 1.5).clamp(0, 1)
+                
+                # OPTION 1: Bold SAR Discrete (Best for boundary detection)
+                sar_discrete = [
+                    '000080',  # Navy: Water
+                    '8B4513',  # Brown: Bare soil
+                    'FFFF00',  # Yellow: Sparse vegetation
+                    '00FF00',  # Green: Moderate crops
+                    'FF0000'   # Red: Dense vegetation
+                ]
+                
+                # OPTION 2: Thermal-style (Good for intensity perception)
+                thermal_palette = [
+                    '000000',  # Black: Water
+                    '0000FF',  # Blue: Very smooth
+                    '00FFFF',  # Cyan: Smooth surfaces
+                    '00FF00',  # Green: Moderate roughness
+                    'FFFF00',  # Yellow: Rough surfaces
+                    'FF8C00',  # Orange: Vegetation
+                    'FF0000',  # Red: Dense vegetation
+                    'FFFFFF'   # White: Very dense
+                ]
+                
+                # OPTION 3: Purple-Orange Diverging (Best contrast for SAR)
+                diverging_palette = [
+                    '4B0082',  # Indigo: Water
+                    '8B00FF',  # Purple: Bare soil
+                    '0000FF',  # Blue: Poor vegetation
+                    '00FFFF',  # Cyan: Moderate
+                    '00FF00',  # Green: Good
+                    'FFFF00',  # Yellow: Healthy
+                    'FFA500',  # Orange: Very healthy
+                    'FF0000'   # Red: Dense canopy
+                ]
+                
+                # SELECT PALETTE
+                selected_sar_palette = sar_discrete
+                sar_palette_name = "SAR Discrete Zones"
+                
+                thumbnails['vegetation_index'] = {
+                    'url': rvi_stretched.getThumbURL({
+                        'min': 0.0,
+                        'max': 1.0,
+                        'palette': selected_sar_palette,
+                        'dimensions': 512,
+                        'region': farm_geometry,
+                        'format': 'png'
+                    }),
+                    'description': 'RVI - SAR all-weather vegetation monitoring (10m resolution)',
+                    'bands': ['VV', 'VH'],
+                    'index_type': 'RVI',
+                    'data_source': 'Sentinel-1 SAR',
+                    'cloud_cover': 'N/A (radar)',
+                    'palette_type': sar_palette_name,
+                    'interpretation': {
+                        'navy_blue': 'Water bodies (smooth surfaces)',
+                        'brown': 'Bare soil / No vegetation',
+                        'yellow': 'Sparse vegetation / Young crops',
+                        'green': 'Moderate vegetation / Growing crops',
+                        'red': 'Dense vegetation / Healthy crops'
+                    },
+                    'visual_notes': 'SAR-based backup for cloudy conditions - histogram stretched for boundary clarity',
+                    'sar_acquisition_date': sar_image.get('system:time_start').getInfo(),
+                    'alternative_palettes': {
+                        'sar_discrete': 'Best for boundary detection (5 zones)',
+                        'thermal_palette': 'Good for intensity perception (8 zones)',
+                        'diverging_palette': 'Maximum SAR contrast (8 zones)'
+                    }
+                }
             
-            # Extract metadata using satellite-specific field names
+            # === FARM BOUNDARY THUMBNAIL (HIGH CONTRAST) ===
+            # Enhanced boundary visualization with thicker lines and better color
+            boundary_feature = ee.Feature(farm_geometry)
+            
+            # Create base image with black background for contrast
+            base_canvas = ee.Image(0).byte().paint(
+                featureCollection=ee.FeatureCollection([boundary_feature]),
+                color=0,
+                width=1
+            )
+            
+            # Paint boundary with bright color and thick line
+            boundary_image = base_canvas.paint(
+                featureCollection=ee.FeatureCollection([boundary_feature]),
+                color=255,
+                width=5  # Thicker line for better visibility
+            )
+            
+            thumbnails['farm_boundary'] = {
+                'url': boundary_image.getThumbURL({
+                    'palette': ['000000', 'FF0000'],  # Black background, red boundary
+                    'dimensions': 512,
+                    'region': farm_geometry,
+                    'format': 'png'
+                }),
+                'description': 'Farm boundary outline (enhanced contrast)',
+                'bands': ['constant'],
+                'visual_notes': 'Thick red line on black background for maximum visibility'
+            }
+            
+            # Step 6: Calculate farm area
+            try:
+                area_hectares = farm_geometry.area(maxError=1).divide(10000).getInfo()
+            except Exception as area_error:
+                logger.warning(f"Could not calculate area: {area_error}")
+                area_hectares = None
+            
+            # Step 7: Extract remaining metadata
             image_id = image_properties.get(metadata_fields['image_id'], 'unknown')
             
-            # Handle date extraction
             if satellite == "SENTINEL_2" and metadata_fields['date'] == 'PRODUCT_ID':
-                # Extract date from Sentinel-2 PRODUCT_ID format
                 product_id = image_properties.get('PRODUCT_ID', '')
                 if len(product_id) > 15:
                     try:
-                        date_part = product_id.split('_')[2]  # YYYYMMDD format
+                        date_part = product_id.split('_')[2]
                         acquisition_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
                     except:
                         acquisition_date = None
@@ -551,39 +757,11 @@ class GoogleEarthEngineService:
             else:
                 acquisition_date = image_properties.get(metadata_fields['date'])
             
-            cloud_cover = image_properties.get(metadata_fields['cloud'], 0)
             sun_elevation = image_properties.get(metadata_fields['sun_elevation'], 0)
-            
-            # Convert solar zenith to elevation for Sentinel-2
             if satellite == "SENTINEL_2" and sun_elevation > 0:
-                sun_elevation = 90 - sun_elevation  # Convert zenith to elevation
+                sun_elevation = 90 - sun_elevation
             
-            # Step 7: Create farm boundary thumbnail
-            boundary_image = ee.Image().byte().paint(
-                featureCollection=ee.FeatureCollection([ee.Feature(farm_geometry)]),
-                color=1,
-                width=3
-            )
-            
-            thumbnails['farm_boundary'] = {
-                'url': boundary_image.getThumbURL({
-                    'palette': ['FF0000'],  # Red boundary
-                    'dimensions': 512,
-                    'region': farm_geometry,
-                    'format': 'png'
-                }),
-                'description': 'Farm boundary outline',
-                'bands': ['constant']
-            }
-            
-            # Step 8: Calculate farm area with error margin
-            try:
-                area_hectares = farm_geometry.area(maxError=1).divide(10000).getInfo()
-            except Exception as area_error:
-                logger.warning(f"Could not calculate area: {area_error}")
-                area_hectares = None
-            
-            # Step 9: Compile response
+            # Step 8: Compile response with cloud-adaptive info
             result = {
                 'farm_info': {
                     'coordinates': coordinates,
@@ -598,31 +776,288 @@ class GoogleEarthEngineService:
                     'cloud_cover': cloud_cover,
                     'sun_elevation': sun_elevation
                 },
-                'thumbnails': thumbnails,
-                'satellite_comparison': {
-                    'landsat_8': '30m resolution, 16-day revisit, good regional coverage',
-                    'sentinel_2': '10m resolution, 5-day revisit, excellent detail',
-                    'current_satellite': f"{satellite} - {band_configs['rgb']['description'].split('(')[1]}"
+                'vegetation_index_strategy': {
+                    'cloud_threshold': 30.0,
+                    'actual_cloud_cover': cloud_cover,
+                    'selected_index': 'RVI (SAR)' if use_sar_backup else 'NDVI (Optical)',
+                    'reason': 'Cloud cover >= 30% - using radar backup' if use_sar_backup else 'Cloud cover < 30% - using optical primary',
+                    'data_quality': 'All-weather radar' if use_sar_backup else 'High-accuracy optical'
                 },
+                'thumbnails': thumbnails,
                 'usage_instructions': {
                     'web_display': 'Use thumbnail URLs directly in <img> tags',
                     'mobile_display': 'Load URLs in ImageView/Image components',
                     'caching': 'URLs are temporary - cache images if needed for offline use',
                     'dimensions': 'All thumbnails are 512px (largest dimension)',
-                    'format': 'PNG with transparency support'
+                    'format': 'PNG with transparency support',
+                    'boundary_visibility': 'Enhanced contrast for clear farm boundary identification'
                 },
                 'processing_info': {
                     'date_range': f"{start_date} to {end_date}",
                     'images_found': image_count,
                     'max_cloud_cover': max_cloud_cover,
-                    'cloud_filter_property': cloud_cover_prop
+                    'cloud_filter_property': cloud_cover_prop,
+                    'sar_images_available': sar_count if use_sar_backup else 'Not queried'
                 }
             }
             
-            logger.info(f"Generated {len(thumbnails)} {satellite} thumbnail images")
+            logger.info(f"Generated {len(thumbnails)} thumbnail images with cloud-adaptive VI")
             return result
             
         except Exception as e:
-            logger.error(f"Error generating {satellite} thumbnails: {e}")
+            logger.error(f"Error generating thumbnails: {e}")
             raise
+
+    def get_dynamic_world_raw_data(
+        self,
+        coordinates: List[List[float]],
+        coordinate_crs: str = "EPSG:4326",
+        start_date: str = "2024-01-01",
+        end_date: str = "2024-12-31",
+        max_images: int = 5
+    ) -> Dict[str, Any]:
+        """
+        Get raw Dynamic World data without processing for inspection.
+        Returns unprocessed Google Earth Engine responses.
         
+        Args:
+            coordinates: List of [x, y] coordinates forming a closed polygon
+            coordinate_crs: Coordinate Reference System
+            start_date: Start date in 'YYYY-MM-DD' format
+            end_date: End date in 'YYYY-MM-DD' format
+            max_images: Maximum number of images to analyze (default: 5)
+            
+        Returns:
+            Dictionary containing raw Dynamic World data structures
+        """
+        try:
+            logger.info(f"Getting raw Dynamic World data from {start_date} to {end_date}")
+            
+            # Step 1: Create farm geometry
+            farm_geometry = ee.Geometry.Polygon(
+                coords=[coordinates], 
+                proj=coordinate_crs,
+                geodesic=False
+            )
+            
+            # Step 2: Load Dynamic World collection
+            dw_collection = (ee.ImageCollection("GOOGLE/DYNAMICWORLD/V1")
+                            .filterBounds(farm_geometry)
+                            .filterDate(start_date, end_date)
+                            .limit(max_images))
+            
+            # Step 3: Get raw collection info
+            collection_info = dw_collection.getInfo()
+            image_count = dw_collection.size().getInfo()
+            
+            logger.info(f"Found {image_count} Dynamic World images, analyzing up to {max_images}")
+            
+            # Step 4: Get raw data from first image
+            first_image_data = None
+            first_image_properties = None
+            band_info = None
+            if image_count > 0:
+                first_image = ee.Image(dw_collection.first())
+                
+                # Get complete raw image info
+                first_image_data = first_image.getInfo()
+                
+                # Get raw properties
+                first_image_properties = first_image.toDictionary().getInfo()
+                
+                # Get band names and info
+                band_names = first_image.bandNames().getInfo()
+                
+                # Get detailed band information
+                band_info = {}
+                for band_name in band_names:
+                    try:
+                        band_image = first_image.select(band_name)
+                        band_info[band_name] = {
+                            'band_info': band_image.getInfo(),
+                            'data_type': band_image.getInfo().get('bands', [{}])[0].get('data_type', 'unknown') if band_image.getInfo().get('bands') else 'unknown'
+                        }
+                    except Exception as band_error:
+                        band_info[band_name] = {'error': str(band_error)}
+            
+            # Step 5: Get raw pixel values for small sample area
+            sample_values = None
+            if image_count > 0:
+                try:
+                    first_image = ee.Image(dw_collection.first())
+                    
+                    # Get raw pixel values from a small sample (to avoid timeout)
+                    sample_values = first_image.sample(
+                        region=farm_geometry,
+                        scale=10,
+                        numPixels=100,  # Small sample to avoid timeout
+                        seed=0,
+                        dropNulls=True
+                    ).getInfo()
+                    
+                except Exception as sample_error:
+                    logger.warning(f"Could not get sample values: {sample_error}")
+                    sample_values = {'error': str(sample_error)}
+            
+            # Step 6: Get raw histogram data
+            raw_histogram = None
+            if image_count > 0:
+                try:
+                    first_image = ee.Image(dw_collection.first())
+                    label_band = first_image.select('label')
+                    
+                    raw_histogram = label_band.reduceRegion(
+                        reducer=ee.Reducer.frequencyHistogram(),
+                        geometry=farm_geometry,
+                        scale=10,
+                        maxPixels=1e6
+                    ).getInfo()
+                    
+                except Exception as hist_error:
+                    logger.warning(f"Could not get histogram: {hist_error}")
+                    raw_histogram = {'error': str(hist_error)}
+            
+            # Step 7: Get list of all images with basic info
+            image_list = []
+            if image_count > 0:
+                try:
+                    # Get info about each image in the collection
+                    image_list_info = dw_collection.getInfo()
+                    if 'features' in image_list_info:
+                        for feature in image_list_info['features']:
+                            if 'properties' in feature:
+                                image_list.append({
+                                    'id': feature.get('id', 'unknown'),
+                                    'properties': feature.get('properties', {}),
+                                    'bands': feature.get('bands', [])
+                                })
+                except Exception as list_error:
+                    logger.warning(f"Could not get image list: {list_error}")
+                    image_list = [{'error': str(list_error)}]
+            
+            # Step 8: Get available band information
+            available_bands = []
+            if image_count > 0:
+                try:
+                    first_image = ee.Image(dw_collection.first())
+                    available_bands = first_image.bandNames().getInfo()
+                except Exception as bands_error:
+                    available_bands = [f"Error getting bands: {bands_error}"]
+            
+            # Step 9: Get projection information
+            projection_info = None
+            if image_count > 0:
+                try:
+                    first_image = ee.Image(dw_collection.first())
+                    projection_info = first_image.projection().getInfo()
+                except Exception as proj_error:
+                    projection_info = {'error': str(proj_error)}
+            
+            # Step 10: Try to get raw reduce region data for all bands
+            all_bands_stats = None
+            if image_count > 0:
+                try:
+                    first_image = ee.Image(dw_collection.first())
+                    all_bands_stats = first_image.reduceRegion(
+                        reducer=ee.Reducer.mean()
+                        .combine(ee.Reducer.stdDev(), sharedInputs=True)
+                        .combine(ee.Reducer.minMax(), sharedInputs=True),
+                        geometry=farm_geometry,
+                        scale=10,
+                        maxPixels=1e6
+                    ).getInfo()
+                except Exception as stats_error:
+                    all_bands_stats = {'error': str(stats_error)}
+            
+            # Step 11: Compile complete raw response
+            result = {
+                'request_info': {
+                    'coordinates': coordinates,
+                    'crs': coordinate_crs,
+                    'date_range': f"{start_date} to {end_date}",
+                    'max_images_requested': max_images,
+                    'collection_id': 'GOOGLE/DYNAMICWORLD/V1'
+                },
+                'collection_raw_info': {
+                    'image_count': image_count,
+                    'collection_data': collection_info,
+                    'collection_type': type(collection_info).__name__,
+                    'collection_keys': list(collection_info.keys()) if isinstance(collection_info, dict) else 'Not a dict'
+                },
+                'first_image_raw_data': {
+                    'image_info': first_image_data,
+                    'image_properties': first_image_properties,
+                    'image_info_type': type(first_image_data).__name__ if first_image_data else 'None',
+                    'image_info_keys': list(first_image_data.keys()) if isinstance(first_image_data, dict) else 'Not a dict or None'
+                },
+                'band_information': {
+                    'available_bands': available_bands,
+                    'detailed_band_info': band_info,
+                    'band_count': len(available_bands) if isinstance(available_bands, list) else 0
+                },
+                'projection_info': projection_info,
+                'sample_pixel_values': {
+                    'sample_data': sample_values,
+                    'sample_type': type(sample_values).__name__ if sample_values else 'None',
+                    'sample_keys': list(sample_values.keys()) if isinstance(sample_values, dict) and 'error' not in sample_values else 'Error or not dict'
+                },
+                'raw_statistics': {
+                    'label_histogram': raw_histogram,
+                    'all_bands_stats': all_bands_stats
+                },
+                'image_list_raw': {
+                    'images': image_list,
+                    'list_length': len(image_list) if isinstance(image_list, list) else 0
+                },
+                'data_structure_analysis': {
+                    'collection_structure': {
+                        'type': type(collection_info).__name__,
+                        'has_features': 'features' in collection_info if isinstance(collection_info, dict) else False,
+                        'features_count': len(collection_info.get('features', [])) if isinstance(collection_info, dict) else 0
+                    },
+                    'first_image_structure': {
+                        'type': type(first_image_data).__name__ if first_image_data else 'None',
+                        'has_bands': 'bands' in first_image_data if isinstance(first_image_data, dict) else False,
+                        'has_properties': 'properties' in first_image_data if isinstance(first_image_data, dict) else False
+                    },
+                    'properties_structure': {
+                        'type': type(first_image_properties).__name__ if first_image_properties else 'None',
+                        'property_count': len(first_image_properties) if isinstance(first_image_properties, dict) else 0,
+                        'sample_properties': list(first_image_properties.keys())[:10] if isinstance(first_image_properties, dict) else []
+                    }
+                },
+                'debug_info': {
+                    'function_executed': 'get_dynamic_world_raw_data',
+                    'timestamp': int(datetime.now().timestamp()),
+                    'geometry_used': {
+                        'type': 'Polygon',
+                        'coordinates': [coordinates],
+                        'crs': coordinate_crs
+                    }
+                }
+            }
+            
+            logger.info(f"Raw Dynamic World data retrieved. Images found: {image_count}")
+            logger.info(f"Available bands: {available_bands}")
+            logger.info(f"Collection type: {type(collection_info).__name__}")
+            
+            return result
+            
+        except ee.EEException as e:
+            logger.error(f"Google Earth Engine API error: {e}")
+            return {
+                'error': {
+                    'type': 'EEException',
+                    'message': str(e),
+                    'function': 'get_dynamic_world_raw_data'
+                }
+            }
+        except Exception as e:
+            logger.error(f"Error getting raw Dynamic World data: {e}")
+            return {
+                'error': {
+                    'type': type(e).__name__,
+                    'message': str(e),
+                    'function': 'get_dynamic_world_raw_data'
+                }
+            }
