@@ -9,4 +9,7 @@ export const databaseConfig: TypeOrmModuleOptions = {
   database: process.env.DB_NAME || 'payment_service',
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
   synchronize: process.env.BUN_ENV !== 'production',
+  extra: {
+    timezone: 'UTC',
+  },
 };

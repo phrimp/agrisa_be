@@ -15,6 +15,7 @@ import type { CreatePaymentLinkData } from '../entities/payos.entity';
 import type { PayosService } from '../services/payos.service';
 import type { PaymentService } from '../services/payment.service';
 import { generateRandomString } from 'src/libs/utils';
+import { PAYOS_EXPIRED_DURATION } from 'src/libs/payos.config';
 
 const ORDER_CODE_LENGTH = 6;
 
@@ -54,12 +55,24 @@ export class PaymentController {
       const orderCode =
         parsed.data.order_code ??
         Math.floor(Math.random() * 10 ** ORDER_CODE_LENGTH);
+
+      const durationStr = PAYOS_EXPIRED_DURATION || '';
+      let durationSeconds: number;
+      if (durationStr.includes('*')) {
+        const parts = durationStr.split('*').map((s) => parseInt(s.trim()));
+        durationSeconds = parts.reduce((a, b) => a * b, 1);
+      } else {
+        durationSeconds = parseInt(durationStr);
+      }
+      const expiredAt = new Date(Date.now() + durationSeconds * 1000);
+
       await this.paymentService.create({
         id: generateRandomString(),
         order_code: orderCode.toString(),
         amount: parsed.data.amount,
         description: parsed.data.description,
         user_id: user_id,
+        expired_at: expiredAt,
       });
 
       const payosPayload = {
@@ -67,6 +80,7 @@ export class PaymentController {
         order_code: orderCode,
         return_url: parsed.data.return_url,
         cancel_url: parsed.data.cancel_url,
+        expired_at: expiredAt,
       };
 
       return this.payosService.createPaymentLink(payosPayload);

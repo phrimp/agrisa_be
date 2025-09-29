@@ -9,6 +9,15 @@ export const paymentLinkSchema = z.object({
   description: z.string().nullable().optional(),
   order_code: z.union([z.string(), z.number()]).nullable().optional(),
   qr_code: z.string().nullable().optional(),
+  expired_at: z
+    .union([z.number(), z.date()])
+    .nullable()
+    .optional()
+    .transform((val) => {
+      if (val === null || val === undefined) return null;
+      if (typeof val === 'number') return new Date(val * 1000);
+      return val;
+    }),
 });
 
 export type PaymentLinkDto = z.infer<typeof paymentLinkSchema>;
@@ -21,7 +30,9 @@ export const createPaymentLinkSchema = z.object({
   cancel_url: z.string().url().optional(),
 });
 
-export type CreatePaymentLinkData = z.infer<typeof createPaymentLinkSchema>;
+export type CreatePaymentLinkData = z.infer<typeof createPaymentLinkSchema> & {
+  expired_at: Date;
+};
 
 export const paymentLinkResponseSchema = z.object({
   bin: z.string().nullable().optional(),
@@ -32,6 +43,15 @@ export const paymentLinkResponseSchema = z.object({
   description: z.string().nullable().optional(),
   order_code: z.number().nullable().optional(),
   qr_code: z.string().nullable().optional(),
+  expired_at: z
+    .union([z.number(), z.date()])
+    .nullable()
+    .optional()
+    .transform((val) => {
+      if (val === null || val === undefined) return null;
+      if (typeof val === 'number') return new Date(val * 1000);
+      return val;
+    }),
 });
 
 export type PaymentLinkResponse = z.infer<typeof paymentLinkResponseSchema>;
