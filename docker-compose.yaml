@@ -277,7 +277,7 @@ services:
       - "traefik.http.routers.satellite-protected.entrypoints=web"
       - "traefik.http.routers.satellite-protected.service=satellite-data-service"
       - "traefik.http.routers.satellite-protected.middlewares=cors,auth-middleware"
-
+  
   # Payment Service
   payment-service:
     build:
@@ -315,6 +315,42 @@ services:
       - "traefik.http.routers.payment-protected.entrypoints=web"
       - "traefik.http.routers.payment-protected.service=payment-service"
       - "traefik.http.routers.payment-protected.middlewares=cors,auth-middleware"
+  # Weather Service
+  weather-service:
+    build:
+      context: ./
+      dockerfile: services/weather-service/Dockerfile
+    container_name: agrisa-weather-service
+    restart: unless-stopped
+    ports:
+      - "${WEATHER_SERVICE_PORT:-8086}:8086"
+    environment:
+      - WEATHER_API_KEY=${WEATHER_API_KEY}
+      - XWEATHER_CLIENT_ID=${XWEATHER_CLIENT_ID}
+      - XWEATHER_CLIENT_SECRET=${XWEATHER_CLIENT_SECRET}
+    volumes:
+      - ./logs/weather-service:/agrisa/log/weather_service
+    networks:
+      - traefik-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+    - "traefik.enable=true"
+    - "traefik.http.services.weather-service.loadbalancer.server.port=8086"
+    - "traefik.http.routers.weather-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/public`)"
+    - "traefik.http.routers.weather-public.entrypoints=web"
+    - "traefik.http.routers.weather-public.service=weather-service"
+    - "traefik.http.routers.weather-public.middlewares=cors"
+    - "traefik.http.routers.weather-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/protected`)"
+    - "traefik.http.routers.weather-protected.entrypoints=web"
+    - "traefik.http.routers.weather-protected.service=weather-service"
+    - "traefik.http.routers.weather-protected.middlewares=cors,auth-middleware"
+    - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
+    - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
+    - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
 
 networks:
   traefik-net:
