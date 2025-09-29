@@ -16,6 +16,8 @@ import type { PayosService } from '../services/payos.service';
 import type { PaymentService } from '../services/payment.service';
 import { generateRandomString } from 'src/libs/utils';
 
+const ORDER_CODE_LENGTH = 6;
+
 @Controller('payment')
 export class PaymentController {
   private readonly logger = new Logger(PaymentController.name);
@@ -50,9 +52,10 @@ export class PaymentController {
 
     try {
       const orderCode =
-        parsed.data.order_code ?? Math.floor(Math.random() * 1000000);
+        parsed.data.order_code ??
+        Math.floor(Math.random() * 10 ** ORDER_CODE_LENGTH);
       await this.paymentService.create({
-        id: generateRandomString(10),
+        id: generateRandomString(),
         order_code: orderCode.toString(),
         amount: parsed.data.amount,
         description: parsed.data.description,
