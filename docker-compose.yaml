@@ -277,7 +277,7 @@ services:
       - "traefik.http.routers.satellite-protected.entrypoints=web"
       - "traefik.http.routers.satellite-protected.service=satellite-data-service"
       - "traefik.http.routers.satellite-protected.middlewares=cors,auth-middleware"
-  
+
   # Payment Service
   payment-service:
     build:
@@ -292,6 +292,7 @@ services:
       - PAYOS_CLIENT_ID=${PAYOS_CLIENT_ID}
       - PAYOS_API_KEY=${PAYOS_API_KEY}
       - PAYOS_CHECKSUM_KEY=${PAYOS_CHECKSUM_KEY}
+      - PAYOS_EXPIRED_DURATION=${PAYOS_EXPIRED_DURATION:-60*5}
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_USERNAME=${POSTGRES_USERNAME}
@@ -337,19 +338,19 @@ services:
       redis:
         condition: service_healthy
     labels:
-    - "traefik.enable=true"
-    - "traefik.http.services.weather-service.loadbalancer.server.port=8086"
-    - "traefik.http.routers.weather-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/public`)"
-    - "traefik.http.routers.weather-public.entrypoints=web"
-    - "traefik.http.routers.weather-public.service=weather-service"
-    - "traefik.http.routers.weather-public.middlewares=cors"
-    - "traefik.http.routers.weather-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/protected`)"
-    - "traefik.http.routers.weather-protected.entrypoints=web"
-    - "traefik.http.routers.weather-protected.service=weather-service"
-    - "traefik.http.routers.weather-protected.middlewares=cors,auth-middleware"
-    - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
-    - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
-    - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
+      - "traefik.enable=true"
+      - "traefik.http.services.weather-service.loadbalancer.server.port=8086"
+      - "traefik.http.routers.weather-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/public`)"
+      - "traefik.http.routers.weather-public.entrypoints=web"
+      - "traefik.http.routers.weather-public.service=weather-service"
+      - "traefik.http.routers.weather-public.middlewares=cors"
+      - "traefik.http.routers.weather-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/protected`)"
+      - "traefik.http.routers.weather-protected.entrypoints=web"
+      - "traefik.http.routers.weather-protected.service=weather-service"
+      - "traefik.http.routers.weather-protected.middlewares=cors,auth-middleware"
+      - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
+      - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
+      - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
 
 networks:
   traefik-net:
