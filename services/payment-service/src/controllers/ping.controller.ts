@@ -7,8 +7,13 @@ export class PingController {
     @Inject('PingService') private readonly pingService: PingService,
   ) {}
 
-  @Get('ping')
-  ping() {
+  @Get('/public/ping')
+  publicPing() {
+    return this.pingService.ping();
+  }
+
+  @Get('/private/ping')
+  privatePing() {
     return this.pingService.ping();
   }
 }
