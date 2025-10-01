@@ -14,13 +14,15 @@ export interface PayosService {
   createPaymentLink(
     data: CreatePaymentLinkData,
   ): Promise<ServiceResponse<PaymentLinkResponse>>;
-  getPaymentLinkInfo(orderId: string): Promise<ServiceResponse<PaymentLinkDto>>;
+  getPaymentLinkInfo(
+    order_id: string,
+  ): Promise<ServiceResponse<PaymentLinkDto>>;
   cancelPaymentLink(
-    orderId: string,
-    cancellationReason: string,
+    order_id: string,
+    cancellation_reason: string,
   ): Promise<ServiceResponse<PaymentLinkDto | Record<string, unknown>>>;
   verifyPaymentWebhookData(
     webhookData: unknown,
   ): PaymentLinkDto | Record<string, unknown>;
-  confirmWebhook(webhookUrl: string): Promise<ServiceResponse<null>>;
+  confirmWebhook(webhook_url: string): Promise<ServiceResponse<null>>;
 }

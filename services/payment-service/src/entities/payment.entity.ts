@@ -4,6 +4,7 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   PrimaryColumn,
+  DeleteDateColumn,
 } from 'typeorm';
 import { z } from 'zod';
 
@@ -11,8 +12,8 @@ export const createPaymentSchema = z.object({
   id: z.string(),
   amount: z.number().positive(),
   description: z.string().min(1).max(255),
-  userId: z.string(),
-  transactionId: z.string().max(255).nullable().optional(),
+  user_id: z.string(),
+  order_code: z.string().max(255).nullable().optional(),
   status: z.enum(['pending', 'completed', 'failed', 'refunded']).optional(),
 });
 
@@ -21,7 +22,6 @@ export const updatePaymentSchema = createPaymentSchema.partial();
 export type CreatePaymentDto = z.infer<typeof createPaymentSchema>;
 export type UpdatePaymentDto = z.infer<typeof updatePaymentSchema>;
 
-// TypeORM entity
 @Entity('payments')
 export class Payment {
   @PrimaryColumn('varchar')
@@ -41,14 +41,23 @@ export class Payment {
   status: string;
 
   @Column({ type: 'varchar' })
-  userId: string;
+  user_id: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
-  transactionId: string | null;
+  checkout_url: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  order_code: string | null;
 
   @CreateDateColumn()
-  createdAt: Date;
+  created_at: Date;
 
   @UpdateDateColumn()
-  updatedAt: Date;
+  updated_at: Date;
+
+  @DeleteDateColumn()
+  deleted_at: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
+  expired_at: Date | null;
 }

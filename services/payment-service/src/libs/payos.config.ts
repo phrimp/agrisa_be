@@ -5,3 +5,5 @@ export const payOS = new PayOS({
   apiKey: process.env.PAYOS_API_KEY,
   checksumKey: process.env.PAYOS_CHECKSUM_KEY,
 });
+
+export const PAYOS_EXPIRED_DURATION = process.env.PAYOS_EXPIRED_DURATION;
