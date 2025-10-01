@@ -6,6 +6,7 @@ import {
   Post,
   Logger,
   Inject,
+  Headers,
 } from '@nestjs/common';
 import {
   createPaymentLinkSchema,
@@ -28,11 +29,12 @@ export class PaymentController {
     @Inject('PaymentService') private readonly paymentService: PaymentService,
   ) {}
 
-  @Post('link')
+  @Post('private/link')
   async createPaymentLink(
-    @Body() body: CreatePaymentLinkData & { user_id: string },
+    @Body() body: CreatePaymentLinkData,
+    @Headers('x-user-id') user_id: string,
   ) {
-    const { user_id, ...payosData } = body;
+    const payosData = body;
 
     const cleanedPayosData = Object.fromEntries(
       Object.entries(payosData).filter(([, value]) => value !== undefined),
@@ -105,12 +107,12 @@ export class PaymentController {
     }
   }
 
-  @Get('link/:order_id')
+  @Get('private/link/:order_id')
   async getPaymentLinkInfo(@Param('order_id') order_id: string) {
     return this.payosService.getPaymentLinkInfo(order_id);
   }
 
-  @Post('link/:order_id/cancel')
+  @Post('private/link/:order_id/cancel')
   async cancelPaymentLink(
     @Param('order_id') order_id: string,
     @Body('cancellation_reason') cancellation_reason: string,
@@ -126,13 +128,25 @@ export class PaymentController {
     return this.payosService.cancelPaymentLink(order_id, cancellation_reason);
   }
 
-  @Post('webhook/verify')
-  verifyWebhook(@Body() body: unknown) {
+  @Post('public/webhook/verify')
+  async verifyWebhook(@Body() body: unknown) {
     try {
       const raw = this.payosService.verifyPaymentWebhookData(body);
 
       const parsed = paymentLinkResponseSchema.safeParse(raw);
       if (parsed.success) {
+        // Add: Update payment status based on webhook data
+        if (parsed.data.order_code) {
+          const payment = await this.paymentService.getById(
+            parsed.data.order_code.toString(),
+          );
+          if (payment && parsed.data.qr_code) {
+            await this.paymentService.update(payment.id, {
+              status: 'completed',
+            });
+          }
+        }
+
         return {
           error: 0,
           message: 'Thành công',
@@ -155,7 +169,7 @@ export class PaymentController {
     }
   }
 
-  @Post('webhook/confirm')
+  @Post('public/webhook/confirm')
   async confirmWebhook(@Body('webhook_url') webhook_url: string) {
     if (!webhook_url) {
       return {
