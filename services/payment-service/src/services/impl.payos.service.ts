@@ -7,6 +7,7 @@ import {
   PaymentLinkResponse,
 } from '../entities/payos.entity';
 import { PayosService } from './payos.service';
+import { transformKeys, toCamelCase, toSnakeCase } from '../libs/utils';
 type PayOSClient = {
   paymentRequests: {
     create: (data: CreatePaymentLinkData) => Promise<unknown>;
@@ -41,8 +42,18 @@ export class ImplPayosService implements PayosService {
     data: CreatePaymentLinkData,
   ): Promise<ServiceResponse<PaymentLinkResponse>> {
     try {
-      const raw = await this.payOS.paymentRequests.create(data);
-      const parsed = paymentLinkSchema.safeParse(raw);
+      // Convert expired_at Date to Unix timestamp for PayOS API
+      const payosData = {
+        ...data,
+        expired_at: Math.floor(data.expired_at.getTime() / 1000),
+      };
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const camelData = transformKeys(payosData, toCamelCase);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      const raw = await this.payOS.paymentRequests.create(camelData);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const snakeRaw = transformKeys(raw, toSnakeCase);
+      const parsed = paymentLinkSchema.safeParse(snakeRaw);
 
       if (!parsed.success) {
         this.logger.error(
@@ -65,11 +76,13 @@ export class ImplPayosService implements PayosService {
   }
 
   async getPaymentLinkInfo(
-    orderId: string,
+    order_id: string,
   ): Promise<ServiceResponse<PaymentLinkDto>> {
     try {
-      const raw = await this.payOS.paymentRequests.get(orderId);
-      const parsed = paymentLinkSchema.safeParse(raw);
+      const raw = await this.payOS.paymentRequests.get(order_id);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const snakeRaw = transformKeys(raw, toSnakeCase);
+      const parsed = paymentLinkSchema.safeParse(snakeRaw);
 
       if (!parsed.success) {
         this.logger.error(
@@ -93,20 +106,25 @@ export class ImplPayosService implements PayosService {
   }
 
   async cancelPaymentLink(
-    orderId: string,
-    cancellationReason: string,
+    order_id: string,
+    cancellation_reason: string,
   ): Promise<ServiceResponse<PaymentLinkDto | Record<string, unknown>>> {
     try {
-      const raw = await this.payOS.paymentRequests.cancel(orderId, {
-        cancellationReason,
+      const raw = await this.payOS.paymentRequests.cancel(order_id, {
+        cancellationReason: cancellation_reason,
       });
-      const parsed = paymentLinkSchema.safeParse(raw);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const snakeRaw = transformKeys(raw, toSnakeCase);
+      const parsed = paymentLinkSchema.safeParse(snakeRaw);
 
       if (!parsed.success) {
         if (!raw) {
           return this.errorResponse('Hủy liên kết thanh toán thất bại');
         }
-        return this.successResponse('Đã hủy liên kết thanh toán', raw);
+        return this.successResponse(
+          'Đã hủy liên kết thanh toán',
+          raw as Record<string, unknown>,
+        );
       }
 
       return this.successResponse(
@@ -124,18 +142,22 @@ export class ImplPayosService implements PayosService {
   ): PaymentLinkDto | Record<string, unknown> {
     try {
       const raw = this.payOS.webhooks.verify(webhookData);
-      const parsed = paymentLinkSchema.safeParse(raw);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      const snakeRaw = transformKeys(raw, toSnakeCase);
+      const parsed = paymentLinkSchema.safeParse(snakeRaw);
 
-      return parsed.success ? parsed.data : (raw as Record<string, unknown>);
+      return parsed.success
+        ? parsed.data
+        : (snakeRaw as Record<string, unknown>);
     } catch (error) {
       this.logger.error('Lỗi xác minh webhook:', error);
       throw error;
     }
   }
 
-  async confirmWebhook(webhookUrl: string): Promise<ServiceResponse<null>> {
+  async confirmWebhook(webhook_url: string): Promise<ServiceResponse<null>> {
     try {
-      await this.payOS.webhooks.confirm(webhookUrl);
+      await this.payOS.webhooks.confirm(webhook_url);
       return this.successResponse('Xác nhận webhook thành công', null);
     } catch (error) {
       this.logger.error('Lỗi xác nhận webhook:', error);
@@ -148,18 +170,19 @@ export class ImplPayosService implements PayosService {
   ): PaymentLinkResponse {
     return {
       bin: paymentLink.bin ?? null,
-      checkoutUrl: paymentLink.checkoutUrl ?? null,
-      accountNumber: paymentLink.accountNumber ?? null,
-      accountName: paymentLink.accountName ?? null,
+      checkout_url: paymentLink.checkout_url ?? null,
+      account_number: paymentLink.account_number ?? null,
+      account_name: paymentLink.account_name ?? null,
       amount: paymentLink.amount ?? null,
       description: paymentLink.description ?? null,
-      orderCode:
-        typeof paymentLink.orderCode === 'number'
-          ? paymentLink.orderCode
-          : typeof paymentLink.orderCode === 'string'
-            ? Number(paymentLink.orderCode)
+      order_code:
+        typeof paymentLink.order_code === 'number'
+          ? paymentLink.order_code
+          : typeof paymentLink.order_code === 'string'
+            ? Number(paymentLink.order_code)
             : null,
-      qrCode: paymentLink.qrCode ?? null,
+      qr_code: paymentLink.qr_code ?? null,
+      expired_at: paymentLink.expired_at ?? null,
     };
   }
 

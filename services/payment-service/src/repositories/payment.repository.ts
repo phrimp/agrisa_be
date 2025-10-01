@@ -33,7 +33,7 @@ export class PaymentRepository {
     return typeof result.affected === 'number' && result.affected > 0;
   }
 
-  async findByUserId(userId: string): Promise<Payment[]> {
-    return this.paymentRepo.find({ where: { userId } });
+  async findByUserId(user_id: string): Promise<Payment[]> {
+    return this.paymentRepo.find({ where: { user_id } });
   }
 }
