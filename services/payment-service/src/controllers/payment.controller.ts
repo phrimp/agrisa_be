@@ -7,6 +7,7 @@ import {
   Logger,
   Inject,
   Headers,
+  Delete,
 } from '@nestjs/common';
 import {
   createPaymentLinkSchema,
@@ -20,7 +21,7 @@ import { PAYOS_EXPIRED_DURATION } from 'src/libs/payos.config';
 
 const ORDER_CODE_LENGTH = 6;
 
-@Controller('payment')
+@Controller()
 export class PaymentController {
   private readonly logger = new Logger(PaymentController.name);
 
@@ -29,7 +30,7 @@ export class PaymentController {
     @Inject('PaymentService') private readonly paymentService: PaymentService,
   ) {}
 
-  @Post('private/link')
+  @Post('protected/link')
   async createPaymentLink(
     @Body() body: CreatePaymentLinkData,
     @Headers('x-user-id') user_id: string,
@@ -107,12 +108,12 @@ export class PaymentController {
     }
   }
 
-  @Get('private/link/:order_id')
+  @Get('protected/link/:order_id')
   async getPaymentLinkInfo(@Param('order_id') order_id: string) {
     return this.payosService.getPaymentLinkInfo(order_id);
   }
 
-  @Post('private/link/:order_id/cancel')
+  @Delete('protected/link/:order_id')
   async cancelPaymentLink(
     @Param('order_id') order_id: string,
     @Body('cancellation_reason') cancellation_reason: string,
@@ -135,7 +136,6 @@ export class PaymentController {
 
       const parsed = paymentLinkResponseSchema.safeParse(raw);
       if (parsed.success) {
-        // Add: Update payment status based on webhook data
         if (parsed.data.order_code) {
           const payment = await this.paymentService.getById(
             parsed.data.order_code.toString(),

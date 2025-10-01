@@ -1,7 +1,7 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import type { PingService } from '../services/ping.service';
 
-@Controller('payment')
+@Controller()
 export class PingController {
   constructor(
     @Inject('PingService') private readonly pingService: PingService,
@@ -12,8 +12,8 @@ export class PingController {
     return this.pingService.ping();
   }
 
-  @Get('/private/ping')
-  privatePing() {
+  @Get('/protected/ping')
+  protectedPing() {
     return this.pingService.ping();
   }
 }
