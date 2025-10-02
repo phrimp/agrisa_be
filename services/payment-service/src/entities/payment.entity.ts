@@ -59,5 +59,8 @@ export class Payment {
   deleted_at: Date | null;
 
   @Column({ type: 'timestamp', nullable: true })
+  paid_at: Date | null;
+
+  @Column({ type: 'timestamp', nullable: true })
   expired_at: Date | null;
 }
