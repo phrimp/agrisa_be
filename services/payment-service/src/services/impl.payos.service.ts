@@ -42,13 +42,14 @@ export class ImplPayosService implements PayosService {
     data: CreatePaymentLinkData,
   ): Promise<ServiceResponse<PaymentLinkResponse>> {
     try {
-      // Convert expired_at Date to Unix timestamp for PayOS API
       const payosData = {
         ...data,
         expired_at: Math.floor(data.expired_at.getTime() / 1000),
       };
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const camelData = transformKeys(payosData, toCamelCase);
+      console.log('PayOS Payload:', JSON.stringify(payosData, null, 2));
+
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const raw = await this.payOS.paymentRequests.create(camelData);
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
