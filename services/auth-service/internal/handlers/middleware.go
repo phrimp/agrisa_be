@@ -83,6 +83,7 @@ func (m *Middleware) ValidateToken(c *gin.Context) {
 	for _, session := range sessions {
 		if session.TokenHash == tokenString && session.IsActive {
 			isSessionValid = true
+			m.sessionService.RenewSession(c, session.ID)
 			break
 		}
 	}
