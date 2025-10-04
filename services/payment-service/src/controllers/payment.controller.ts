@@ -134,32 +134,33 @@ export class PaymentController {
       const raw = this.payosService.verifyPaymentWebhookData(body);
       this.logger.log(`Raw webhook data: ${JSON.stringify(raw)}`);
 
+      // Parse body trực tiếp thay vì raw
       const parsed = webhookPayloadSchema.safeParse(body);
       this.logger.log(`Parsed webhook data: ${JSON.stringify(parsed)}`);
 
       if (parsed.success) {
-        if (parsed.data.data && parsed.data.data.order_code) {
+        if (parsed.data.data && parsed.data.data.orderCode) {
           const payment = await this.paymentService.findById(
-            parsed.data.data.order_code.toString(),
+            parsed.data.data.orderCode.toString(),
           );
           if (payment) {
-            if (String(parsed.data.code) === '00') {
+            if (parsed.data.data.code === '00') {
               await this.paymentService.update(payment.id, {
                 status: 'completed',
               });
               this.logger.log(`Payment ${payment.id} updated to completed`);
             } else {
               this.logger.warn(
-                `Webhook received but not successful: code=${parsed.data.code}`,
+                `Webhook received but not successful: code=${parsed.data.data.code}`,
               );
             }
           } else {
             this.logger.warn(
-              `Payment not found for order_code: ${parsed.data.data.order_code}`,
+              `Payment not found for orderCode: ${parsed.data.data.orderCode}`,
             );
           }
         } else {
-          this.logger.warn('No order_code in webhook data');
+          this.logger.warn('No orderCode in webhook data');
         }
 
         return parsed.data;
