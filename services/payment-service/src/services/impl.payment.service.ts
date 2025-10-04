@@ -15,7 +15,7 @@ export class ImplPaymentService implements PaymentService {
     page: number,
     limit: number,
     status?: string[],
-  ): Promise<Payment[]> {
+  ): Promise<{ items: Payment[]; total: number }> {
     return this.paymentRepository.find(page, limit, status ?? []);
   }
 
@@ -36,7 +36,7 @@ export class ImplPaymentService implements PaymentService {
     page: number,
     limit: number,
     status?: string[],
-  ): Promise<Payment[]> {
+  ): Promise<{ items: Payment[]; total: number }> {
     return this.paymentRepository.findByUserId(
       user_id,
       page,
