@@ -43,6 +43,10 @@ export class PaymentRepository {
     return this.paymentRepo.findOne({ where: { id } });
   }
 
+  async findByOrderCode(order_code: string): Promise<Payment | null> {
+    return this.paymentRepo.findOne({ where: { order_code } });
+  }
+
   async update(id: string, updates: Partial<Payment>): Promise<Payment | null> {
     await this.paymentRepo.update(id, updates);
     return this.findById(id);

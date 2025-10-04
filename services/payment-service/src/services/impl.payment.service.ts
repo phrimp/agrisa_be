@@ -23,6 +23,10 @@ export class ImplPaymentService implements PaymentService {
     return this.paymentRepository.findById(id);
   }
 
+  async findByOrderCode(order_code: string): Promise<Payment | null> {
+    return this.paymentRepository.findByOrderCode(order_code);
+  }
+
   async update(id: string, updates: Partial<Payment>): Promise<Payment | null> {
     return this.paymentRepository.update(id, updates);
   }
