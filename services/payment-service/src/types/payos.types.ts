@@ -5,7 +5,7 @@ export const paymentLinkSchema = z.object({
   checkout_url: z.string().url().nullable().optional(),
   account_number: z.string().nullable().optional(),
   account_name: z.string().nullable().optional(),
-  amount: z.number().nullable().optional(),
+  amount: z.coerce.number().nullable().optional(),
   description: z.string().nullable().optional(),
   order_code: z.union([z.string(), z.number()]).nullable().optional(),
   qr_code: z.string().nullable().optional(),
@@ -24,7 +24,7 @@ export type PaymentLinkDto = z.infer<typeof paymentLinkSchema>;
 
 export const createPaymentLinkSchema = z.object({
   order_code: z.number().optional(),
-  amount: z.number(),
+  amount: z.coerce.number(),
   description: z.string(),
   return_url: z.string().url().optional(),
   cancel_url: z.string().url().optional(),
@@ -39,7 +39,7 @@ export const paymentLinkResponseSchema = z.object({
   checkout_url: z.string().url().nullable().optional(),
   account_number: z.string().nullable().optional(),
   account_name: z.string().nullable().optional(),
-  amount: z.number().nullable().optional(),
+  amount: z.coerce.number().nullable().optional(),
   description: z.string().nullable().optional(),
   order_code: z.number().nullable().optional(),
   qr_code: z.string().nullable().optional(),
