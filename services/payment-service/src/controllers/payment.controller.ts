@@ -129,22 +129,20 @@ export class PaymentController {
 
   @Post('public/webhook/verify')
   async verifyWebhook(@Body() body: unknown) {
-    this.logger.log(`Webhook body received: ${JSON.stringify(body)}`); // Thêm log để debug
+    this.logger.log(`Webhook body received: ${JSON.stringify(body)}`);
     try {
       const raw = this.payosService.verifyPaymentWebhookData(body);
-      this.logger.log(`Raw webhook data: ${JSON.stringify(raw)}`); // Thêm log
+      this.logger.log(`Raw webhook data: ${JSON.stringify(raw)}`);
 
-      const parsed = webhookPayloadSchema.safeParse(raw); // Dùng schema mới
-      this.logger.log(`Parsed webhook data: ${JSON.stringify(parsed)}`); // Thêm log
+      const parsed = webhookPayloadSchema.safeParse(body);
+      this.logger.log(`Parsed webhook data: ${JSON.stringify(parsed)}`);
 
       if (parsed.success) {
         if (parsed.data.data && parsed.data.data.order_code) {
-          // Sửa từ orderCode thành order_code (snake_case)
           const payment = await this.paymentService.findById(
-            parsed.data.data.order_code.toString(), // Sửa từ orderCode thành order_code
+            parsed.data.data.order_code.toString(),
           );
           if (payment) {
-            // Check data.code === '00' cho thanh toán thành công
             if (String(parsed.data.code) === '00') {
               await this.paymentService.update(payment.id, {
                 status: 'completed',
@@ -157,11 +155,11 @@ export class PaymentController {
             }
           } else {
             this.logger.warn(
-              `Payment not found for order_code: ${parsed.data.data.order_code}`, // Sửa từ orderCode thành order_code
+              `Payment not found for order_code: ${parsed.data.data.order_code}`,
             );
           }
         } else {
-          this.logger.warn('No order_code in webhook data'); // Sửa từ orderCode thành order_code
+          this.logger.warn('No order_code in webhook data');
         }
 
         return parsed.data;

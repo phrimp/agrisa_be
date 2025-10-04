@@ -78,10 +78,11 @@ export type ServicePaymentLinkDtoResponse = z.infer<
   typeof servicePaymentLinkDtoResponseSchema
 >;
 
-// Schema cho payload webhook từ PayOS (dùng snake_case)
+// Schema cho payload webhook từ PayOS (dùng snake_case, thêm success, code là string)
 export const webhookPayloadSchema = z.object({
-  code: z.number(), // 0 = success
+  code: z.string(), // "00" = success (đổi từ number thành string)
   desc: z.string(),
+  success: z.boolean().optional(), // Thêm success (optional)
   data: z.object({
     order_code: z.number(),
     amount: z.number(),
@@ -98,6 +99,7 @@ export const webhookPayloadSchema = z.object({
     counter_account_number: z.nullable(z.string()),
     virtual_account_name: z.nullable(z.string()),
     virtual_account_number: z.nullable(z.string()),
+    currency: z.string().optional(), // Thêm nếu có trong payload
   }),
   signature: z.string(),
 });
