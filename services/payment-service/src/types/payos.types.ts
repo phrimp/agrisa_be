@@ -77,3 +77,27 @@ export type ServicePaymentLinkResponse = z.infer<
 export type ServicePaymentLinkDtoResponse = z.infer<
   typeof servicePaymentLinkDtoResponseSchema
 >;
+
+// Schema cho payload webhook từ PayOS (dùng snake_case)
+export const webhookPayloadSchema = z.object({
+  code: z.number(), // 0 = success
+  desc: z.string(),
+  data: z.object({
+    order_code: z.number(),
+    amount: z.number(),
+    description: z.string(),
+    account_number: z.string(),
+    reference: z.string(),
+    transaction_date_time: z.string(),
+    payment_link_id: z.string(),
+    code: z.string(),
+    desc: z.string(),
+    counter_account_bank_id: z.nullable(z.string()),
+    counter_account_bank_name: z.nullable(z.string()),
+    counter_account_name: z.nullable(z.string()),
+    counter_account_number: z.nullable(z.string()),
+    virtual_account_name: z.nullable(z.string()),
+    virtual_account_number: z.nullable(z.string()),
+  }),
+  signature: z.string(),
+});
