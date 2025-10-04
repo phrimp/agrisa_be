@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const createPaymentSchema = z.object({
   id: z.string(),
-  amount: z.number().positive(),
+  amount: z.coerce.number().positive(),
   description: z.string().min(1).max(255),
   user_id: z.string(),
   order_code: z.string().max(255).nullable().optional(),
@@ -11,7 +11,7 @@ export const createPaymentSchema = z.object({
 
 export const paymentSchema = z.object({
   id: z.string(),
-  amount: z.number().positive(),
+  amount: z.coerce.number().positive(),
   description: z.string().min(1).max(255),
   status: z
     .enum(['pending', 'completed', 'canceled', 'refunded'])
