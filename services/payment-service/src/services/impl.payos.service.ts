@@ -5,7 +5,7 @@ import {
   PaymentLinkDto,
   CreatePaymentLinkData,
   PaymentLinkResponse,
-} from '../entities/payos.entity';
+} from '../types/payos.types';
 import { PayosService } from './payos.service';
 import { transformKeys, toCamelCase, toSnakeCase } from '../libs/utils';
 type PayOSClient = {

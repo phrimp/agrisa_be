@@ -1,4 +1,4 @@
-import { PingResponse } from '../entities/ping.entity';
+import { PingResponse } from '../types/ping.types';
 
 export interface PingService {
   ping(): PingResponse;

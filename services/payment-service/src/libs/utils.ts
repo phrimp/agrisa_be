@@ -30,4 +30,17 @@ const transformKeys = (obj: any, transform: (key: string) => string): any => {
   return transformed;
 };
 
-export { generateRandomString, toCamelCase, toSnakeCase, transformKeys };
+const checkPermissions = (
+  permissions: string[],
+  required: string[],
+): boolean => {
+  return required.every((perm) => permissions.includes(perm));
+};
+
+export {
+  generateRandomString,
+  toCamelCase,
+  toSnakeCase,
+  transformKeys,
+  checkPermissions,
+};
