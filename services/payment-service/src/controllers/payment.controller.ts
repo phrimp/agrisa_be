@@ -134,11 +134,16 @@ export class PaymentController {
   @Post('public/webhook/verify')
   async verifyWebhook(@Body() body: unknown) {
     try {
+      this.logger.log('Received webhook payload', { body }); // Thêm log cho payload nhận được
+
       this.payosService.verifyPaymentWebhookData(body);
 
       const parsed = webhookPayloadSchema.safeParse(body);
-
       if (parsed.success) {
+        this.logger.log('Webhook parsed successfully', {
+          parsedData: parsed.data,
+        }); // Thêm log cho dữ liệu đã parse
+
         if (parsed.data.data && parsed.data.data.orderCode) {
           const payment = await this.paymentService.findByOrderCode(
             parsed.data.data.orderCode.toString(),
@@ -148,13 +153,28 @@ export class PaymentController {
               await this.paymentService.update(payment.id, {
                 status: 'completed',
               });
+              this.logger.log('Payment status updated to completed', {
+                orderCode: parsed.data.data.orderCode,
+              }); // Thêm log cho cập nhật trạng thái
+            } else {
+              this.logger.log('Payment code not 00, no status update', {
+                code: parsed.data.data.code,
+                orderCode: parsed.data.data.orderCode,
+              }); // Thêm log cho trường hợp không cập nhật
             }
+          } else {
+            this.logger.warn('Payment not found for orderCode', {
+              orderCode: parsed.data.data.orderCode,
+            }); // Thêm log cảnh báo nếu không tìm thấy payment
           }
         }
 
         return parsed.data;
       }
 
+      this.logger.warn('Webhook payload validation failed', {
+        errors: parsed.error.format(),
+      }); // Thêm log cho lỗi validation
       throw new HttpException(
         'Dữ liệu webhook không hợp lệ',
         HttpStatus.BAD_REQUEST,
