@@ -140,7 +140,7 @@ export class PaymentController {
 
       if (parsed.success) {
         if (parsed.data.data && parsed.data.data.orderCode) {
-          const payment = await this.paymentService.findById(
+          const payment = await this.paymentService.findByOrderCode(
             parsed.data.data.orderCode.toString(),
           );
           if (payment) {
