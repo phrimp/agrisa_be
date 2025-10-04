@@ -152,6 +152,7 @@ export class PaymentController {
             if (parsed.data.data.code === '00') {
               await this.paymentService.update(payment.id, {
                 status: 'completed',
+                paid_at: new Date(),
               });
               this.logger.log('Payment status updated to completed', {
                 orderCode: parsed.data.data.orderCode,
