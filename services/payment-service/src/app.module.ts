@@ -7,6 +7,7 @@ import { ImplPaymentService } from './services/impl.payment.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { databaseConfig } from './libs/db.config';
 import { Payment } from './entities/payment.entity';
+import { PaymentRepository } from './repositories/payment.repository';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { Payment } from './entities/payment.entity';
   ],
   controllers: [PingController, PaymentController],
   providers: [
+    PaymentRepository,
     { provide: 'PingService', useClass: ImplPingService },
     { provide: 'PayosService', useClass: ImplPayosService },
     { provide: 'PaymentService', useClass: ImplPaymentService },
