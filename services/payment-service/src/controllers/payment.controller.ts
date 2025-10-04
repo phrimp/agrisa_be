@@ -14,7 +14,7 @@ import {
 } from '@nestjs/common';
 import {
   createPaymentLinkSchema,
-  paymentLinkResponseSchema,
+  webhookPayloadSchema,
 } from '../types/payos.types';
 import type { CreatePaymentLinkData } from '../types/payos.types';
 import type { PayosService } from '../services/payos.service';
@@ -129,20 +129,39 @@ export class PaymentController {
 
   @Post('public/webhook/verify')
   async verifyWebhook(@Body() body: unknown) {
+    this.logger.log(`Webhook body received: ${JSON.stringify(body)}`); // Thêm log để debug
     try {
       const raw = this.payosService.verifyPaymentWebhookData(body);
+      this.logger.log(`Raw webhook data: ${JSON.stringify(raw)}`); // Thêm log
 
-      const parsed = paymentLinkResponseSchema.safeParse(raw);
+      const parsed = webhookPayloadSchema.safeParse(raw); // Dùng schema mới
+      this.logger.log(`Parsed webhook data: ${JSON.stringify(parsed)}`); // Thêm log
+
       if (parsed.success) {
-        if (parsed.data.order_code) {
+        if (parsed.data.data && parsed.data.data.order_code) {
+          // Sửa từ orderCode thành order_code (snake_case)
           const payment = await this.paymentService.findById(
-            parsed.data.order_code.toString(),
+            parsed.data.data.order_code.toString(), // Sửa từ orderCode thành order_code
           );
-          if (payment && parsed.data.qr_code) {
-            await this.paymentService.update(payment.id, {
-              status: 'completed',
-            });
+          if (payment) {
+            // Check data.code === '00' cho thanh toán thành công
+            if (String(parsed.data.code) === '00') {
+              await this.paymentService.update(payment.id, {
+                status: 'completed',
+              });
+              this.logger.log(`Payment ${payment.id} updated to completed`);
+            } else {
+              this.logger.warn(
+                `Webhook received but not successful: code=${parsed.data.code}`,
+              );
+            }
+          } else {
+            this.logger.warn(
+              `Payment not found for order_code: ${parsed.data.data.order_code}`, // Sửa từ orderCode thành order_code
+            );
           }
+        } else {
+          this.logger.warn('No order_code in webhook data'); // Sửa từ orderCode thành order_code
         }
 
         return parsed.data;
