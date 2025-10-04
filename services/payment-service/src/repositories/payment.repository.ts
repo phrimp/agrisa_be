@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 
 @Injectable()
@@ -33,7 +33,25 @@ export class PaymentRepository {
     return typeof result.affected === 'number' && result.affected > 0;
   }
 
-  async findByUserId(user_id: string): Promise<Payment[]> {
-    return this.paymentRepo.find({ where: { user_id } });
+  async findByUserId(
+    user_id: string,
+    page: number,
+    limit: number,
+    status: string[],
+  ): Promise<Payment[]> {
+    const page_num = Math.max(1, Number(page) || 1);
+    const limit_num = Math.max(1, Number(limit) || 10);
+    const skip = (page_num - 1) * limit_num;
+
+    const query: Record<string, unknown> = { user_id };
+    if (status && status.length > 0) {
+      query.status = In(status);
+    }
+    return this.paymentRepo.find({
+      where: query,
+      skip,
+      take: limit_num,
+      order: { created_at: 'DESC' },
+    });
   }
 }
