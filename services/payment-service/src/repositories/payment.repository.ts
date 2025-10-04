@@ -15,8 +15,25 @@ export class PaymentRepository {
     return this.paymentRepo.save(newPayment);
   }
 
-  async findAll(): Promise<Payment[]> {
-    return this.paymentRepo.find();
+  async find(
+    page: number,
+    limit: number,
+    status: string[],
+  ): Promise<Payment[]> {
+    const query: Record<string, unknown> = {};
+    if (status && status.length > 0) {
+      query.status = In(status);
+    }
+    const page_num = Math.max(1, Number(page) || 1);
+    const limit_num = Math.max(1, Number(limit) || 10);
+    const skip = (page_num - 1) * limit_num;
+
+    return this.paymentRepo.find({
+      where: query,
+      skip,
+      take: limit_num,
+      order: { created_at: 'DESC' },
+    });
   }
 
   async findById(id: string): Promise<Payment | null> {

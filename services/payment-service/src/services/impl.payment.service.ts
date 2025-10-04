@@ -11,8 +11,12 @@ export class ImplPaymentService implements PaymentService {
     return this.paymentRepository.create(payment);
   }
 
-  async find(): Promise<Payment[]> {
-    return this.paymentRepository.findAll();
+  async find(
+    page: number,
+    limit: number,
+    status?: string[],
+  ): Promise<Payment[]> {
+    return this.paymentRepository.find(page, limit, status ?? []);
   }
 
   async findById(id: string): Promise<Payment | null> {

@@ -9,15 +9,17 @@ import {
   Headers,
   Delete,
   Query,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   createPaymentLinkSchema,
   paymentLinkResponseSchema,
-} from '../entities/payos.entity';
-import type { CreatePaymentLinkData } from '../entities/payos.entity';
+} from '../types/payos.types';
+import type { CreatePaymentLinkData } from '../types/payos.types';
 import type { PayosService } from '../services/payos.service';
 import type { PaymentService } from '../services/payment.service';
-import { generateRandomString } from 'src/libs/utils';
+import { checkPermissions, generateRandomString } from 'src/libs/utils';
 import { PAYOS_EXPIRED_DURATION } from 'src/libs/payos.config';
 
 const ORDER_CODE_LENGTH = 6;
@@ -184,19 +186,62 @@ export class PaymentController {
   }
 
   @Get('protected/orders')
-  async getMyOrders(
+  async getAllOrders(
     @Headers('x-user-id') user_id: string,
+    @Headers('x-user-permissions') user_permissions: string,
     @Query('page') page = '1',
     @Query('limit') limit = '10',
     @Query('status') status?: string[],
   ) {
     const page_num = Math.max(parseInt(page, 10) || 1, 1);
     const limit_num = Math.max(parseInt(limit, 10) || 10, 1);
-    return this.paymentService.findByUserId(
-      user_id,
-      page_num,
-      limit_num,
-      status,
-    );
+    const permissions = user_permissions ? user_permissions.split(',') : [];
+
+    try {
+      if (checkPermissions(permissions, ['admin'])) {
+        const orders = this.paymentService.find(page_num, limit_num, status);
+        return {
+          message: 'Thành công',
+          code: HttpCode,
+          data: orders,
+          total_pages: Math.ceil((await orders).length / limit_num),
+          current_page: page_num,
+          total_items: (await orders).length,
+          items_per_page: limit_num,
+          previous: page_num > 1,
+          next: page_num * limit_num < (await orders).length,
+        };
+      } else {
+        const orders = this.paymentService.findByUserId(
+          user_id,
+          page_num,
+          limit_num,
+          status,
+        );
+        return {
+          message: 'Thành công',
+          code: HttpCode,
+          data: orders,
+          total_pages: Math.ceil((await orders).length / limit_num),
+          current_page: page_num,
+          total_items: (await orders).length,
+          items_per_page: limit_num,
+          previous: page_num > 1,
+          next: page_num * limit_num < (await orders).length,
+        };
+      }
+    } catch (error) {
+      return {
+        message: `Lỗi: ${error || 'Đã xảy ra lỗi'}`,
+        code: HttpStatus.INTERNAL_SERVER_ERROR,
+        data: null,
+        total_pages: 0,
+        current_page: page_num,
+        total_items: 0,
+        items_per_page: limit_num,
+        previous: false,
+        next: false,
+      };
+    }
   }
 }

@@ -6,21 +6,6 @@ import {
   PrimaryColumn,
   DeleteDateColumn,
 } from 'typeorm';
-import { z } from 'zod';
-
-export const createPaymentSchema = z.object({
-  id: z.string(),
-  amount: z.number().positive(),
-  description: z.string().min(1).max(255),
-  user_id: z.string(),
-  order_code: z.string().max(255).nullable().optional(),
-  status: z.enum(['pending', 'completed', 'failed', 'refunded']).optional(),
-});
-
-export const updatePaymentSchema = createPaymentSchema.partial();
-
-export type CreatePaymentDto = z.infer<typeof createPaymentSchema>;
-export type UpdatePaymentDto = z.infer<typeof updatePaymentSchema>;
 
 @Entity('payments')
 export class Payment {

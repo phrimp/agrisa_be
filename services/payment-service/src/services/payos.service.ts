@@ -2,7 +2,7 @@ import {
   PaymentLinkDto,
   CreatePaymentLinkData,
   PaymentLinkResponse,
-} from '../entities/payos.entity';
+} from '../types/payos.types';
 
 type ServiceResponse<T = unknown> = {
   error: number;
