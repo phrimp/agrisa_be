@@ -19,21 +19,24 @@ export class PaymentRepository {
     page: number,
     limit: number,
     status: string[],
-  ): Promise<Payment[]> {
+  ): Promise<{ items: Payment[]; total: number }> {
     const query: Record<string, unknown> = {};
     if (status && status.length > 0) {
       query.status = In(status);
     }
+
     const page_num = Math.max(1, Number(page) || 1);
     const limit_num = Math.max(1, Number(limit) || 10);
     const skip = (page_num - 1) * limit_num;
 
-    return this.paymentRepo.find({
+    const [items, total] = await this.paymentRepo.findAndCount({
       where: query,
       skip,
       take: limit_num,
       order: { created_at: 'DESC' },
     });
+
+    return { items, total };
   }
 
   async findById(id: string): Promise<Payment | null> {
@@ -55,7 +58,7 @@ export class PaymentRepository {
     page: number,
     limit: number,
     status: string[],
-  ): Promise<Payment[]> {
+  ): Promise<{ items: Payment[]; total: number }> {
     const page_num = Math.max(1, Number(page) || 1);
     const limit_num = Math.max(1, Number(limit) || 10);
     const skip = (page_num - 1) * limit_num;
@@ -64,11 +67,12 @@ export class PaymentRepository {
     if (status && status.length > 0) {
       query.status = In(status);
     }
-    return this.paymentRepo.find({
+    const [items, total] = await this.paymentRepo.findAndCount({
       where: query,
       skip,
       take: limit_num,
       order: { created_at: 'DESC' },
     });
+    return { items, total };
   }
 }
