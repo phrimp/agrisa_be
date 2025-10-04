@@ -23,7 +23,7 @@ import { checkPermissions, generateRandomString } from 'src/libs/utils';
 import { PAYOS_EXPIRED_DURATION } from 'src/libs/payos.config';
 import { paymentViewSchema } from 'src/types/payment.types';
 import z from 'zod';
-const ORDER_CODE_LENGTH = 6;
+const ORDER_CODE_LENGTH = 8;
 
 @Controller()
 export class PaymentController {
@@ -39,13 +39,13 @@ export class PaymentController {
     @Body() body: CreatePaymentLinkData,
     @Headers('x-user-id') user_id: string,
   ) {
-    const payosData = body;
+    const payos_data = body;
 
-    const cleanedPayosData = Object.fromEntries(
-      Object.entries(payosData).filter(([, value]) => value !== undefined),
+    const cleaned_payos_data = Object.fromEntries(
+      Object.entries(payos_data).filter(([, value]) => value !== undefined),
     );
 
-    const parsed = createPaymentLinkSchema.safeParse(cleanedPayosData);
+    const parsed = createPaymentLinkSchema.safeParse(cleaned_payos_data);
     if (!parsed.success) {
       this.logger.warn(
         'Invalid createPaymentLink payload',
@@ -55,49 +55,49 @@ export class PaymentController {
     }
 
     try {
-      const orderCode =
+      const order_code =
         parsed.data.order_code ??
         Math.floor(Math.random() * 10 ** ORDER_CODE_LENGTH);
 
-      const durationStr = PAYOS_EXPIRED_DURATION || '';
-      let durationSeconds: number;
-      if (durationStr.includes('*')) {
-        const parts = durationStr.split('*').map((s) => parseInt(s.trim()));
-        durationSeconds = parts.reduce((a, b) => a * b, 1);
+      const duration_str = PAYOS_EXPIRED_DURATION || '';
+      let duration_seconds: number;
+      if (duration_str.includes('*')) {
+        const parts = duration_str.split('*').map((s) => parseInt(s.trim()));
+        duration_seconds = parts.reduce((a, b) => a * b, 1);
       } else {
-        durationSeconds = parseInt(durationStr);
+        duration_seconds = parseInt(duration_str);
       }
-      const expiredAt = new Date(Date.now() + durationSeconds * 1000);
+      const expired_at = new Date(Date.now() + duration_seconds * 1000);
 
-      const paymentId = generateRandomString();
+      const payment_id = generateRandomString();
 
       await this.paymentService.create({
-        id: paymentId,
-        order_code: orderCode.toString(),
+        id: payment_id,
+        order_code: order_code.toString(),
         amount: parsed.data.amount,
         description: parsed.data.description,
         user_id: user_id,
-        expired_at: expiredAt,
+        expired_at: expired_at,
       });
 
-      const payosPayload = {
+      const payos_payload = {
         ...parsed.data,
-        order_code: orderCode,
+        order_code: order_code,
         return_url: parsed.data.return_url,
         cancel_url: parsed.data.cancel_url,
-        expired_at: expiredAt,
+        expired_at: expired_at,
       };
 
-      const payosResponse =
-        await this.payosService.createPaymentLink(payosPayload);
+      const payos_response =
+        await this.payosService.createPaymentLink(payos_payload);
 
-      if (payosResponse.error === 0 && payosResponse.data?.checkout_url) {
-        await this.paymentService.update(paymentId, {
-          checkout_url: payosResponse.data.checkout_url,
+      if (payos_response.error === 0 && payos_response.data?.checkout_url) {
+        await this.paymentService.update(payment_id, {
+          checkout_url: payos_response.data.checkout_url,
         });
       }
 
-      return payosResponse;
+      return payos_response.data;
     } catch (error) {
       this.logger.error('Failed to create payment', error);
       throw new HttpException(
@@ -109,7 +109,9 @@ export class PaymentController {
 
   @Get('protected/link/:order_id')
   async getPaymentLinkInfo(@Param('order_id') order_id: string) {
-    return this.payosService.getPaymentLinkInfo(order_id);
+    const payment_link_info =
+      await this.payosService.getPaymentLinkInfo(order_id);
+    return payment_link_info.data;
   }
 
   @Delete('protected/link/:order_id')
@@ -124,19 +126,17 @@ export class PaymentController {
       );
     }
 
-    return this.payosService.cancelPaymentLink(order_id, cancellation_reason);
+    return this.payosService
+      .cancelPaymentLink(order_id, cancellation_reason)
+      .then((cancel_response) => cancel_response.data);
   }
 
   @Post('public/webhook/verify')
   async verifyWebhook(@Body() body: unknown) {
-    this.logger.log(`Webhook body received: ${JSON.stringify(body)}`);
     try {
-      const raw = this.payosService.verifyPaymentWebhookData(body);
-      this.logger.log(`Raw webhook data: ${JSON.stringify(raw)}`);
+      this.payosService.verifyPaymentWebhookData(body);
 
-      // Parse body trực tiếp thay vì raw
       const parsed = webhookPayloadSchema.safeParse(body);
-      this.logger.log(`Parsed webhook data: ${JSON.stringify(parsed)}`);
 
       if (parsed.success) {
         if (parsed.data.data && parsed.data.data.orderCode) {
@@ -148,19 +148,8 @@ export class PaymentController {
               await this.paymentService.update(payment.id, {
                 status: 'completed',
               });
-              this.logger.log(`Payment ${payment.id} updated to completed`);
-            } else {
-              this.logger.warn(
-                `Webhook received but not successful: code=${parsed.data.data.code}`,
-              );
             }
-          } else {
-            this.logger.warn(
-              `Payment not found for orderCode: ${parsed.data.data.orderCode}`,
-            );
           }
-        } else {
-          this.logger.warn('No orderCode in webhook data');
         }
 
         return parsed.data;
@@ -170,8 +159,8 @@ export class PaymentController {
         'Dữ liệu webhook không hợp lệ',
         HttpStatus.BAD_REQUEST,
       );
-    } catch (err) {
-      this.logger.error('Failed to verify webhook', err);
+    } catch (error) {
+      this.logger.error('Failed to verify webhook', error);
       throw new HttpException(
         'Xác minh webhook thất bại',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -188,7 +177,9 @@ export class PaymentController {
       );
     }
 
-    return this.payosService.confirmWebhook(webhook_url);
+    return this.payosService
+      .confirmWebhook(webhook_url)
+      .then((confirm_response) => confirm_response.data);
   }
 
   @Get('protected/orders')
@@ -203,7 +194,7 @@ export class PaymentController {
     const limit_num = Math.max(parseInt(limit, 10) || 10, 1);
     const permissions = user_permissions ? user_permissions.split(',') : [];
 
-    const orders = checkPermissions(permissions, ['view_all_orders'])
+    const orders_result = checkPermissions(permissions, ['view_all_orders'])
       ? this.paymentService.find(page_num, limit_num, status?.split(','))
       : this.paymentService.findByUserId(
           user_id,
@@ -212,9 +203,9 @@ export class PaymentController {
           status?.split(','),
         );
 
-    return orders
-      .then((res) => {
-        const { items, total } = res;
+    return orders_result
+      .then((result) => {
+        const { items, total } = result;
         const total_pages = Math.ceil(total / limit_num);
         return {
           items: z.array(paymentViewSchema).parse(items),
@@ -228,8 +219,8 @@ export class PaymentController {
           },
         };
       })
-      .catch((err) => {
-        this.logger.error('Failed to get orders', err);
+      .catch((error) => {
+        this.logger.error('Failed to get orders', error);
         throw new HttpException(
           'Lỗi khi lấy danh sách đơn hàng',
           HttpStatus.INTERNAL_SERVER_ERROR,

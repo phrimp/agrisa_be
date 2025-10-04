@@ -14,7 +14,7 @@ export const paymentSchema = z.object({
   amount: z.coerce.number().positive(),
   description: z.string().min(1).max(255),
   status: z
-    .enum(['pending', 'completed', 'canceled', 'refunded'])
+    .enum(['pending', 'completed', 'failed', 'refunded'])
     .default('pending'),
   user_id: z.string(),
   checkout_url: z.string().max(255).nullable().optional(),
@@ -29,7 +29,7 @@ export const paymentSchema = z.object({
 const statusMap: Record<z.infer<typeof paymentSchema>['status'], string> = {
   pending: 'Chờ thanh toán',
   completed: 'Đã thanh toán',
-  canceled: 'Đã hủy',
+  failed: 'Thất bại',
   refunded: 'Đã hoàn tiền',
 };
 
