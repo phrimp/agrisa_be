@@ -199,20 +199,24 @@ export class PaymentController {
 
     try {
       if (checkPermissions(permissions, ['admin'])) {
-        const orders = this.paymentService.find(page_num, limit_num, status);
+        const orders = await this.paymentService.find(
+          page_num,
+          limit_num,
+          status,
+        );
         return {
           message: 'Thành công',
-          code: HttpCode,
+          code: HttpStatus.OK,
           data: orders,
-          total_pages: Math.ceil((await orders).length / limit_num),
+          total_pages: Math.ceil(orders.length / limit_num),
           current_page: page_num,
-          total_items: (await orders).length,
+          total_items: orders.length,
           items_per_page: limit_num,
           previous: page_num > 1,
-          next: page_num * limit_num < (await orders).length,
+          next: page_num * limit_num < orders.length,
         };
       } else {
-        const orders = this.paymentService.findByUserId(
+        const orders = await this.paymentService.findByUserId(
           user_id,
           page_num,
           limit_num,
@@ -220,14 +224,14 @@ export class PaymentController {
         );
         return {
           message: 'Thành công',
-          code: HttpCode,
+          code: HttpStatus.OK,
           data: orders,
-          total_pages: Math.ceil((await orders).length / limit_num),
+          total_pages: Math.ceil(orders.length / limit_num),
           current_page: page_num,
-          total_items: (await orders).length,
+          total_items: orders.length,
           items_per_page: limit_num,
           previous: page_num > 1,
-          next: page_num * limit_num < (await orders).length,
+          next: page_num * limit_num < orders.length,
         };
       }
     } catch (error) {
