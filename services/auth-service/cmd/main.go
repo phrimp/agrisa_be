@@ -15,7 +15,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 )
@@ -121,16 +120,6 @@ func main() {
 
 	// Setup Gin router
 	r := gin.Default()
-
-	cors_cfg := cors.DefaultConfig()
-	cors_cfg.AllowOrigins = []string{"*"} // Replace with your frontend origin
-	cors_cfg.AllowMethods = []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"}
-	cors_cfg.AllowHeaders = []string{"*"}
-	cors_cfg.ExposeHeaders = []string{"*"} // Headers to expose to the client
-	cors_cfg.AllowCredentials = true
-	cors_cfg.MaxAge = 12 * time.Hour // How long the preflight request can be cached
-
-	r.Use(cors.New(cors_cfg))
 
 	// Register routes
 	userHandler.RegisterRoutes(r, userHandler)
