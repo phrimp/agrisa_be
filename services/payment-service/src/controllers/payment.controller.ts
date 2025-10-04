@@ -21,6 +21,8 @@ import type { PayosService } from '../services/payos.service';
 import type { PaymentService } from '../services/payment.service';
 import { checkPermissions, generateRandomString } from 'src/libs/utils';
 import { PAYOS_EXPIRED_DURATION } from 'src/libs/payos.config';
+import { paymentViewSchema } from 'src/types/payment.types';
+import z from 'zod';
 const ORDER_CODE_LENGTH = 6;
 
 @Controller()
@@ -196,7 +198,7 @@ export class PaymentController {
     const limit_num = Math.max(parseInt(limit, 10) || 10, 1);
     const permissions = user_permissions ? user_permissions.split(',') : [];
 
-    const servicePromise = checkPermissions(permissions, ['view_all_orders'])
+    const orders = checkPermissions(permissions, ['view_all_orders'])
       ? this.paymentService.find(page_num, limit_num, status?.split(','))
       : this.paymentService.findByUserId(
           user_id,
@@ -205,20 +207,20 @@ export class PaymentController {
           status?.split(','),
         );
 
-    return servicePromise
-      .then((result) => {
-        const { items, total } = result;
+    return orders
+      .then((res) => {
+        const { items, total } = res;
         const total_pages = Math.ceil(total / limit_num);
         return {
           success: true,
-          data: { items },
+          data: { items: z.array(paymentViewSchema).parse(items) },
           metadata: {
             page: page_num,
             limit: limit_num,
             total_items: total,
             total_pages,
-            next: page_num < total_pages ? page_num + 1 : null,
-            previous: page_num > 1 ? page_num - 1 : null,
+            next: page_num < total_pages,
+            previous: page_num > 1,
             timestamp: new Date().toISOString(),
           },
         };
