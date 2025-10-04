@@ -78,28 +78,28 @@ export type ServicePaymentLinkDtoResponse = z.infer<
   typeof servicePaymentLinkDtoResponseSchema
 >;
 
-// Schema cho payload webhook từ PayOS (dùng snake_case, thêm success, code là string)
+// Schema cho payload webhook từ PayOS (dùng camelCase cho data, match payload thực tế)
 export const webhookPayloadSchema = z.object({
-  code: z.string(), // "00" = success (đổi từ number thành string)
+  code: z.string(), // "00" = success
   desc: z.string(),
   success: z.boolean().optional(), // Thêm success (optional)
   data: z.object({
-    order_code: z.number(),
+    accountNumber: z.string(),
     amount: z.number(),
     description: z.string(),
-    account_number: z.string(),
     reference: z.string(),
-    transaction_date_time: z.string(),
-    payment_link_id: z.string(),
+    transactionDateTime: z.string(),
+    virtualAccountNumber: z.string(),
+    counterAccountBankId: z.string().nullable(),
+    counterAccountBankName: z.string().nullable(),
+    counterAccountName: z.string().nullable(),
+    counterAccountNumber: z.string().nullable(),
+    virtualAccountName: z.string().nullable(),
+    currency: z.string().optional(),
+    orderCode: z.number(),
+    paymentLinkId: z.string(),
     code: z.string(),
     desc: z.string(),
-    counter_account_bank_id: z.nullable(z.string()),
-    counter_account_bank_name: z.nullable(z.string()),
-    counter_account_name: z.nullable(z.string()),
-    counter_account_number: z.nullable(z.string()),
-    virtual_account_name: z.nullable(z.string()),
-    virtual_account_number: z.nullable(z.string()),
-    currency: z.string().optional(), // Thêm nếu có trong payload
   }),
   signature: z.string(),
 });
