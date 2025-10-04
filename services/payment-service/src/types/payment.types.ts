@@ -14,7 +14,7 @@ export const paymentSchema = z.object({
   amount: z.number().positive(),
   description: z.string().min(1).max(255),
   status: z
-    .enum(['pending', 'completed', 'failed', 'refunded'])
+    .enum(['pending', 'completed', 'canceled', 'refunded'])
     .default('pending'),
   user_id: z.string(),
   checkout_url: z.string().max(255).nullable().optional(),
@@ -25,6 +25,18 @@ export const paymentSchema = z.object({
   paid_at: z.date().nullable().optional(),
   expired_at: z.date().nullable().optional(),
 });
+
+const statusMap: Record<z.infer<typeof paymentSchema>['status'], string> = {
+  pending: 'Chờ thanh toán',
+  completed: 'Đã thanh toán',
+  canceled: 'Đã hủy',
+  refunded: 'Đã hoàn tiền',
+};
+
+export const paymentViewSchema = paymentSchema.transform((p) => ({
+  ...p,
+  status: statusMap[p.status] ?? p.status,
+}));
 
 export const updatePaymentSchema = createPaymentSchema.partial();
 
@@ -43,3 +55,4 @@ export type CreatePaymentDto = z.infer<typeof createPaymentSchema>;
 export type UpdatePaymentDto = z.infer<typeof updatePaymentSchema>;
 export type PaymentDto = z.infer<typeof paymentSchema>;
 export type FindOrdersResponseDto = z.infer<typeof findOrdersResponseSchema>;
+export type PaymentViewDto = z.infer<typeof paymentViewSchema>;
