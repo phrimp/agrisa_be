@@ -48,7 +48,6 @@ export class ImplPayosService implements PayosService {
       };
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const camelData = transformKeys(payosData, toCamelCase);
-      console.log('PayOS Payload:', JSON.stringify(payosData, null, 2));
 
       // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
       const raw = await this.payOS.paymentRequests.create(camelData);
