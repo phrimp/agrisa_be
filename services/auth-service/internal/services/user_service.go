@@ -429,7 +429,7 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 	var cccdFrontAccessURL, cccdBackAccessURL string
 
 	// Step 14: Upload files to MinIO
-	uploadedFiles, err := (s.utils.ProcessFiles(s.minioClient, form.File, "auth-service", []string{".jpg", ".png", ".jpeg"}, 1))
+	uploadedFiles, err := (s.utils.ProcessFiles(s.minioClient, form.File, "auth-service", []string{".jpg", ".png", ".jpeg"}, 5))
 	if err != nil {
 		// Step 14: Handle upload error
 		log.Printf("Failed to upload files to MinIO: %v", err)
