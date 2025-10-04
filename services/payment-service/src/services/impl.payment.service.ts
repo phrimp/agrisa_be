@@ -1,36 +1,43 @@
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { PaymentRepository } from '../repositories/payment.repository';
 import { Payment } from '../entities/payment.entity';
 import { PaymentService } from './payment.service';
 
 @Injectable()
 export class ImplPaymentService implements PaymentService {
-  constructor(
-    @InjectRepository(Payment)
-    private paymentRepository: Repository<Payment>,
-  ) {}
+  constructor(private readonly paymentRepository: PaymentRepository) {}
 
   async create(payment: Partial<Payment>): Promise<Payment> {
-    const newPayment = this.paymentRepository.create(payment);
-    return this.paymentRepository.save(newPayment);
+    return this.paymentRepository.create(payment);
   }
 
-  async getAll(): Promise<Payment[]> {
-    return this.paymentRepository.find();
+  async find(): Promise<Payment[]> {
+    return this.paymentRepository.findAll();
   }
 
-  async getById(id: string): Promise<Payment | null> {
-    return this.paymentRepository.findOne({ where: { id } });
+  async findById(id: string): Promise<Payment | null> {
+    return this.paymentRepository.findById(id);
   }
 
   async update(id: string, updates: Partial<Payment>): Promise<Payment | null> {
-    await this.paymentRepository.update(id, updates);
-    return this.getById(id);
+    return this.paymentRepository.update(id, updates);
   }
 
   async delete(id: string): Promise<boolean> {
-    const result = await this.paymentRepository.delete(id);
-    return typeof result.affected === 'number' && result.affected > 0;
+    return this.paymentRepository.delete(id);
+  }
+
+  async findByUserId(
+    user_id: string,
+    page: number,
+    limit: number,
+    status?: string[],
+  ): Promise<Payment[]> {
+    return this.paymentRepository.findByUserId(
+      user_id,
+      page,
+      limit,
+      status ?? [],
+    );
   }
 }

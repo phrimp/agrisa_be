@@ -8,6 +8,7 @@ import {
   Inject,
   Headers,
   Delete,
+  Query,
 } from '@nestjs/common';
 import {
   createPaymentLinkSchema,
@@ -137,7 +138,7 @@ export class PaymentController {
       const parsed = paymentLinkResponseSchema.safeParse(raw);
       if (parsed.success) {
         if (parsed.data.order_code) {
-          const payment = await this.paymentService.getById(
+          const payment = await this.paymentService.findById(
             parsed.data.order_code.toString(),
           );
           if (payment && parsed.data.qr_code) {
@@ -180,5 +181,22 @@ export class PaymentController {
     }
 
     return this.payosService.confirmWebhook(webhook_url);
+  }
+
+  @Get('protected/orders')
+  async getMyOrders(
+    @Headers('x-user-id') user_id: string,
+    @Query('page') page = '1',
+    @Query('limit') limit = '10',
+    @Query('status') status?: string[],
+  ) {
+    const page_num = Math.max(parseInt(page, 10) || 1, 1);
+    const limit_num = Math.max(parseInt(limit, 10) || 10, 1);
+    return this.paymentService.findByUserId(
+      user_id,
+      page_num,
+      limit_num,
+      status,
+    );
   }
 }
