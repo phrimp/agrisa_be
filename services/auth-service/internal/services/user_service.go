@@ -429,7 +429,7 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 	var cccdFrontAccessURL, cccdBackAccessURL string
 
 	// Step 14: Upload files to MinIO
-	uploadedFiles, err := (s.utils.ProcessFiles(s.minioClient, form.File, "auth-service", []string{".jpg", ".png", ".jpeg"}, 5))
+	uploadedFiles, err := (s.utils.ProcessFiles(s.minioClient, form.File, "auth-service", []string{".jpg", ".png", ".jpeg"}, 50))
 	if err != nil {
 		// Step 14: Handle upload error
 		log.Printf("Failed to upload files to MinIO: %v", err)
@@ -788,7 +788,7 @@ func (s *UserService) VerifyFaceLiveness(form *multipart.Form) (interface{}, err
 
 	videoAccessURL := ""
 
-	fileInfos, err := s.utils.ProcessFiles(s.minioClient, form.File, "auth-service", []string{".mp4", ".jpg", ".png"}, 10)
+	fileInfos, err := s.utils.ProcessFiles(s.minioClient, form.File, "auth-service", []string{".mp4", ".jpg", ".png"}, 50)
 	if err != nil {
 		log.Printf("Error when processing files: %v", err)
 		return utils.CreateErrorResponse("INTERNAL_ERROR", "Error when processing files"), nil

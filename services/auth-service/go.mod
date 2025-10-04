@@ -4,7 +4,6 @@ go 1.25.1
 
 require (
 	agrisa_utils v0.0.0
-	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.10.1
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	github.com/google/uuid v1.6.0
@@ -22,12 +21,14 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/go-ini/ini v1.67.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
-	github.com/kr/text v0.2.0 // indirect
+	github.com/kr/pretty v0.3.0 // indirect
 	github.com/minio/crc64nvme v1.0.2 // indirect
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
+	github.com/rogpeppe/go-internal v1.8.0 // indirect
 	github.com/rs/xid v1.6.0 // indirect
 	github.com/tinylib/msgp v1.4.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
 
 require (
