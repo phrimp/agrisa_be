@@ -51,11 +51,7 @@ export class PaymentController {
         'Invalid createPaymentLink payload',
         parsed.error.format(),
       );
-      return {
-        error: -1,
-        message: 'Dữ liệu không hợp lệ',
-        data: null,
-      };
+      throw new HttpException('Dữ liệu không hợp lệ', HttpStatus.BAD_REQUEST);
     }
 
     try {
@@ -104,11 +100,10 @@ export class PaymentController {
       return payosResponse;
     } catch (error) {
       this.logger.error('Failed to create payment', error);
-      return {
-        error: -1,
-        message: 'Tạo thanh toán thất bại',
-        data: null,
-      };
+      throw new HttpException(
+        'Tạo thanh toán thất bại',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -123,11 +118,10 @@ export class PaymentController {
     @Body('cancellation_reason') cancellation_reason: string,
   ) {
     if (!cancellation_reason) {
-      return {
-        error: -1,
-        message: 'Vui lòng cung cấp cancellation_reason',
-        data: null,
-      };
+      throw new HttpException(
+        'Vui lòng cung cấp cancellation_reason',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     return this.payosService.cancelPaymentLink(order_id, cancellation_reason);
@@ -151,36 +145,29 @@ export class PaymentController {
           }
         }
 
-        return {
-          error: 0,
-          message: 'Thành công',
-          data: parsed.data,
-        };
+        return parsed.data;
       }
 
-      return {
-        error: 0,
-        message: 'Thành công',
-        data: raw as Record<string, unknown>,
-      };
+      throw new HttpException(
+        'Dữ liệu webhook không hợp lệ',
+        HttpStatus.BAD_REQUEST,
+      );
     } catch (err) {
       this.logger.error('Failed to verify webhook', err);
-      return {
-        error: -1,
-        message: 'Xác minh webhook thất bại',
-        data: null,
-      };
+      throw new HttpException(
+        'Xác minh webhook thất bại',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
   @Post('public/webhook/confirm')
   async confirmWebhook(@Body('webhook_url') webhook_url: string) {
     if (!webhook_url) {
-      return {
-        error: -1,
-        message: 'webhook_url is required',
-        data: null,
-      };
+      throw new HttpException(
+        'webhook_url is required',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     return this.payosService.confirmWebhook(webhook_url);
@@ -212,8 +199,7 @@ export class PaymentController {
         const { items, total } = res;
         const total_pages = Math.ceil(total / limit_num);
         return {
-          success: true,
-          data: { items: z.array(paymentViewSchema).parse(items) },
+          items: z.array(paymentViewSchema).parse(items),
           metadata: {
             page: page_num,
             limit: limit_num,
@@ -221,7 +207,6 @@ export class PaymentController {
             total_pages,
             next: page_num < total_pages,
             previous: page_num > 1,
-            timestamp: new Date().toISOString(),
           },
         };
       })
