@@ -6,7 +6,16 @@ export const createPaymentSchema = z.object({
   description: z.string().min(1).max(255),
   user_id: z.string(),
   order_code: z.string().max(255).nullable().optional(),
-  status: z.enum(['pending', 'completed', 'failed', 'refunded']).optional(),
+  status: z
+    .enum([
+      'pending',
+      'completed',
+      'failed',
+      'refunded',
+      'cancelled',
+      'expired',
+    ])
+    .optional(),
 });
 
 export const paymentSchema = z.object({
@@ -14,7 +23,14 @@ export const paymentSchema = z.object({
   amount: z.coerce.number().positive(),
   description: z.string().min(1).max(255),
   status: z
-    .enum(['pending', 'completed', 'failed', 'refunded'])
+    .enum([
+      'pending',
+      'completed',
+      'failed',
+      'refunded',
+      'cancelled',
+      'expired',
+    ])
     .default('pending'),
   user_id: z.string(),
   checkout_url: z.string().max(255).nullable().optional(),
@@ -31,12 +47,22 @@ const statusMap: Record<z.infer<typeof paymentSchema>['status'], string> = {
   completed: 'Đã thanh toán',
   failed: 'Thất bại',
   refunded: 'Đã hoàn tiền',
+  cancelled: 'Đã hủy',
+  expired: 'Đã hết hạn',
 };
 
-export const paymentViewSchema = paymentSchema.transform((p) => ({
-  ...p,
-  status: statusMap[p.status] ?? p.status,
-}));
+export const paymentViewSchema = paymentSchema.transform((p) => {
+  // Nếu expired_at < now và status là 'pending', map thành 'expired'
+  const now = new Date();
+  const effectiveStatus =
+    p.expired_at && p.expired_at < now && p.status === 'pending'
+      ? 'expired'
+      : p.status;
+  return {
+    ...p,
+    status: statusMap[effectiveStatus] ?? effectiveStatus,
+  };
+});
 
 export const updatePaymentSchema = createPaymentSchema.partial();
 
