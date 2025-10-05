@@ -86,7 +86,7 @@ export class PaymentController {
         ...parsed.data,
         order_code: order_code,
         return_url: parsed.data.return_url,
-        cancel_url: `${process.env.BASE_URL || 'http://localhost:3000'}/api/public/cancel?order_id=${order_code}&redirect=${encodeURIComponent(parsed.data.cancel_url!)}`,
+        cancel_url: `${process.env.BASE_URL || 'https://agrisa-api.phrimp.io.vn'}/payment/public/cancel?order_id=${order_code}&redirect=${encodeURIComponent(parsed.data.cancel_url!)}`,
         expired_at: expired_at,
       };
 
@@ -155,7 +155,7 @@ export class PaymentController {
   @Post('public/webhook/verify')
   async verifyWebhook(@Body() body: unknown) {
     try {
-      this.logger.log('Received webhook payload', { body }); // Thêm log cho payload nhận được
+      this.logger.log('Received webhook payload', { body });
 
       this.payosService.verifyPaymentWebhookData(body);
 
@@ -163,7 +163,7 @@ export class PaymentController {
       if (parsed.success) {
         this.logger.log('Webhook parsed successfully', {
           parsedData: parsed.data,
-        }); // Thêm log cho dữ liệu đã parse
+        });
 
         if (parsed.data.data && parsed.data.data.orderCode) {
           const payment = await this.paymentService.findByOrderCode(
