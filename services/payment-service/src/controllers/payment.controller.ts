@@ -11,7 +11,9 @@ import {
   Query,
   HttpException,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   createPaymentLinkSchema,
   webhookPayloadSchema,
@@ -84,7 +86,7 @@ export class PaymentController {
         ...parsed.data,
         order_code: order_code,
         return_url: parsed.data.return_url,
-        cancel_url: parsed.data.cancel_url,
+        cancel_url: `${process.env.BASE_URL || 'http://localhost:3000'}/api/public/cancel?order_id=${order_code}&redirect=${encodeURIComponent(parsed.data.cancel_url!)}`,
         expired_at: expired_at,
       };
 
@@ -117,18 +119,37 @@ export class PaymentController {
   @Delete('protected/link/:order_id')
   async cancelPaymentLink(
     @Param('order_id') order_id: string,
-    @Body('cancellation_reason') cancellation_reason: string,
+    @Body('cancellation_reason') cancellation_reason?: string,
   ) {
-    if (!cancellation_reason) {
+    return this.payosService
+      .cancelPaymentLink(order_id, cancellation_reason || '')
+      .then((cancel_response) => cancel_response.data);
+  }
+
+  @Get('public/cancel')
+  async handleCancelRedirect(
+    @Query('order_id') order_id: string,
+    @Query('redirect') redirect_url: string,
+    @Res() res: Response,
+  ) {
+    if (!order_id || !redirect_url) {
       throw new HttpException(
-        'Vui lòng cung cấp cancellation_reason',
+        'order_id and redirect are required',
         HttpStatus.BAD_REQUEST,
       );
     }
 
-    return this.payosService
-      .cancelPaymentLink(order_id, cancellation_reason)
-      .then((cancel_response) => cancel_response.data);
+    try {
+      await this.payosService.cancelPaymentLink(order_id, 'Khách hàng hủy');
+      const payment = await this.paymentService.findByOrderCode(order_id);
+      if (payment) {
+        await this.paymentService.update(payment.id, { status: 'cancelled' });
+      }
+      return res.redirect(redirect_url);
+    } catch (error) {
+      this.logger.error('Failed to cancel payment link', error);
+      return res.redirect(`${redirect_url}?error=cancel_failed`);
+    }
   }
 
   @Post('public/webhook/verify')
@@ -152,20 +173,21 @@ export class PaymentController {
             if (parsed.data.data.code === '00') {
               await this.paymentService.update(payment.id, {
                 status: 'completed',
+                paid_at: new Date(),
               });
               this.logger.log('Payment status updated to completed', {
                 orderCode: parsed.data.data.orderCode,
-              }); // Thêm log cho cập nhật trạng thái
+              });
             } else {
               this.logger.log('Payment code not 00, no status update', {
                 code: parsed.data.data.code,
                 orderCode: parsed.data.data.orderCode,
-              }); // Thêm log cho trường hợp không cập nhật
+              });
             }
           } else {
             this.logger.warn('Payment not found for orderCode', {
               orderCode: parsed.data.data.orderCode,
-            }); // Thêm log cảnh báo nếu không tìm thấy payment
+            });
           }
         }
 
