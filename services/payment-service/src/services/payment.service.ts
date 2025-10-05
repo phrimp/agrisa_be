@@ -17,4 +17,5 @@ export interface PaymentService {
     limit: number,
     status?: string[],
   ): Promise<{ items: Payment[]; total: number }>;
+  findExpired(): Promise<Payment[]>;
 }

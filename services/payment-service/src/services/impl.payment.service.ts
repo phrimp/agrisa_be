@@ -48,4 +48,8 @@ export class ImplPaymentService implements PaymentService {
       status ?? [],
     );
   }
+
+  async findExpired(): Promise<Payment[]> {
+    return this.paymentRepository.findExpired();
+  }
 }

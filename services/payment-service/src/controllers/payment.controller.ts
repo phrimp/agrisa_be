@@ -86,7 +86,7 @@ export class PaymentController {
         ...parsed.data,
         order_code: order_code,
         return_url: parsed.data.return_url,
-        cancel_url: `${process.env.BASE_URL || 'https://agrisa-api.phrimp.io.vn'}/payment/public/cancel?order_id=${order_code}&redirect=${encodeURIComponent(parsed.data.cancel_url!)}`,
+        cancel_url: `https://agrisa-api.phrimp.io.vn/payment/public/webhook/cancel?order_id=${order_code}&redirect=${encodeURIComponent(parsed.data.cancel_url!)}`,
         expired_at: expired_at,
       };
 
@@ -126,7 +126,7 @@ export class PaymentController {
       .then((cancel_response) => cancel_response.data);
   }
 
-  @Get('public/cancel')
+  @Get('public/webhook/cancel')
   async handleCancelRedirect(
     @Query('order_id') order_id: string,
     @Query('redirect') redirect_url: string,

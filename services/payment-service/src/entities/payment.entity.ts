@@ -20,7 +20,14 @@ export class Payment {
 
   @Column({
     type: 'enum',
-    enum: ['pending', 'completed', 'failed', 'refunded'],
+    enum: [
+      'pending',
+      'completed',
+      'failed',
+      'refunded',
+      'cancelled',
+      'expired',
+    ],
     default: 'pending',
   })
   status: string;

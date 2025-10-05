@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Repository, LessThan, Not } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 
 @Injectable()
@@ -78,5 +78,14 @@ export class PaymentRepository {
       order: { created_at: 'DESC' },
     });
     return { items, total };
+  }
+
+  async findExpired(): Promise<Payment[]> {
+    return this.paymentRepo.find({
+      where: {
+        expired_at: LessThan(new Date()),
+        status: Not(In(['completed', 'cancelled', 'expired'])),
+      },
+    });
   }
 }
