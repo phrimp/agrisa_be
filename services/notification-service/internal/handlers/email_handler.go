@@ -17,6 +17,10 @@ func NewEmailHandler(emailService *google.EmailService) *EmailHandler {
 }
 
 func (e *EmailHandler) Register(app *fiber.App) {
+	protectedGr := app.Group("/notification/protected/api/v2")
+	emailGr := protectedGr.Group("/email")
+
+	emailGr.Post("/send/greet", e.Greet)
 }
 
 func (e *EmailHandler) Greet(c fiber.Ctx) error {
