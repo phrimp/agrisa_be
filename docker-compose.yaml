@@ -373,17 +373,17 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.services.auth-service.loadbalancer.server.port=8088"
+      - "traefik.http.services.notification-service.loadbalancer.server.port=8088"
 
-      - "traefik.http.routers.auth-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/public`)"
-      - "traefik.http.routers.auth-public.entrypoints=web"
-      - "traefik.http.routers.auth-public.service=notification-service"
-      - "traefik.http.routers.auth-public.middlewares=cors"
+      - "traefik.http.routers.notification-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/public`)"
+      - "traefik.http.routers.notification-public.entrypoints=web"
+      - "traefik.http.routers.notification-public.service=notification-service"
+      - "traefik.http.routers.notification-public.middlewares=cors"
 
-      - "traefik.http.routers.auth-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/protected`)"
-      - "traefik.http.routers.auth-protected.entrypoints=web"
-      - "traefik.http.routers.auth-protected.service=notification-service"
-      - "traefik.http.routers.auth-protected.middlewares=cors,auth-middleware"
+      - "traefik.http.routers.notification-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/protected`)"
+      - "traefik.http.routers.notification-protected.entrypoints=web"
+      - "traefik.http.routers.notification-protected.service=notification-service"
+      - "traefik.http.routers.notification-protected.middlewares=cors,auth-middleware"
 
 networks:
   traefik-net:
