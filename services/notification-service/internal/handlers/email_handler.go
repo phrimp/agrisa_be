@@ -1,0 +1,36 @@
+package handlers
+
+import (
+	"notification-service/internal/google"
+
+	"github.com/gofiber/fiber/v3"
+)
+
+type EmailHandler struct {
+	emailService *google.EmailService
+}
+
+func NewEmailHandler(emailService *google.EmailService) *EmailHandler {
+	return &EmailHandler{
+		emailService: emailService,
+	}
+}
+
+func (e *EmailHandler) Register(app *fiber.App) {
+}
+
+func (e *EmailHandler) Greet(c fiber.Ctx) error {
+	type GreetRequest struct {
+		To   string `json:"to"`
+		Name string `json:"name"`
+	}
+	var greetRequest GreetRequest
+
+	if err := c.Bind().Body(&greetRequest); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid request body",
+		})
+	}
+	e.emailService.GreetingEmail(greetRequest.To, greetRequest.Name)
+	return c.Status(fiber.StatusOK).SendString("Greeting sent")
+}

@@ -348,9 +348,42 @@ services:
       - "traefik.http.routers.weather-protected.entrypoints=web"
       - "traefik.http.routers.weather-protected.service=weather-service"
       - "traefik.http.routers.weather-protected.middlewares=cors,auth-middleware"
-      - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
-      - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
-      - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
+
+  notification-service:
+    build:
+      context: ./
+      dockerfile: services/notification-service/Dockerfile
+    container_name: agrisa-notification-service
+    restart: unless-stopped
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-8083}:8088"
+    environment:
+      - NOTIFICATION_SERVICE_PORT=8088
+      - GOOGLE_USERNAME=${GOOGLE_USERNAME}
+      - GOOGLE_PASSWORD=${GOOGLE_PASSWORD}
+
+    volumes:
+      - ./logs/notification_service:/agrisa/log/notification_service
+    networks:
+      - traefik-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.auth-service.loadbalancer.server.port=8088"
+
+      - "traefik.http.routers.auth-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/public`)"
+      - "traefik.http.routers.auth-public.entrypoints=web"
+      - "traefik.http.routers.auth-public.service=notification-service"
+      - "traefik.http.routers.auth-public.middlewares=cors"
+
+      - "traefik.http.routers.auth-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/protected`)"
+      - "traefik.http.routers.auth-protected.entrypoints=web"
+      - "traefik.http.routers.auth-protected.service=notification-service"
+      - "traefik.http.routers.auth-protected.middlewares=cors,auth-middleware"
 
 networks:
   traefik-net:

@@ -4,11 +4,14 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
-	"policy-service/internal/config"
-	"policy-service/internal/database/postgres"
+	"notification-service/internal/config"
+	"notification-service/internal/google"
+	"notification-service/internal/handlers"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -20,7 +23,7 @@ func setupLogging() (*os.File, error) {
 		}
 	}()
 
-	logDir := filepath.Join("/agrisa", "log", "policy_service")
+	logDir := filepath.Join("/agrisa", "log", "notification_service")
 	fmt.Println("Log directory:", logDir)
 	err := os.MkdirAll(logDir, 0o755)
 	if err != nil {
@@ -62,16 +65,31 @@ func main() {
 	}
 	defer logFile.Close()
 	cfg := config.New()
-	log.Printf("Connecting to PostgreSQL with: host=%s, port=%s, user=%s, dbname=auth_service",
-		cfg.PostgresCfg.Host, cfg.PostgresCfg.Port, cfg.PostgresCfg.Username)
-	db, err := postgres.ConnectAndCreateDB(cfg.PostgresCfg)
-	if err != nil {
-		log.Printf("error connect to database: %s", err)
-		go postgres.RetryConnectOnFailed(30*time.Second, &db, cfg.PostgresCfg)
-	}
 
 	app := fiber.New()
 	app.Get("/checkhealth", func(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).SendString("Policy service is healthy")
 	})
+
+	emailService := google.NewEmailService(cfg.GoogleConfig.MailUsername, cfg.GoogleConfig.MailPassword)
+
+	emailHandler := handlers.NewEmailHandler(emailService)
+
+	emailHandler.Register(app)
+
+	shutdownChan := make(chan os.Signal, 1)
+	doneChan := make(chan bool, 1)
+
+	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		log.Printf("Starting server on port %s", cfg.Port)
+		if err := app.Listen(fmt.Sprintf("0.0.0.0:%s", cfg.Port)); err != nil {
+			log.Fatalf("Error starting server: %v", err)
+		}
+		doneChan <- true
+	}()
+
+	<-shutdownChan
+	log.Println("Shutting down server...")
 }
