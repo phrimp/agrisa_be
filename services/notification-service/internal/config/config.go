@@ -21,7 +21,7 @@ type GoogleConfig struct {
 
 func New() *NotificationService {
 	return &NotificationService{
-		Port: getEnvOrDefault("PORT", "8083"),
+		Port: getEnvOrDefault("NOTIFICATION_SERVICE_PORT", "8088"),
 		RabbitMQCfg: RabbitMQConfig{
 			Username: getEnvOrDefault("RABBITMQ_USER", "admin"),
 			Password: getEnvOrDefault("RABBITMQ_PWD", "admin"),
