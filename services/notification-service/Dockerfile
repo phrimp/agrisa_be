@@ -28,6 +28,7 @@ COPY --from=builder /app/main /app/
 RUN chown -R appuser:appgroup /app
 # Create log directory
 RUN mkdir -p /agrisa/log/notification_service
+RUN chown -R appuser:appgroup /agrisa/log/notification_service
 USER appuser
 # Command to run
 CMD ["./main"]
