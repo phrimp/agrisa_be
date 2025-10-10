@@ -35,6 +35,11 @@ func (e *EmailHandler) Greet(c fiber.Ctx) error {
 			"error": "Invalid request body",
 		})
 	}
-	e.emailService.GreetingEmail(greetRequest.To, greetRequest.Name)
+	if err := e.emailService.GreetingEmail(greetRequest.To, greetRequest.Name); err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error":  "Failed to send email",
+			"detail": err.Error(),
+		})
+	}
 	return c.Status(fiber.StatusOK).SendString("Greeting sent")
 }

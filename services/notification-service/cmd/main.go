@@ -3,15 +3,14 @@ package main
 import (
 	"fmt"
 	"log"
+	"notification-service/internal/config"
+	"notification-service/internal/google"
+	"notification-service/internal/handlers"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
-
-	"notification-service/internal/config"
-	"notification-service/internal/google"
-	"notification-service/internal/handlers"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -65,6 +64,7 @@ func main() {
 	}
 	defer logFile.Close()
 	cfg := config.New()
+	fmt.Printf("%s", cfg)
 
 	app := fiber.New()
 	app.Get("/checkhealth", func(c fiber.Ctx) error {
