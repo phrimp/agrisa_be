@@ -352,6 +352,49 @@ services:
       - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
       - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
 
+  # Profile Service
+  profile-service:
+    build:
+      context: ./
+      dockerfile: services/profile-service/Dockerfile
+    container_name: agrisa-profile-service
+    restart: unless-stopped
+    ports:
+      - "${PROFILE_SERVICE_PORT:-8087}:8087"
+    environment:
+      - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
+      - POSTGRES_PORT=${POSTGRES_PORT:-9406}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${PROFILE_SERVICE_DB_NAME:-profile_service}
+      - SERVER_PORT=8087
+      - MINIO_ENDPOINT=${MINIO_URL}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_LOCATION=${MINIO_LOCATION}
+      - MINIO_SECURE=${MINIO_SECURE}
+      - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
+    volumes:
+      - ./logs/profile-service:/agrisa/log/profile_service
+    networks:
+      - traefik-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.profile-service.loadbalancer.server.port=8087"
+
+      - "traefik.http.routers.profile-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/profile/public`)"
+      - "traefik.http.routers.profile-public.entrypoints=web"
+      - "traefik.http.routers.profile-public.service=profile-service"
+      - "traefik.http.routers.profile-public.middlewares=cors"
+
+      - "traefik.http.routers.profile-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/profile/protected`)"
+      - "traefik.http.routers.profile-protected.entrypoints=web"
+      - "traefik.http.routers.profile-protected.service=profile-service"
+      - "traefik.http.routers.profile-protected.middlewares=cors,auth-middleware"
+
 networks:
   traefik-net:
     driver: bridge
