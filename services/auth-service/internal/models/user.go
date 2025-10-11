@@ -4,6 +4,8 @@ import (
 	"time"
 )
 
+const SystemID string = "System"
+
 type User struct {
 	ID            string     `json:"id" db:"id"`
 	PhoneNumber   string     `json:"phone_number" db:"phone_number"`

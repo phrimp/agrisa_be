@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"auth-service/internal/config"
 	"auth-service/internal/database/minio"
 	"context"
 	"fmt"
@@ -9,10 +10,11 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
-	"auth-service/internal/config"
+	"github.com/gin-gonic/gin"
 )
 
 type FileInfo struct {
@@ -60,7 +62,8 @@ func NewUtils(minioClient *minio.MinioClient, cfg *config.AuthServiceConfig) *Ut
 
 func (u *Utils) ProcessFiles(minioClient *minio.MinioClient,
 	files map[string][]*multipart.FileHeader,
-	serviceName string, allowedExts []string, maxMB int64) ([]FileInfo, error) {
+	serviceName string, allowedExts []string, maxMB int64,
+) ([]FileInfo, error) {
 	var uploadedFiles []FileInfo
 	ctx := context.Background()
 
@@ -133,7 +136,7 @@ func ValidateFile(fileHeader *multipart.FileHeader, allowedExts []string, maxMB 
 
 	// Check file extension
 	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
-	//allowedExts := []string{".jpg", ".jpeg", ".png", ".gif", ".pdf", ".txt"}
+	// allowedExts := []string{".jpg", ".jpeg", ".png", ".gif", ".pdf", ".txt"}
 
 	isAllowed := false
 	for _, allowedExt := range allowedExts {
@@ -172,4 +175,54 @@ func CreateSuccessResponse(data any) SuccessResponse {
 			Timestamp: time.Now(),
 		},
 	}
+}
+
+// Handler utilities for common operations
+
+// Simple error response for handlers (matches handler DTOs)
+type SimpleErrorResponse struct {
+	Error   string `json:"error"`
+	Message string `json:"message,omitempty"`
+}
+
+// ParsePaginationParams extracts and validates pagination parameters
+func ParsePaginationParams(c *gin.Context) (limit, offset int) {
+	limit, _ = strconv.Atoi(c.DefaultQuery("limit", "10"))
+	offset, _ = strconv.Atoi(c.DefaultQuery("offset", "0"))
+
+	if limit <= 0 || limit > 100 {
+		limit = 10
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return limit, offset
+}
+
+// ParseIDParam extracts and validates ID parameter from URL
+func ParseIDParam(c *gin.Context, paramName string) (int, error) {
+	idStr := c.Param(paramName)
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s: must be a valid integer", paramName)
+	}
+	return id, nil
+}
+
+// SendError sends a standardized error response
+func SendError(c *gin.Context, statusCode int, errorMsg, message string) {
+	c.JSON(statusCode, SimpleErrorResponse{
+		Error:   errorMsg,
+		Message: message,
+	})
+}
+
+// SendSuccess sends a standardized success response
+func SendSuccess(c *gin.Context, statusCode int, data interface{}) {
+	c.JSON(statusCode, data)
+}
+
+// SendMessage sends a simple message response
+func SendMessage(c *gin.Context, statusCode int, message string) {
+	c.JSON(statusCode, gin.H{"message": message})
 }

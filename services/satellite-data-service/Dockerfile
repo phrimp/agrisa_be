@@ -1,17 +1,7 @@
-FROM python:3.11-slim as builder
+FROM python:3.11 as builder
 
 # Set timezone
 ENV TZ=Asia/Ho_Chi_Minh
-
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libpq-dev \
-    libgeos-dev \
-    libproj-dev \
-    libgdal-dev \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
 WORKDIR /app

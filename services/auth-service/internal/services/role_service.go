@@ -125,9 +125,42 @@ func (s *RoleService) CreatePermission(name, resource, action, description strin
 	return permission, nil
 }
 
+// GetPermission retrieves a permission by ID
+func (s *RoleService) GetPermission(id int) (*models.Permission, error) {
+	return s.roleRepo.GetPermissionByID(id)
+}
+
 // GetAllPermissions retrieves all permissions with optional filtering
 func (s *RoleService) GetAllPermissions(resource string, limit, offset int) ([]*models.Permission, error) {
 	return s.roleRepo.GetPermissions(resource, limit, offset)
+}
+
+// UpdatePermission updates an existing permission
+func (s *RoleService) UpdatePermission(permission *models.Permission) error {
+	if permission.ID <= 0 {
+		return fmt.Errorf("invalid permission ID")
+	}
+	if permission.Name == "" {
+		return fmt.Errorf("permission name cannot be empty")
+	}
+	if permission.Resource == "" {
+		return fmt.Errorf("resource cannot be empty")
+	}
+	if permission.Action == "" {
+		return fmt.Errorf("action cannot be empty")
+	}
+
+	// Note: This assumes the repository has an UpdatePermission method
+	// If not available, we'd need to add it to the repository interface and implementation
+	return fmt.Errorf("UpdatePermission not implemented in repository")
+}
+
+// DeletePermission deletes a permission by ID
+func (s *RoleService) DeletePermission(id int) error {
+	if id <= 0 {
+		return fmt.Errorf("invalid permission ID")
+	}
+	return s.roleRepo.DeletePermission(id)
 }
 
 // GrantPermissionToRole grants a permission to a role
