@@ -843,7 +843,7 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 			Status:        models.UserStatusPendingVerification,
 			PhoneVerified: phoneVerificationStatus,
 			LockedUntil:   0,
-			FaceLiveness:  "",
+			FaceLiveness:  nil,
 		}
 		err := s.userRepo.CreateUser(&newUser)
 		if err != nil {
@@ -882,7 +882,7 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 		Status:        models.UserStatusPendingVerification,
 		PhoneVerified: phoneVerificationStatus,
 		LockedUntil:   0,
-		FaceLiveness:  "",
+		FaceLiveness:  nil,
 	}
 	err := s.userRepo.CreateUser(&newUser)
 	if err != nil {

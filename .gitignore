@@ -202,7 +202,6 @@ service-account-key.json
 minio-data/
 
 # PostgreSQL dumps
-*.sql
 *.dump
 
 # Redis dumps

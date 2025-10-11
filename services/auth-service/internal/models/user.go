@@ -19,7 +19,7 @@ type User struct {
 	LastLogin     *time.Time `json:"last_login" db:"last_login"`
 	LockedUntil   int64      `json:"locked_until" db:"locked_until"`
 	LoginAttempts int64      `json:"login_attempts" db:"login_attempts"`
-	FaceLiveness  string       `json:"face_liveness" db:"face_liveness"`
+	FaceLiveness  *string    `json:"face_liveness" db:"face_liveness"`
 }
 
 type UserStatus string

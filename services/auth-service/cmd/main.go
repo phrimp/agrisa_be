@@ -28,7 +28,7 @@ func setupLogging() (*os.File, error) {
 
 	logDir := filepath.Join("/agrisa", "log", "auth_service")
 	fmt.Println("Log directory:", logDir)
-	err := os.MkdirAll(logDir, 0755)
+	err := os.MkdirAll(logDir, 0o755)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log directory: %v", err)
 	}
@@ -37,7 +37,7 @@ func setupLogging() (*os.File, error) {
 	logFileName := fmt.Sprintf("log_%s.log", currentTime.Format("2006-01-02"))
 	logFile := filepath.Join(logDir, logFileName)
 
-	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %v", err)
 	}
@@ -76,7 +76,7 @@ func main() {
 	defer logFile.Close()
 
 	cfg := config.New()
-	log.Printf("Line 65 - main.go: Connecting to PostgreSQL with: host=%s, port=%s, user=%s, dbname=auth_service",
+	log.Printf("Connecting to PostgreSQL with: host=%s, port=%s, user=%s, dbname=auth_service",
 		cfg.PostgresCfg.Host, cfg.PostgresCfg.Port, cfg.PostgresCfg.Username)
 
 	db, err := postgres.ConnectAndCreateDB(cfg.PostgresCfg)
@@ -126,6 +126,7 @@ func main() {
 	authHandler.RegisterRoutes(r)
 	middlewareHandler.RegisterRoutes(r)
 	roleHandler.RegisterRoutes(r)
+	roleHandler.InitDefaultRole()
 
 	// Start HTTP server
 	serverPort := os.Getenv("SERVER_PORT")
