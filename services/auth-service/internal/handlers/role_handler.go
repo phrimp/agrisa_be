@@ -27,37 +27,37 @@ func (r *RoleHandler) RegisterRoutes(router *gin.Engine) {
 	// Public routes
 	publicGroup := router.Group("/auth/public/api/v2/role")
 	{
-		publicGroup.GET("/roles", r.GetAllRoles)
-		publicGroup.GET("/roles/:id", r.GetRole)
-		publicGroup.GET("/roles/name/:name", r.GetRoleByName)
+		publicGroup.GET("", r.GetAllRoles)
+		publicGroup.GET("/:id", r.GetRole)
+		publicGroup.GET("/name/:name", r.GetRoleByName)
 	}
 
 	// Protected routes
 	protectedGroup := router.Group("/auth/protected/api/v2/role")
 	{
 		// Role CRUD
-		protectedGroup.POST("/roles", r.CreateRole)
-		protectedGroup.PUT("/roles/:id", r.UpdateRole)
-		protectedGroup.DELETE("/roles/:id", r.DeleteRole)
-		protectedGroup.PATCH("/roles/:id/activate", r.ActivateRole)
-		protectedGroup.PATCH("/roles/:id/deactivate", r.DeactivateRole)
+		protectedGroup.POST("", r.CreateRole)
+		protectedGroup.PUT("/:id", r.UpdateRole)
+		protectedGroup.DELETE("/:id", r.DeleteRole)
+		protectedGroup.PATCH("/:id/activate", r.ActivateRole)
+		protectedGroup.PATCH("/:id/deactivate", r.DeactivateRole)
 
 		// Role-Permission Management
-		protectedGroup.POST("/roles/:id/permissions/:permissionId", r.GrantPermissionToRole)
-		protectedGroup.DELETE("/roles/:id/permissions/:permissionId", r.RevokePermissionFromRole)
-		protectedGroup.GET("/roles/:id/permissions", r.GetRolePermissions)
-		protectedGroup.GET("/roles/:id/permissions/effective", r.GetEffectiveRolePermissions)
+		protectedGroup.POST("/:id/permissions/:permissionId", r.GrantPermissionToRole)
+		protectedGroup.DELETE("/:id/permissions/:permissionId", r.RevokePermissionFromRole)
+		protectedGroup.GET("/:id/permissions", r.GetRolePermissions)
+		protectedGroup.GET("/:id/permissions/effective", r.GetEffectiveRolePermissions)
 
 		// User-Role Management
-		protectedGroup.POST("/roles/:id/users/:userId", r.AssignRoleToUser)
-		protectedGroup.DELETE("/roles/:id/users/:userId", r.RemoveRoleFromUser)
+		protectedGroup.POST("/:id/users/:userId", r.AssignRoleToUser)
+		protectedGroup.DELETE("/:id/users/:userId", r.RemoveRoleFromUser)
 		protectedGroup.GET("/users/:userId/roles", r.GetUserRoles)
 		protectedGroup.GET("/users/:userId/permissions", r.GetUserPermissions)
 		protectedGroup.POST("/users/:userId/permissions/check", r.CheckUserPermission)
 
 		// Role Hierarchy
-		protectedGroup.POST("/roles/:parentId/children/:childId", r.CreateRoleHierarchy)
-		protectedGroup.DELETE("/roles/:parentId/children/:childId", r.DeleteRoleHierarchy)
+		protectedGroup.POST("/hierarchy/:parentId/children/:childId", r.CreateRoleHierarchy)
+		protectedGroup.DELETE("/hierarchy/:parentId/children/:childId", r.DeleteRoleHierarchy)
 	}
 }
 
