@@ -34,6 +34,8 @@ func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
 	authGrPub.POST("/login", a.Login)
 
 	authGrPro := router.Group("/auth/protected/api/v2")
+	accountGr := router.Group("/account")
+	accountGr.POST("/new")
 	sessionGr := authGrPro.Group("/session")
 	// User manage their own session
 	sessionGr.GET("/me", a.GetMySession)
@@ -315,8 +317,9 @@ func (a *AuthHandler) Register(c *gin.Context) {
 		})
 		return
 	}
-
 	// Assign default user role
+	systemID := models.SystemID
+	a.roleService.AssignRoleToUser(user.ID, 1, &systemID, nil)
 
 	// Prepare successful registration response
 	responseData := map[string]interface{}{
