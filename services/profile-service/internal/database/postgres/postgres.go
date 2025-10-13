@@ -1,56 +1,31 @@
 package postgres
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"profile-service/internal/config"
 	"time"
 
 	"github.com/jmoiron/sqlx"
+	_ "github.com/lib/pq"
 )
 
 var DB_Status bool
 
 func ConnectAndCreateDB(cfg config.PostgresConfig) (*sqlx.DB, error) {
-	defaultConnStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=auth_service sslmode=disable",
+
+	targetConnStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=profile_service sslmode=disable",
 		cfg.Host, cfg.Port, cfg.Username, cfg.Password)
-
-	// Logging the connection string values (excluding password for security)
-	log.Printf("Connecting to PostgreSQL with: host=%s, port=%s, user=%s, dbname=auth_service, password=%s",
-
-		cfg.Host, cfg.Port, cfg.Username, cfg.Password)
-
-	defaultDB, err := sql.Open("postgres", defaultConnStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to default postgres db: %w", err)
-	}
-	defer defaultDB.Close()
-
-	var exists bool
-	checkQuery := `SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname = $1)`
-	err = defaultDB.QueryRow(checkQuery, cfg.DBname).Scan(&exists)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check if database exists: %w", err)
-	}
-
-	if !exists {
-		createQuery := fmt.Sprintf(`CREATE DATABASE "%s"`, cfg.DBname)
-		_, err = defaultDB.Exec(createQuery)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create database %s: %w", cfg.DBname, err)
-		}
-		fmt.Printf("Database '%s' created successfully\n", cfg.DBname)
-	} else {
-		fmt.Printf("Database '%s' already exists\n", cfg.DBname)
-	}
-
-	targetConnStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-		cfg.Host, cfg.Port, cfg.Username, cfg.Password, cfg.DBname)
 
 	db, err := sqlx.Connect("postgres", targetConnStr)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to target database: %w", err)
+	}
+
+	// list databases for debugging
+	err = ListDatabases(db)
+	if err != nil {
+		log.Printf("failed to list databases: %s", err)
 	}
 
 	if err := db.Ping(); err != nil {
@@ -90,4 +65,21 @@ func RetryConnectOnFailed(wait_amount time.Duration, db **sqlx.DB, cfg config.Po
 	time.Sleep(wait_amount)
 
 	RetryConnectOnFailed(wait_amount, db, cfg)
+}
+
+func ListDatabases(db *sqlx.DB) error {
+	var databases []string
+	query := `SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname`
+
+	err := db.Select(&databases, query)
+	if err != nil {
+		return fmt.Errorf("failed to list databases: %w", err)
+	}
+
+	log.Println("Current databases:")
+	for _, dbName := range databases {
+		fmt.Println(dbName)
+	}
+
+	return nil
 }

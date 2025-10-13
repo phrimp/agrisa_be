@@ -5,9 +5,14 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"time"
-	"profile-service/internal/database/postgres"
 	"profile-service/internal/config"
+	"profile-service/internal/database/postgres"
+	"profile-service/internal/handlers"
+	"profile-service/internal/repository"
+	"profile-service/internal/services"
+	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 func setupLogging() (*os.File, error) {
@@ -17,7 +22,7 @@ func setupLogging() (*os.File, error) {
 		}
 	}()
 
-	logDir := filepath.Join("/agrisa", "log", "weather_service")
+	logDir := filepath.Join("/agrisa", "log", "profile_service")
 	fmt.Println("Log directory:", logDir)
 	err := os.MkdirAll(logDir, 0755)
 	if err != nil {
@@ -65,11 +70,34 @@ func main() {
 	log.Printf("Line 65 - main.go: Connecting to PostgreSQL with: host=%s, port=%s, user=%s, dbname=auth_service",
 		cfg.PostgresCfg.Host, cfg.PostgresCfg.Port, cfg.PostgresCfg.Username)
 
-    // db connection
+	// db connection
 	db, err := postgres.ConnectAndCreateDB(cfg.PostgresCfg)
 	if err != nil {
 		log.Fatalf("Error connecting to PostgreSQL: %v", err)
 	}
 	defer db.Close()
+
+	r := gin.Default()
+
+	//repositories
+	insurancePartnerRepository := repository.NewInsurancePartnerRepository(db)
+
+	//services
+	insurancePartnerService := services.NewInsurancePartnerService(insurancePartnerRepository)
+
+	// handlers
+	insurancePartnerHandler := handlers.NewInsurancePartnerHandler(insurancePartnerService)
+
+	// Register routes
+	insurancePartnerHandler.RegisterRoutes(r)
+	serverPort := os.Getenv("PROFILE_SERVICE_PORT")
+	if serverPort == "" {
+		serverPort = "8087"
+	}
+
+	log.Printf("Starting auth-service on port %s", serverPort)
+	if err := r.Run(":" + serverPort); err != nil {
+		log.Fatalf("Failed to start server: %v", err)
+	}
 
 }
