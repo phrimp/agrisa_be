@@ -317,8 +317,9 @@ func (a *AuthHandler) Register(c *gin.Context) {
 		})
 		return
 	}
-
 	// Assign default user role
+	systemID := models.SystemID
+	a.roleService.AssignRoleToUser(user.ID, 1, &systemID, nil)
 
 	// Prepare successful registration response
 	responseData := map[string]interface{}{
