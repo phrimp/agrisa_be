@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"profile-service/internal/services"
 
+	"utils"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -28,5 +30,13 @@ func (h *InsurancePartnerHandler) Ping(c *gin.Context) {
 }
 
 func (h *InsurancePartnerHandler) GetInsurancePartnersByID(c *gin.Context) {
-
+	partnerID := c.Param("partner_id")
+	result, err := h.InsurancePartnerService.GetInsurancePartnerByID(partnerID)
+	if err != nil {
+		internalServerErrorResponse := utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "Failed to get insurance partner by ID")
+		c.JSON(http.StatusInternalServerError, internalServerErrorResponse)
+		return
+	}
+	response := utils.CreateSuccessResponse(result)
+	c.JSON(http.StatusOK, response)
 }
