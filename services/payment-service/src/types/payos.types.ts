@@ -78,11 +78,10 @@ export type ServicePaymentLinkDtoResponse = z.infer<
   typeof servicePaymentLinkDtoResponseSchema
 >;
 
-// Schema cho payload webhook từ PayOS (dùng camelCase cho data, match payload thực tế)
 export const webhookPayloadSchema = z.object({
-  code: z.string(), // "00" = success
+  code: z.string(),
   desc: z.string(),
-  success: z.boolean().optional(), // Thêm success (optional)
+  success: z.boolean().optional(),
   data: z.object({
     accountNumber: z.string(),
     amount: z.number(),

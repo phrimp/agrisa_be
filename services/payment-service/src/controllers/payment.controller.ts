@@ -155,16 +155,10 @@ export class PaymentController {
   @Post('public/webhook/verify')
   async verifyWebhook(@Body() body: unknown) {
     try {
-      this.logger.log('Received webhook payload', { body });
-
       this.payosService.verifyPaymentWebhookData(body);
 
       const parsed = webhookPayloadSchema.safeParse(body);
       if (parsed.success) {
-        this.logger.log('Webhook parsed successfully', {
-          parsedData: parsed.data,
-        });
-
         if (parsed.data.data && parsed.data.data.orderCode) {
           const payment = await this.paymentService.findByOrderCode(
             parsed.data.data.orderCode.toString(),
@@ -175,17 +169,9 @@ export class PaymentController {
                 status: 'completed',
                 paid_at: new Date(),
               });
-              this.logger.log('Payment status updated to completed', {
-                orderCode: parsed.data.data.orderCode,
-              });
-            } else {
-              this.logger.log('Payment code not 00, no status update', {
-                code: parsed.data.data.code,
-                orderCode: parsed.data.data.orderCode,
-              });
             }
           } else {
-            this.logger.warn('Payment not found for orderCode', {
+            this.logger.warn('Không tìm thấy order_code', {
               orderCode: parsed.data.data.orderCode,
             });
           }
@@ -195,14 +181,14 @@ export class PaymentController {
       }
 
       this.logger.warn('Webhook payload validation failed', {
-        errors: parsed.error.format(),
-      }); // Thêm log cho lỗi validation
+        errors: parsed.error,
+      });
       throw new HttpException(
         'Dữ liệu webhook không hợp lệ',
         HttpStatus.BAD_REQUEST,
       );
     } catch (error) {
-      this.logger.error('Failed to verify webhook', error);
+      this.logger.error('Thất bại xác minh webhook', error);
       throw new HttpException(
         'Xác minh webhook thất bại',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -213,10 +199,7 @@ export class PaymentController {
   @Post('public/webhook/confirm')
   async confirmWebhook(@Body('webhook_url') webhook_url: string) {
     if (!webhook_url) {
-      throw new HttpException(
-        'webhook_url is required',
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new HttpException('yêu cầu webhook_url', HttpStatus.BAD_REQUEST);
     }
 
     return this.payosService

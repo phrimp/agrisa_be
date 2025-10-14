@@ -29,7 +29,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"orderCode\": \"ADS213ASD\",\n  \"amount\": 100000,\n  \"description\": \"Test payment\",\n  \"returnUrl\": \"https://example.com/success\",\n  \"cancelUrl\": \"https://example.com/cancel\",\n  \"userId\": \"user123\"\n}"
+          "raw": "{\n  \"amount\": 100000,\n  \"description\": \"Test payment\",\n  \"returnUrl\": \"https://example.com/success\",\n  \"cancelUrl\": \"https://example.com/cancel\",\n  \"userId\": \"user123\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/payment/link",
@@ -129,7 +129,7 @@
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:3000",
+      "value": "https://api-agrisa.phrimp.io.vn",
       "type": "string"
     }
   ]
