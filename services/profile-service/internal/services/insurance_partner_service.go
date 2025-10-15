@@ -11,6 +11,7 @@ type InsurancePartnerService struct {
 
 type IInsurancePartnerService interface {
 	GetInsurancePartnerByID(partnerID string) (*models.InsurancePartner, error)
+	GetPartnerReviews(partnerID string, sortBy string, sortDirection string, limit int, offset int) ([]models.PartnerReview, error)
 }
 
 func (s *InsurancePartnerService) GetInsurancePartnerByID(partnerID string) (*models.InsurancePartner, error) {
@@ -21,4 +22,9 @@ func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository) IIn
 	return &InsurancePartnerService{
 		repo: repo,
 	}
+}
+
+
+func (s *InsurancePartnerService) GetPartnerReviews(partnerID string, sortBy string, sortDirection string, limit int, offset int) ([]models.PartnerReview, error) {
+	return s.repo.GetPartnerReviews(partnerID, sortBy, sortDirection, limit, offset)
 }

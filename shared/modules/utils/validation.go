@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 func ValidateEmail(email string) (bool, error) {
@@ -71,4 +73,27 @@ func ValidateCCCD(cccd string) bool {
 
 	// Check birth year is reasonable and person is at least 14
 	return fullYear >= 1900 && fullYear <= currentYear && (currentYear-fullYear) >= 14
+}
+
+func GetQueryParamAsInt(c *gin.Context, paramName string, defaultValue int) (int, error) {
+	// Get the query parameter value
+	paramValue := c.Query(paramName)
+
+	// If parameter is not provided or empty, return default value
+	if paramValue == "" {
+		return defaultValue, nil
+	}
+
+	// Try to convert to integer
+	intValue, err := strconv.Atoi(paramValue)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a valid integer", paramName)
+	}
+
+	// Validate that value is greater than 0
+	if intValue <= 0 {
+		return 0, fmt.Errorf("%s must be greater than 0", paramName)
+	}
+
+	return intValue, nil
 }
