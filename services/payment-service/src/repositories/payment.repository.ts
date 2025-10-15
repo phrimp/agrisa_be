@@ -34,13 +34,17 @@ export class PaymentRepository {
       skip,
       take: limit_num,
       order: { created_at: 'DESC' },
+      relations: ['orderItems'],
     });
 
     return { items, total };
   }
 
   async findById(id: string): Promise<Payment | null> {
-    return this.paymentRepo.findOne({ where: { id } });
+    return this.paymentRepo.findOne({
+      where: { id },
+      relations: ['orderItems'],
+    });
   }
 
   async findByOrderCode(order_code: string): Promise<Payment | null> {
@@ -76,6 +80,7 @@ export class PaymentRepository {
       skip,
       take: limit_num,
       order: { created_at: 'DESC' },
+      relations: ['orderItems'],
     });
     return { items, total };
   }

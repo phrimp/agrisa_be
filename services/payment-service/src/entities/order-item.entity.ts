@@ -21,14 +21,17 @@ export class OrderItem {
   @JoinColumn({ name: 'payment_id' })
   payment_id: string;
 
-  @Column('varchar')
-  item_id: string;
+  @Column('varchar', { nullable: true })
+  item_id: string | null;
 
-  @Column({ type: 'varchar', length: 255 })
-  item_name: string;
+  @Column('varchar')
+  name: string;
 
   @Column('decimal', { precision: 12, scale: 2 })
-  item_price: number;
+  price: number;
+
+  @Column('int', { default: 1 })
+  quantity: number;
 
   @Column({ type: 'varchar', length: 50, nullable: true })
   type: string | null;

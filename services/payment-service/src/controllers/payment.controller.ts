@@ -25,6 +25,7 @@ import { checkPermissions, generateRandomString } from 'src/libs/utils';
 import { PAYOS_EXPIRED_DURATION } from 'src/libs/payos.config';
 import { paymentViewSchema } from 'src/types/payment.types';
 import z from 'zod';
+import type { OrderItemService } from 'src/services/order-item.service';
 const ORDER_CODE_LENGTH = 8;
 
 @Controller()
@@ -34,6 +35,8 @@ export class PaymentController {
   constructor(
     @Inject('PayosService') private readonly payosService: PayosService,
     @Inject('PaymentService') private readonly paymentService: PaymentService,
+    @Inject('OrderItemService')
+    private readonly orderItemService: OrderItemService,
   ) {}
 
   @Post('protected/link')
@@ -81,6 +84,22 @@ export class PaymentController {
         user_id: user_id,
         expired_at: expired_at,
       });
+
+      if (parsed.data.items && parsed.data.items.length > 0) {
+        for (const item of parsed.data.items) {
+          await this.orderItemService.create({
+            id: generateRandomString(),
+            payment_id: payment_id,
+            item_id: item.item_id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity ?? 1,
+            type: item.type,
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+        }
+      }
 
       const payos_payload = {
         ...parsed.data,

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const paymentLinkSchema = z.object({
   bin: z.string().nullable().optional(),
-  checkout_url: z.string().url().nullable().optional(),
+  checkout_url: z.url().nullable().optional(),
   account_number: z.string().nullable().optional(),
   account_name: z.string().nullable().optional(),
   amount: z.coerce.number().nullable().optional(),
@@ -28,6 +28,17 @@ export const createPaymentLinkSchema = z.object({
   description: z.string(),
   return_url: z.string().url().optional(),
   cancel_url: z.string().url().optional(),
+  items: z
+    .array(
+      z.object({
+        item_id: z.string().optional(),
+        name: z.string(),
+        price: z.coerce.number().positive(),
+        quantity: z.coerce.number().int().positive().default(1),
+        type: z.string().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export type CreatePaymentLinkData = z.infer<typeof createPaymentLinkSchema> & {
@@ -52,6 +63,15 @@ export const paymentLinkResponseSchema = z.object({
       if (typeof val === 'number') return new Date(val * 1000);
       return val;
     }),
+  items: z
+    .array(
+      z.object({
+        name: z.string(),
+        price: z.coerce.number().positive(),
+        quantity: z.coerce.number().int().positive().default(1),
+      }),
+    )
+    .optional(),
 });
 
 export type PaymentLinkResponse = z.infer<typeof paymentLinkResponseSchema>;

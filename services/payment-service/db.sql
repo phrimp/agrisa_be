@@ -1,15 +1,15 @@
-CREATE DATABASE IF NOT EXISTS payment_service;
+CREATE TYPE payment_status AS ENUM ('pending', 'completed', 'failed', 'refunded', 'cancelled', 'expired');
 
 CREATE TABLE payments (
     id VARCHAR PRIMARY KEY,
     amount DECIMAL(12,2) NOT NULL,
     description VARCHAR(255) NOT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    status payment_status NOT NULL DEFAULT 'pending',
     user_id VARCHAR NOT NULL,
     checkout_url VARCHAR(255),
     order_code VARCHAR(255),
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     expired_at TIMESTAMP,
     paid_at TIMESTAMP,
     deleted_at TIMESTAMP
@@ -18,14 +18,15 @@ CREATE TABLE payments (
 CREATE TABLE order_items (
     id VARCHAR PRIMARY KEY,
     payment_id VARCHAR NOT NULL,
-    item_id VARCHAR NOT NULL,
-    item_name VARCHAR(255) NOT NULL,
-    item_price DECIMAL(12,2) NOT NULL,
+    item_id VARCHAR,
+    name VARCHAR NOT NULL,
+    price DECIMAL(12,2) NOT NULL,
+    quantity INT NOT NULL DEFAULT 1,
     type VARCHAR(50),
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP,
-    FOREIGN KEY (payment_id) REFERENCES payments(id)
+    FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE
 );
 
 CREATE TABLE configurations (
@@ -36,7 +37,7 @@ CREATE TABLE configurations (
     payos_expired_duration VARCHAR,
     payos_order_code_length INT,
     payment_cron_expression VARCHAR,
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP NOT NULL DEFAULT now(),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP
 );
