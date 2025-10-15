@@ -43,7 +43,7 @@ func (r *InsurancePartnerRepository) GetPartnerReviews(partnerID string, sortBy 
 
 	// Validate that the number of fields and directions must be equal
 	if len(sortByFields) != len(sortDirections) {
-		return nil, fmt.Errorf("sortBy and sortDirection must have the same number of elements")
+		return nil, fmt.Errorf("invalid. sortBy and sortDirection must have the same number of elements")
 	}
 
 	// Whitelist allowed fields to prevent SQL injection

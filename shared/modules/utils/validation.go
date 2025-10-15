@@ -87,12 +87,12 @@ func GetQueryParamAsInt(c *gin.Context, paramName string, defaultValue int) (int
 	// Try to convert to integer
 	intValue, err := strconv.Atoi(paramValue)
 	if err != nil {
-		return 0, fmt.Errorf("%s must be a valid integer", paramName)
+		return 0, fmt.Errorf("invalid %s", paramName)
 	}
 
 	// Validate that value is greater than 0
 	if intValue <= 0 {
-		return 0, fmt.Errorf("%s must be greater than 0", paramName)
+		return 0, fmt.Errorf("invalid %s", paramName)
 	}
 
 	return intValue, nil
