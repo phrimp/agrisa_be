@@ -27,9 +27,9 @@ type MinioConfig struct {
 
 func New() *ProfileServiceConfig {
 	return &ProfileServiceConfig{
-		Port: getEnvOrDefault("PROFILE_SERVICE_PORT", "8084"),
+		Port: getEnvOrDefault("PROFILE_SERVICE_PORT", "8087"),
 		PostgresCfg: PostgresConfig{
-			DBname:   getEnvOrDefault("PROFILE_SERVICE_DB_NAME", "auth_service"),
+			DBname:   getEnvOrDefault("POSTGRES_DB", ""),
 			Username: getEnvOrDefault("POSTGRES_USER", "user"),
 			Password: getEnvOrDefault("POSTGRES_PASSWORD", "password"),
 			Host:     getEnvOrDefault("POSTGRES_HOST", "localhost"),

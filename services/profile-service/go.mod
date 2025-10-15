@@ -1,11 +1,15 @@
 module profile-service
 
-go 1.24.6
+go 1.25.1
 
 require (
 	github.com/gin-gonic/gin v1.11.0
 	github.com/jmoiron/sqlx v1.4.0
+	github.com/lib/pq v1.10.9
+	utils v0.0.0-00010101000000-000000000000
 )
+
+replace utils => ../../shared/modules/utils
 
 require (
 	github.com/bytedance/sonic v1.14.0 // indirect
