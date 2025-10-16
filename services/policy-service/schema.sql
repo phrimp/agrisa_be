@@ -667,6 +667,29 @@ CREATE INDEX idx_eval_log_result ON trigger_evaluation_log(evaluation_result);
 
 COMMENT ON TABLE trigger_evaluation_log IS 'Audit log of all trigger evaluations';
 
+
+CREATE TABLE farm_data_value (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    
+    -- Context
+    farm_id UUID NOT NULL REFERENCES farm(id),
+    data_source_id UUID NOT NULL REFERENCES data_source(id),
+    
+    -- The actual measurement
+    measured_value DECIMAL(10,4) NOT NULL,
+    measurement_timestamp INT NOT NULL, -- unix timestamp
+    
+    -- Quality (optional but useful)
+    data_quality data_quality DEFAULT 'good',
+    
+    -- Metadata
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_farm_data_value_farm_time ON farm_data_value(farm_id, measurement_timestamp DESC);
+CREATE INDEX idx_farm_data_value_source_time ON farm_data_value(data_source_id, measurement_timestamp DESC);
+CREATE INDEX idx_farm_data_value_farm_source ON farm_data_value(farm_id, data_source_id);
+
 -- ============================================================================
 -- SAMPLE DATA
 -- ============================================================================
