@@ -13,37 +13,42 @@ import (
 type BasePolicy struct {
 	ID                             uuid.UUID        `json:"id" db:"id"`
 	InsuranceProviderID            string           `json:"insurance_provider_id" db:"insurance_provider_id"`
-	EssentialAdditionalInformation interface{}      `json:"essential_additional_infomation" db:"essential_additional_infomation"`
 	ProductName                    string           `json:"product_name" db:"product_name"`
 	ProductCode                    *string          `json:"product_code,omitempty" db:"product_code"`
 	ProductDescription             *string          `json:"product_description,omitempty" db:"product_description"`
 	CropType                       string           `json:"crop_type" db:"crop_type"`
 	CoverageCurrency               string           `json:"coverage_currency" db:"coverage_currency"`
 	CoverageDurationDays           int              `json:"coverage_duration_days" db:"coverage_duration_days"`
-	CoverageStartDayRule           *string          `json:"coverage_start_day_rule,omitempty" db:"coverage_start_day_rule"`
+	FixPremiumAmount               int              `json:"fix_premium_amount" db:"fix_premium_amount"`
+	IsPerHectare                   bool             `json:"is_per_hectare" db:"is_per_hectare"`
 	PremiumBaseRate                float64          `json:"premium_base_rate" db:"premium_base_rate"`
-	DataTierID                     uuid.UUID        `json:"data_tier_id" db:"data_tier_id"`
+	FixPayoutAmount                int              `json:"fix_payout_amount" db:"fix_payout_amount"`
+	IsPayoutPerHectare             bool             `json:"is_payout_per_hectare" db:"is_payout_per_hectare"`
+	OverThresholdMultiplier        float64          `json:"over_threshold_multiplier" db:"over_threshold_multiplier"`
+	PayoutBaseRate                 float64          `json:"payout_base_rate" db:"payout_base_rate"`
 	DataComplexityScore            int              `json:"data_complexity_score" db:"data_complexity_score"`
 	MonthlyDataCost                float64          `json:"monthly_data_cost" db:"monthly_data_cost"`
 	Status                         BasePolicyStatus `json:"status" db:"status"`
 	TemplateDocumentURL            *string          `json:"template_document_url,omitempty" db:"template_document_url"`
 	DocumentValidationStatus       ValidationStatus `json:"document_validation_status" db:"document_validation_status"`
 	DocumentValidationScore        *float64         `json:"document_validation_score,omitempty" db:"document_validation_score"`
+	ImportantAdditionalInformation interface{}      `json:"important_additional_information,omitempty" db:"important_additional_information"`
 	CreatedAt                      time.Time        `json:"created_at" db:"created_at"`
 	UpdatedAt                      time.Time        `json:"updated_at" db:"updated_at"`
 	CreatedBy                      *string          `json:"created_by,omitempty" db:"created_by"`
 }
 
 type BasePolicyTrigger struct {
-	ID               uuid.UUID       `json:"id" db:"id"`
-	BasePolicyID     uuid.UUID       `json:"base_policy_id" db:"base_policy_id"`
-	LogicalOperator  LogicalOperator `json:"logical_operator" db:"logical_operator"`
-	PayoutPercentage float64         `json:"payout_percentage" db:"payout_percentage"`
-	ValidFromDay     *int            `json:"valid_from_day,omitempty" db:"valid_from_day"`
-	ValidToDay       *int            `json:"valid_to_day,omitempty" db:"valid_to_day"`
-	GrowthStage      *string         `json:"growth_stage,omitempty" db:"growth_stage"`
-	CreatedAt        time.Time       `json:"created_at" db:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at" db:"updated_at"`
+	ID                    uuid.UUID        `json:"id" db:"id"`
+	BasePolicyID          uuid.UUID        `json:"base_policy_id" db:"base_policy_id"`
+	LogicalOperator       LogicalOperator  `json:"logical_operator" db:"logical_operator"`
+	ValidFromDay          *int             `json:"valid_from_day,omitempty" db:"valid_from_day"`
+	ValidToDay            *int             `json:"valid_to_day,omitempty" db:"valid_to_day"`
+	GrowthStage           *string          `json:"growth_stage,omitempty" db:"growth_stage"`
+	MonitorFrequencyValue int              `json:"monitor_frequency_value" db:"monitor_frequency_value"`
+	MonitorFrequencyUnit  MonitorFrequency `json:"monitor_frequency_unit" db:"monitor_frequency_unit"`
+	CreatedAt             time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt             time.Time        `json:"updated_at" db:"updated_at"`
 }
 
 type BasePolicyTriggerCondition struct {
@@ -52,6 +57,7 @@ type BasePolicyTriggerCondition struct {
 	DataSourceID          uuid.UUID            `json:"data_source_id" db:"data_source_id"`
 	ThresholdOperator     ThresholdOperator    `json:"threshold_operator" db:"threshold_operator"`
 	ThresholdValue        float64              `json:"threshold_value" db:"threshold_value"`
+	EarlyWarningThreshold *float64             `json:"early_warning_threshold,omitempty" db:"early_warning_threshold"`
 	AggregationFunction   AggregationFunction  `json:"aggregation_function" db:"aggregation_function"`
 	AggregationWindowDays int                  `json:"aggregation_window_days" db:"aggregation_window_days"`
 	ConsecutiveRequired   bool                 `json:"consecutive_required" db:"consecutive_required"`
@@ -91,3 +97,4 @@ type BasePolicyDocumentValidation struct {
 	ValidationNotes     *string          `json:"validation_notes,omitempty" db:"validation_notes"`
 	CreatedAt           time.Time        `json:"created_at" db:"created_at"`
 }
+

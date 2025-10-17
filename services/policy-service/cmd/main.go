@@ -4,11 +4,15 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
-	"time"
-
 	"policy-service/internal/config"
 	"policy-service/internal/database/postgres"
+	"policy-service/internal/handlers"
+	"policy-service/internal/repository"
+	"policy-service/internal/services"
+	"syscall"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -74,4 +78,32 @@ func main() {
 	app.Get("/checkhealth", func(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).SendString("Policy service is healthy")
 	})
+
+	// Initialize repositories
+	dataTierRepo := repository.NewDataTierRepository(db)
+
+	// Initialize services
+	dataTierService := services.NewDataTierService(dataTierRepo)
+
+	// Initialize handlers
+	dataTierHandler := handlers.NewDataTierHandler(dataTierService)
+
+	// Register routes
+	dataTierHandler.Register(app)
+
+	shutdownChan := make(chan os.Signal, 1)
+	doneChan := make(chan bool, 1)
+
+	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		log.Printf("Starting server on port %s", cfg.Port)
+		if err := app.Listen(fmt.Sprintf("0.0.0.0:%s", cfg.Port)); err != nil {
+			log.Fatalf("Error starting server: %v", err)
+		}
+		doneChan <- true
+	}()
+
+	<-shutdownChan
+	log.Println("Shutting down server...")
 }

@@ -429,6 +429,54 @@ services:
       - "traefik.http.routers.profile-protected.service=profile-service"
       - "traefik.http.routers.profile-protected.middlewares=cors,auth-middleware"
 
+  policy-service:
+    build:
+      context: ./
+      dockerfile: services/policy-service/Dockerfile
+    container_name: agrisa-policy-service
+    restart: unless-stopped
+    ports:
+      - "${POLICY_SERVICE_PORT:-8083}:8089"
+    environment:
+      - PORT=8089
+      - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
+      - POSTGRES_PORT=${POSTGRES_PORT:-9406}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${AUTH_SERVICE_DB_NAME:-agrisa}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-example}
+      - MINIO_ENDPOINT=${MINIO_URL}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_LOCATION=${MINIO_LOCATION}
+      - MINIO_SECURE=${MINIO_SECURE}
+      - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
+
+    volumes:
+      - ./logs/policy_service:/agrisa/log/policy_service
+    networks:
+      - traefik-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.policy-service.loadbalancer.server.port=8089"
+
+      - "traefik.http.routers.policy-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/policy/public`)"
+      - "traefik.http.routers.policy-public.entrypoints=web"
+      - "traefik.http.routers.policy-public.service=policy-service"
+      - "traefik.http.routers.policy-public.middlewares=cors"
+
+      - "traefik.http.routers.policy-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/policy/protected`)"
+      - "traefik.http.routers.policy-protected.entrypoints=web"
+      - "traefik.http.routers.policy-protected.service=policy-service"
+      - "traefik.http.routers.policy-protected.middlewares=cors,auth-middleware"
+
 networks:
   traefik-net:
     driver: bridge

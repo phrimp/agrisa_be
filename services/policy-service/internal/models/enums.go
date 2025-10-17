@@ -134,3 +134,13 @@ const (
 	PhotoLandCertificate PhotoType = "land_certificate"
 	PhotoOther           PhotoType = "other"
 )
+
+type MonitorFrequency string
+
+const (
+	MonitorFrequencyHour  MonitorFrequency = "hour"
+	MonitorFrequencyDay   MonitorFrequency = "day"
+	MonitorFrequencyWeek  MonitorFrequency = "week"
+	MonitorFrequencyMonth MonitorFrequency = "month"
+	MonitorFrequencyYear  MonitorFrequency = "year"
+)
