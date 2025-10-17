@@ -32,3 +32,13 @@ type DataSource struct {
 	CreatedAt           time.Time      `json:"created_at" db:"created_at"`
 	UpdatedAt           time.Time      `json:"updated_at" db:"updated_at"`
 }
+
+type FarmDataValue struct {
+	ID                   uuid.UUID   `json:"id" db:"id"`
+	FarmID               uuid.UUID   `json:"farm_id" db:"farm_id"`
+	DataSourceID         uuid.UUID   `json:"data_source_id" db:"data_source_id"`
+	MeasuredValue        float64     `json:"measured_value" db:"measured_value"`
+	MeasurementTimestamp int64       `json:"measurement_timestamp" db:"measurement_timestamp"`
+	DataQuality          DataQuality `json:"data_quality" db:"data_quality"`
+	CreatedAt            time.Time   `json:"created_at" db:"created_at"`
+}
