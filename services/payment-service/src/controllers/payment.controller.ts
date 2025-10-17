@@ -188,6 +188,7 @@ export class PaymentController {
                 status: 'completed',
                 paid_at: new Date(),
               });
+              console.log('DATA:', parsed.data.data);
             }
           } else {
             this.logger.warn('Không tìm thấy order_code', {

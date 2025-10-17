@@ -11,9 +11,9 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/ping",
+          "raw": "{{base_url}}/payment/public/ping",
           "host": ["{{base_url}}"],
-          "path": ["ping"]
+          "path": ["payment", "public", "ping"]
         }
       }
     },
@@ -32,9 +32,9 @@
           "raw": "{\n  \"amount\": 100000,\n  \"description\": \"Test payment\",\n  \"returnUrl\": \"https://example.com/success\",\n  \"cancelUrl\": \"https://example.com/cancel\",\n  \"userId\": \"user123\"\n}"
         },
         "url": {
-          "raw": "{{base_url}}/payment/link",
+          "raw": "{{base_url}}/payment/protected/link",
           "host": ["{{base_url}}"],
-          "path": ["payment", "link"]
+          "path": ["payment", "protected", "link"]
         }
       }
     },
@@ -44,9 +44,9 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/payment/link/:orderId",
+          "raw": "{{base_url}}/payment/protected/link/:orderId",
           "host": ["{{base_url}}"],
-          "path": ["payment", "link", ":orderId"],
+          "path": ["payment", "protected", "link", ":orderId"],
           "variable": [
             {
               "key": "orderId",
@@ -59,7 +59,7 @@
     {
       "name": "Cancel Payment Link",
       "request": {
-        "method": "POST",
+        "method": "DELETE",
         "header": [
           {
             "key": "Content-Type",
@@ -68,12 +68,12 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"cancellationReason\": \"User cancelled\"\n}"
+          "raw": "{\n  \"cancellation_reason\": \"User cancelled\"\n}"
         },
         "url": {
-          "raw": "{{base_url}}/payment/link/:orderId/cancel",
+          "raw": "{{base_url}}/payment/protected/link/:orderId",
           "host": ["{{base_url}}"],
-          "path": ["payment", "link", ":orderId", "cancel"],
+          "path": ["payment", "protected", "link", ":orderId"],
           "variable": [
             {
               "key": "orderId",
@@ -98,9 +98,9 @@
           "raw": "{}"
         },
         "url": {
-          "raw": "{{base_url}}/payment/webhook/verify",
+          "raw": "{{base_url}}/payment/public/webhook/verify",
           "host": ["{{base_url}}"],
-          "path": ["payment", "webhook", "verify"]
+          "path": ["payment", "public", "webhook", "verify"]
         }
       }
     },
@@ -124,12 +124,34 @@
           "path": ["payment", "webhook", "confirm"]
         }
       }
+    },
+    {
+      "name": "Get Orders",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/payment/protected/orders?page=1&limit=10",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "protected", "orders"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      }
     }
   ],
   "variable": [
     {
       "key": "base_url",
-      "value": "https://api-agrisa.phrimp.io.vn",
+      "value": "https://agrisa-api.phrimp.io.vn",
       "type": "string"
     }
   ]
