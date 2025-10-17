@@ -443,7 +443,7 @@ services:
       - POSTGRES_PORT=${POSTGRES_PORT:-9406}
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${AUTH_SERVICE_DB_NAME:-agrisa}
+      - POSTGRES_DB=${POLICY_SERVICE_DB_NAME:-agrisa}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-example}
