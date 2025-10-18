@@ -283,6 +283,7 @@ CREATE INDEX idx_base_policy_trigger_policy ON base_policy_trigger(base_policy_i
 COMMENT ON TABLE base_policy_trigger IS 'ONE trigger group per base policy, contains multiple conditions';
 
 -- Base policy trigger conditions (multiple conditions per trigger)
+-- MERGED: Now includes data usage cost tracking (previously in base_policy_data_usage)
 CREATE TABLE base_policy_trigger_condition (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     base_policy_trigger_id UUID NOT NULL REFERENCES base_policy_trigger(id) ON DELETE CASCADE,
@@ -310,42 +311,25 @@ CREATE TABLE base_policy_trigger_condition (
     -- Order
     condition_order INT DEFAULT 0,
     
+    -- Data usage cost tracking (merged from base_policy_data_usage)
+    base_cost DECIMAL(8,4) NOT NULL DEFAULT 0.0,
+    category_multiplier DECIMAL(4,2) NOT NULL DEFAULT 1.0,
+    tier_multiplier DECIMAL(4,2) NOT NULL DEFAULT 1.0,
+    calculated_cost DECIMAL(10,4) NOT NULL DEFAULT 0.0,
+    
     -- Metadata
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
-    CONSTRAINT positive_window CHECK (aggregation_window_days > 0)
+    CONSTRAINT positive_window CHECK (aggregation_window_days > 0),
+    CONSTRAINT positive_costs CHECK (calculated_cost >= 0 AND base_cost >= 0)
 );
 
 CREATE INDEX idx_base_trigger_condition_trigger ON base_policy_trigger_condition(base_policy_trigger_id);
 CREATE INDEX idx_base_trigger_condition_data_source ON base_policy_trigger_condition(data_source_id);
 CREATE INDEX idx_base_trigger_condition_order ON base_policy_trigger_condition(base_policy_trigger_id, condition_order);
 
-COMMENT ON TABLE base_policy_trigger_condition IS 'Multiple conditions in a trigger group, each condition references a data_source';
-
--- Track data sources used in base policy (ONE row per data source per policy)
-CREATE TABLE base_policy_data_usage (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    base_policy_id UUID NOT NULL REFERENCES base_policy(id) ON DELETE CASCADE,
-    data_source_id UUID NOT NULL REFERENCES data_source(id),
-    
-    -- Cost snapshot at time of selection
-    base_cost DECIMAL(8,4) NOT NULL,
-    category_multiplier DECIMAL(4,2) NOT NULL,
-    tier_multiplier DECIMAL(4,2) NOT NULL,
-    calculated_cost DECIMAL(10,4) NOT NULL,
-    
-    -- Metadata
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    
-    CONSTRAINT positive_costs CHECK (calculated_cost >= 0),
-    CONSTRAINT unique_data_source_per_policy UNIQUE (base_policy_id, data_source_id)
-);
-
-CREATE INDEX idx_base_policy_data_usage_policy ON base_policy_data_usage(base_policy_id);
-CREATE INDEX idx_base_policy_data_usage_data_source ON base_policy_data_usage(data_source_id);
-
-COMMENT ON TABLE base_policy_data_usage IS 'Tracks which data sources are used in base policy (one row per data source)';
-COMMENT ON COLUMN base_policy_data_usage.calculated_cost IS 'base_cost × category_multiplier × tier_multiplier per month';
+COMMENT ON TABLE base_policy_trigger_condition IS 'Multiple conditions in a trigger group, each condition references a data_source and includes cost tracking';
+COMMENT ON COLUMN base_policy_trigger_condition.calculated_cost IS 'base_cost × category_multiplier × tier_multiplier per month';
 
 -- Document validation for base policy
 CREATE TABLE base_policy_document_validation (

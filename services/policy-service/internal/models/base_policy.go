@@ -55,6 +55,8 @@ type BasePolicyTriggerCondition struct {
 	ID                    uuid.UUID            `json:"id" db:"id"`
 	BasePolicyTriggerID   uuid.UUID            `json:"base_policy_trigger_id" db:"base_policy_trigger_id"`
 	DataSourceID          uuid.UUID            `json:"data_source_id" db:"data_source_id"`
+	
+	// Trigger condition fields
 	ThresholdOperator     ThresholdOperator    `json:"threshold_operator" db:"threshold_operator"`
 	ThresholdValue        float64              `json:"threshold_value" db:"threshold_value"`
 	EarlyWarningThreshold *float64             `json:"early_warning_threshold,omitempty" db:"early_warning_threshold"`
@@ -65,19 +67,16 @@ type BasePolicyTriggerCondition struct {
 	BaselineFunction      *AggregationFunction `json:"baseline_function,omitempty" db:"baseline_function"`
 	ValidationWindowDays  int                  `json:"validation_window_days" db:"validation_window_days"`
 	ConditionOrder        int                  `json:"condition_order" db:"condition_order"`
+	
+	// Data usage cost tracking fields (merged from BasePolicyDataUsage)
+	BaseCost              float64              `json:"base_cost" db:"base_cost"`
+	CategoryMultiplier    float64              `json:"category_multiplier" db:"category_multiplier"`
+	TierMultiplier        float64              `json:"tier_multiplier" db:"tier_multiplier"`
+	CalculatedCost        float64              `json:"calculated_cost" db:"calculated_cost"`
+	
 	CreatedAt             time.Time            `json:"created_at" db:"created_at"`
 }
 
-type BasePolicyDataUsage struct {
-	ID                 uuid.UUID `json:"id" db:"id"`
-	BasePolicyID       uuid.UUID `json:"base_policy_id" db:"base_policy_id"`
-	DataSourceID       uuid.UUID `json:"data_source_id" db:"data_source_id"`
-	BaseCost           float64   `json:"base_cost" db:"base_cost"`
-	CategoryMultiplier float64   `json:"category_multiplier" db:"category_multiplier"`
-	TierMultiplier     float64   `json:"tier_multiplier" db:"tier_multiplier"`
-	CalculatedCost     float64   `json:"calculated_cost" db:"calculated_cost"`
-	CreatedAt          time.Time `json:"created_at" db:"created_at"`
-}
 
 type BasePolicyDocumentValidation struct {
 	ID                  uuid.UUID        `json:"id" db:"id"`
