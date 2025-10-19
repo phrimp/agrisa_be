@@ -60,16 +60,13 @@ export class ImplPayosService implements PayosService, OnModuleInit {
     data: CreatePaymentLinkData,
   ): Promise<ServiceResponse<PaymentLinkResponse>> {
     try {
-      // Remove fields that PayOS doesn't accept
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const { type, ...payosOnlyData } = data as CreatePaymentLinkData & {
-        type?: string;
-      };
-
       const payosData = {
-        ...payosOnlyData,
+        ...data,
         expired_at: Math.floor(data.expired_at.getTime() / 1000),
       };
+
+      delete (payosData as any).type;
+
       const camelData = transformKeys(payosData, toCamelCase);
 
       this.logger.log('Sending to PayOS:', JSON.stringify(camelData, null, 2));
