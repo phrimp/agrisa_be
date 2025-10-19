@@ -13,7 +13,6 @@ import { PaymentRepository } from './repositories/payment.repository';
 import { ConfigurationController } from './controllers/configuration.controller';
 import { ImplConfigurationService } from './services/impl.configuration.service';
 import { Configuration } from './entities/configuration.entity';
-import { ConfigurationRepository } from './repositories/configuration.repository';
 
 @Module({
   imports: [
@@ -24,7 +23,6 @@ import { ConfigurationRepository } from './repositories/configuration.repository
   controllers: [PingController, PaymentController, ConfigurationController],
   providers: [
     PaymentRepository,
-    ConfigurationRepository,
     ExpiredCheckerService,
     { provide: 'PingService', useClass: ImplPingService },
     { provide: 'PayosService', useClass: ImplPayosService },
