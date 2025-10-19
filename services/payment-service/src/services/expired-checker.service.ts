@@ -16,12 +16,29 @@ export class ExpiredCheckerService implements OnModuleInit {
   onModuleInit() {
     const cronExpression = process.env.PAYMENT_CRON_EXPRESSION || '0 6 * * *';
 
-    // Add new job with config expression
-    const job = new CronJob(cronExpression, async () => {
-      await this.checkExpiredPayments();
-    });
-    this.schedulerRegistry.addCronJob('checkExpiredPayments', job);
-    job.start();
+    this.logger.log(`Initializing cron job with expression: ${cronExpression}`);
+
+    try {
+      // Add new job with config expression
+      const job = new CronJob(cronExpression, async () => {
+        await this.checkExpiredPayments();
+      });
+      this.schedulerRegistry.addCronJob('checkExpiredPayments', job);
+      job.start();
+      this.logger.log('Expired payment checker cron job started successfully');
+    } catch (error) {
+      this.logger.error(
+        `Failed to start cron job with expression: ${cronExpression}`,
+        error,
+      );
+      // Fallback to default safe cron expression
+      this.logger.warn('Using fallback cron expression: 0 6 * * *');
+      const fallbackJob = new CronJob('0 6 * * *', async () => {
+        await this.checkExpiredPayments();
+      });
+      this.schedulerRegistry.addCronJob('checkExpiredPayments', fallbackJob);
+      fallbackJob.start();
+    }
   }
 
   async checkExpiredPayments() {
