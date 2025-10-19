@@ -19,7 +19,6 @@ func NewDataTierRepository(db *sqlx.DB) *DataTierRepository {
 }
 
 func (r *DataTierRepository) CreateDataTierCategory(category *models.DataTierCategory) error {
-	category.ID = uuid.New()
 	category.CreatedAt = time.Now()
 	category.UpdatedAt = time.Now()
 
@@ -117,7 +116,6 @@ func (r *DataTierRepository) DeleteDataTierCategory(id uuid.UUID) error {
 }
 
 func (r *DataTierRepository) CreateDataTier(tier *models.DataTier) error {
-	tier.ID = uuid.New()
 	tier.CreatedAt = time.Now()
 	tier.UpdatedAt = time.Now()
 

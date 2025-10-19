@@ -26,8 +26,14 @@ type BasePolicy struct {
 	IsPayoutPerHectare             bool             `json:"is_payout_per_hectare" db:"is_payout_per_hectare"`
 	OverThresholdMultiplier        float64          `json:"over_threshold_multiplier" db:"over_threshold_multiplier"`
 	PayoutBaseRate                 float64          `json:"payout_base_rate" db:"payout_base_rate"`
-	DataComplexityScore            int              `json:"data_complexity_score" db:"data_complexity_score"`
-	MonthlyDataCost                float64          `json:"monthly_data_cost" db:"monthly_data_cost"`
+	PayoutCap                      *int             `json:"payout_cap,omitempty" db:"payout_cap"`
+	EnrollmentStartDay             *int             `json:"enrollment_start_day,omitempty" db:"enrollment_start_day"`
+	EnrollmentEndDay               *int             `json:"enrollment_end_day,omitempty" db:"enrollment_end_day"`
+	AutoRenewal                    bool             `json:"auto_renewal" db:"auto_renewal"`
+	RenewalDiscountRate            *float64         `json:"renewal_discount_rate,omitempty" db:"renewal_discount_rate"`
+	BasePolicyInvalidDate          *int             `json:"base_policy_invalid_date,omitempty" db:"base_policy_invalid_date"`
+	InsuranceValidFromDay          *int             `json:"insurance_valid_from_day,omitempty" db:"insurance_valid_from_day"`
+	InsuranceValidToDay            *int             `json:"insurance_valid_to_day,omitempty" db:"insurance_valid_to_day"`
 	Status                         BasePolicyStatus `json:"status" db:"status"`
 	TemplateDocumentURL            *string          `json:"template_document_url,omitempty" db:"template_document_url"`
 	DocumentValidationStatus       ValidationStatus `json:"document_validation_status" db:"document_validation_status"`
@@ -42,11 +48,10 @@ type BasePolicyTrigger struct {
 	ID                    uuid.UUID        `json:"id" db:"id"`
 	BasePolicyID          uuid.UUID        `json:"base_policy_id" db:"base_policy_id"`
 	LogicalOperator       LogicalOperator  `json:"logical_operator" db:"logical_operator"`
-	ValidFromDay          *int             `json:"valid_from_day,omitempty" db:"valid_from_day"`
-	ValidToDay            *int             `json:"valid_to_day,omitempty" db:"valid_to_day"`
 	GrowthStage           *string          `json:"growth_stage,omitempty" db:"growth_stage"`
 	MonitorFrequencyValue int              `json:"monitor_frequency_value" db:"monitor_frequency_value"`
 	MonitorFrequencyUnit  MonitorFrequency `json:"monitor_frequency_unit" db:"monitor_frequency_unit"`
+	BlackoutPeriods       interface{}      `json:"blackout_periods,omitempty" db:"blackout_periods"` // JSONB
 	CreatedAt             time.Time        `json:"created_at" db:"created_at"`
 	UpdatedAt             time.Time        `json:"updated_at" db:"updated_at"`
 }

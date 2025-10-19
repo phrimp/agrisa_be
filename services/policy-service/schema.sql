@@ -220,11 +220,18 @@ CREATE TABLE base_policy (
     is_payout_per_hectare BOOLEAN NOT NULL DEFAULT false,
     over_threshold_multiplier DECIMAL(10,4) NOT NULL,
     payout_base_rate DECIMAL(10,4) NOT NULL,
+    payout_cap INT,
     
-    -- Data complexity (calculated from base_policy_data_usage)
-    data_complexity_score INT DEFAULT 0,
-    monthly_data_cost DECIMAL(10,2) DEFAULT 0,
+    -- Enrollment date
+    enrollment_start_day INT,
+    enrollment_end_day INT,
     
+    -- Lifecycle
+    auto_renewal BOOLEAN DEFAULT false,
+    renewal_discount_rate DECIMAL(3,2),
+    base_policy_invalid_date INT,
+    insurance_valid_from_day INT,
+    insurance_valid_to_day INT,
     -- Status
     status base_policy_status DEFAULT 'draft',
     
@@ -240,19 +247,14 @@ CREATE TABLE base_policy (
     created_by VARCHAR(100),
     
     CONSTRAINT positive_premium_rate CHECK (premium_base_rate >= 0),
-    CONSTRAINT positive_duration CHECK (coverage_duration_days > 0),
-    CONSTRAINT positive_complexity CHECK (data_complexity_score >= 0),
-    CONSTRAINT positive_data_cost CHECK (monthly_data_cost >= 0)
+    CONSTRAINT positive_duration CHECK (coverage_duration_days > 0)
 );
 
 CREATE INDEX idx_base_policy_provider ON base_policy(insurance_provider_id);
 CREATE INDEX idx_base_policy_status ON base_policy(status);
 CREATE INDEX idx_base_policy_crop ON base_policy(crop_type);
-CREATE INDEX idx_base_policy_complexity ON base_policy(data_complexity_score);
 
 COMMENT ON TABLE base_policy IS 'Policy templates - data_tier removed, can use multiple data sources from different tiers';
-COMMENT ON COLUMN base_policy.data_complexity_score IS 'Number of unique data sources used (calculated)';
-COMMENT ON COLUMN base_policy.monthly_data_cost IS 'Total monthly cost for all data sources (calculated)';
 
 -- Base policy trigger (ONE trigger group per policy)
 CREATE TABLE base_policy_trigger (
@@ -263,19 +265,16 @@ CREATE TABLE base_policy_trigger (
     logical_operator logical_operator NOT NULL DEFAULT 'AND',
     
     -- Time constraints
-    valid_from_day INT,
-    valid_to_day INT,
     growth_stage VARCHAR(50),
     monitor_frequency_value INT DEFAULT 1,
     monitor_frequency_unit monitor_frequency NOT NULL DEFAULT 'day',
+    blackout_periods JSONB,
     
     -- Metadata
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
-    CONSTRAINT one_trigger_per_base_policy UNIQUE (base_policy_id),
-    CONSTRAINT valid_payout_percentage CHECK (payout_percentage >= 0 AND payout_percentage <= 100),
-    CONSTRAINT valid_day_range CHECK (valid_to_day IS NULL OR valid_from_day IS NULL OR valid_to_day >= valid_from_day)
+    CONSTRAINT one_trigger_per_base_policy UNIQUE (base_policy_id)
 );
 
 CREATE INDEX idx_base_policy_trigger_policy ON base_policy_trigger(base_policy_id);

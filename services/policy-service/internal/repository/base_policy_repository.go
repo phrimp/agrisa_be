@@ -19,7 +19,6 @@ func NewBasePolicyRepository(db *sqlx.DB) *BasePolicyRepository {
 }
 
 func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error {
-	policy.ID = uuid.New()
 	policy.CreatedAt = time.Now()
 	policy.UpdatedAt = time.Now()
 
@@ -28,18 +27,20 @@ func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
 			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
-			over_threshold_multiplier, payout_base_rate, data_complexity_score,
-			monthly_data_cost, status, template_document_url, document_validation_status,
-			document_validation_score, important_additional_information, created_at,
-			updated_at, created_by
+			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
+			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
+			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
+			document_validation_status, document_validation_score, important_additional_information,
+			created_at, updated_at, created_by
 		) VALUES (
 			:id, :insurance_provider_id, :product_name, :product_code, :product_description,
 			:crop_type, :coverage_currency, :coverage_duration_days, :fix_premium_amount,
 			:is_per_hectare, :premium_base_rate, :fix_payout_amount, :is_payout_per_hectare,
-			:over_threshold_multiplier, :payout_base_rate, :data_complexity_score,
-			:monthly_data_cost, :status, :template_document_url, :document_validation_status,
-			:document_validation_score, :important_additional_information, :created_at,
-			:updated_at, :created_by
+			:over_threshold_multiplier, :payout_base_rate, :payout_cap, :enrollment_start_day,
+			:enrollment_end_day, :auto_renewal, :renewal_discount_rate, :base_policy_invalid_date,
+			:insurance_valid_from_day, :insurance_valid_to_day, :status, :template_document_url,
+			:document_validation_status, :document_validation_score, :important_additional_information,
+			:created_at, :updated_at, :created_by
 		)`
 
 	_, err := r.db.NamedExec(query, policy)
@@ -57,10 +58,11 @@ func (r *BasePolicyRepository) GetBasePolicyByID(id uuid.UUID) (*models.BasePoli
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
 			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
-			over_threshold_multiplier, payout_base_rate, data_complexity_score,
-			monthly_data_cost, status, template_document_url, document_validation_status,
-			document_validation_score, important_additional_information, created_at,
-			updated_at, created_by
+			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
+			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
+			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
+			document_validation_status, document_validation_score, important_additional_information,
+			created_at, updated_at, created_by
 		FROM base_policy
 		WHERE id = $1`
 
@@ -82,10 +84,11 @@ func (r *BasePolicyRepository) GetAllBasePolicies() ([]models.BasePolicy, error)
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
 			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
-			over_threshold_multiplier, payout_base_rate, data_complexity_score,
-			monthly_data_cost, status, template_document_url, document_validation_status,
-			document_validation_score, important_additional_information, created_at,
-			updated_at, created_by
+			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
+			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
+			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
+			document_validation_status, document_validation_score, important_additional_information,
+			created_at, updated_at, created_by
 		FROM base_policy
 		ORDER BY created_at DESC`
 
@@ -104,10 +107,11 @@ func (r *BasePolicyRepository) GetBasePoliciesByProvider(providerID string) ([]m
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
 			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
-			over_threshold_multiplier, payout_base_rate, data_complexity_score,
-			monthly_data_cost, status, template_document_url, document_validation_status,
-			document_validation_score, important_additional_information, created_at,
-			updated_at, created_by
+			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
+			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
+			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
+			document_validation_status, document_validation_score, important_additional_information,
+			created_at, updated_at, created_by
 		FROM base_policy
 		WHERE insurance_provider_id = $1
 		ORDER BY created_at DESC`
@@ -127,10 +131,11 @@ func (r *BasePolicyRepository) GetBasePoliciesByStatus(status models.BasePolicyS
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
 			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
-			over_threshold_multiplier, payout_base_rate, data_complexity_score,
-			monthly_data_cost, status, template_document_url, document_validation_status,
-			document_validation_score, important_additional_information, created_at,
-			updated_at, created_by
+			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
+			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
+			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
+			document_validation_status, document_validation_score, important_additional_information,
+			created_at, updated_at, created_by
 		FROM base_policy
 		WHERE status = $1
 		ORDER BY created_at DESC`
@@ -150,10 +155,11 @@ func (r *BasePolicyRepository) GetBasePoliciesByCropType(cropType string) ([]mod
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
 			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
-			over_threshold_multiplier, payout_base_rate, data_complexity_score,
-			monthly_data_cost, status, template_document_url, document_validation_status,
-			document_validation_score, important_additional_information, created_at,
-			updated_at, created_by
+			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
+			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
+			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
+			document_validation_status, document_validation_score, important_additional_information,
+			created_at, updated_at, created_by
 		FROM base_policy
 		WHERE crop_type = $1
 		ORDER BY created_at DESC`
@@ -185,8 +191,14 @@ func (r *BasePolicyRepository) UpdateBasePolicy(policy *models.BasePolicy) error
 			is_payout_per_hectare = :is_payout_per_hectare,
 			over_threshold_multiplier = :over_threshold_multiplier,
 			payout_base_rate = :payout_base_rate,
-			data_complexity_score = :data_complexity_score,
-			monthly_data_cost = :monthly_data_cost,
+			payout_cap = :payout_cap,
+			enrollment_start_day = :enrollment_start_day,
+			enrollment_end_day = :enrollment_end_day,
+			auto_renewal = :auto_renewal,
+			renewal_discount_rate = :renewal_discount_rate,
+			base_policy_invalid_date = :base_policy_invalid_date,
+			insurance_valid_from_day = :insurance_valid_from_day,
+			insurance_valid_to_day = :insurance_valid_to_day,
 			status = :status,
 			template_document_url = :template_document_url,
 			document_validation_status = :document_validation_status,
@@ -273,18 +285,17 @@ func (r *BasePolicyRepository) GetBasePolicyCountByStatus(status models.BasePoli
 // ============================================================================
 
 func (r *BasePolicyRepository) CreateBasePolicyTrigger(trigger *models.BasePolicyTrigger) error {
-	trigger.ID = uuid.New()
 	trigger.CreatedAt = time.Now()
 	trigger.UpdatedAt = time.Now()
 
 	query := `
 		INSERT INTO base_policy_trigger (
-			id, base_policy_id, logical_operator, valid_from_day, valid_to_day,
-			growth_stage, monitor_frequency_value, monitor_frequency_unit,
+			id, base_policy_id, logical_operator, growth_stage, 
+			monitor_frequency_value, monitor_frequency_unit, blackout_periods,
 			created_at, updated_at
 		) VALUES (
-			:id, :base_policy_id, :logical_operator, :valid_from_day, :valid_to_day,
-			:growth_stage, :monitor_frequency_value, :monitor_frequency_unit,
+			:id, :base_policy_id, :logical_operator, :growth_stage,
+			:monitor_frequency_value, :monitor_frequency_unit, :blackout_periods,
 			:created_at, :updated_at
 		)`
 
@@ -300,8 +311,8 @@ func (r *BasePolicyRepository) GetBasePolicyTriggerByID(id uuid.UUID) (*models.B
 	var trigger models.BasePolicyTrigger
 	query := `
 		SELECT 
-			id, base_policy_id, logical_operator, valid_from_day, valid_to_day,
-			growth_stage, monitor_frequency_value, monitor_frequency_unit,
+			id, base_policy_id, logical_operator, growth_stage,
+			monitor_frequency_value, monitor_frequency_unit, blackout_periods,
 			created_at, updated_at
 		FROM base_policy_trigger
 		WHERE id = $1`
@@ -321,8 +332,8 @@ func (r *BasePolicyRepository) GetBasePolicyTriggersByPolicyID(policyID uuid.UUI
 	var triggers []models.BasePolicyTrigger
 	query := `
 		SELECT 
-			id, base_policy_id, logical_operator, valid_from_day, valid_to_day,
-			growth_stage, monitor_frequency_value, monitor_frequency_unit,
+			id, base_policy_id, logical_operator, growth_stage,
+			monitor_frequency_value, monitor_frequency_unit, blackout_periods,
 			created_at, updated_at
 		FROM base_policy_trigger
 		WHERE base_policy_id = $1
@@ -342,11 +353,10 @@ func (r *BasePolicyRepository) UpdateBasePolicyTrigger(trigger *models.BasePolic
 	query := `
 		UPDATE base_policy_trigger SET
 			logical_operator = :logical_operator,
-			valid_from_day = :valid_from_day,
-			valid_to_day = :valid_to_day,
 			growth_stage = :growth_stage,
 			monitor_frequency_value = :monitor_frequency_value,
 			monitor_frequency_unit = :monitor_frequency_unit,
+			blackout_periods = :blackout_periods,
 			updated_at = :updated_at
 		WHERE id = :id`
 
@@ -415,7 +425,6 @@ func (r *BasePolicyRepository) CheckBasePolicyTriggerExists(id uuid.UUID) (bool,
 // ============================================================================
 
 func (r *BasePolicyRepository) CreateBasePolicyTriggerCondition(condition *models.BasePolicyTriggerCondition) error {
-	condition.ID = uuid.New()
 	condition.CreatedAt = time.Now()
 
 	query := `
@@ -436,6 +445,55 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerCondition(condition *model
 	_, err := r.db.NamedExec(query, condition)
 	if err != nil {
 		return fmt.Errorf("failed to create base policy trigger condition: %w", err)
+	}
+
+	return nil
+}
+
+func (r *BasePolicyRepository) CreateBasePolicyTriggerConditionsBatch(conditions []models.BasePolicyTriggerCondition) error {
+	if len(conditions) == 0 {
+		return nil
+	}
+
+	// Start transaction for batch operation
+	tx, err := r.db.Beginx()
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Prepare conditions with timestamps
+	now := time.Now()
+	for i := range conditions {
+		conditions[i].CreatedAt = now
+	}
+
+	query := `
+		INSERT INTO base_policy_trigger_condition (
+			id, base_policy_trigger_id, data_source_id, threshold_operator,
+			threshold_value, early_warning_threshold, aggregation_function,
+			aggregation_window_days, consecutive_required, baseline_window_days,
+			baseline_function, validation_window_days, condition_order,
+			base_cost, category_multiplier, tier_multiplier, calculated_cost, created_at
+		) VALUES (
+			:id, :base_policy_trigger_id, :data_source_id, :threshold_operator,
+			:threshold_value, :early_warning_threshold, :aggregation_function,
+			:aggregation_window_days, :consecutive_required, :baseline_window_days,
+			:baseline_function, :validation_window_days, :condition_order,
+			:base_cost, :category_multiplier, :tier_multiplier, :calculated_cost, :created_at
+		)`
+
+	// Execute batch insert
+	for _, condition := range conditions {
+		_, err := tx.NamedExec(query, condition)
+		if err != nil {
+			return fmt.Errorf("failed to insert condition %s: %w", condition.ID, err)
+		}
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit batch insert: %w", err)
 	}
 
 	return nil
