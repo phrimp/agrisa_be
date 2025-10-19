@@ -34,6 +34,7 @@ export const paymentSchema = z.object({
     .default('pending'),
   user_id: z.string(),
   checkout_url: z.string().max(255).nullable().optional(),
+  type: z.string().max(50).nullable().optional(),
   order_code: z.string().max(255).nullable().optional(),
   created_at: z.date(),
   updated_at: z.date(),

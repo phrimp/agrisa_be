@@ -81,6 +81,7 @@ export class PaymentController {
         order_code: order_code.toString(),
         amount: parsed.data.amount,
         description: parsed.data.description,
+        type: payos_data.type,
         user_id: user_id,
         expired_at: expired_at,
       });
@@ -94,7 +95,6 @@ export class PaymentController {
             name: item.name,
             price: item.price,
             quantity: item.quantity ?? 1,
-            type: item.type,
             created_at: new Date(),
             updated_at: new Date(),
           });
