@@ -1,3 +1,6 @@
+DROP DATABASE IF EXISTS payment_service;
+CREATE DATABASE IF NOT EXISTS payment_service;
+
 CREATE TYPE payment_status AS ENUM ('pending', 'completed', 'failed', 'refunded', 'cancelled', 'expired');
 
 CREATE TABLE payments (

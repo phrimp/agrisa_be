@@ -146,6 +146,39 @@
           ]
         }
       }
+    },
+    {
+      "name": "Get Configuration",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/payment/configuration",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "configuration"]
+        }
+      }
+    },
+    {
+      "name": "Update Configuration",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"payos_client_id\": \"your_client_id\",\n  \"payos_api_key\": \"your_api_key\",\n  \"payos_checksum_key\": \"your_checksum_key\",\n  \"payos_expired_duration\": \"300\",\n  \"payos_order_code_length\": 8,\n  \"payment_cron_expression\": \"0 6 * * *\"\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payment/configuration",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "configuration"]
+        }
+      }
     }
   ],
   "variable": [

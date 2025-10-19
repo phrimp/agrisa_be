@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { payOS } from '../libs/payos.config';
+import { Injectable, Logger, OnModuleInit, Inject } from '@nestjs/common';
+import { PayOS } from '@payos/node';
+import type { ConfigurationService } from './configuration.service';
 import {
   paymentLinkSchema,
   PaymentLinkDto,
@@ -30,12 +31,25 @@ type ServiceResponse<T = unknown> = {
 };
 
 @Injectable()
-export class ImplPayosService implements PayosService {
+export class ImplPayosService implements PayosService, OnModuleInit {
   private readonly logger = new Logger(ImplPayosService.name);
-  private readonly payOS: PayOSClient;
+  private payOS: PayOSClient;
 
-  constructor() {
-    this.payOS = payOS as unknown as PayOSClient;
+  constructor(
+    @Inject('ConfigurationService')
+    private readonly configurationService: ConfigurationService,
+  ) {}
+
+  async onModuleInit() {
+    const config = await this.configurationService.getConfiguration();
+    if (!config) {
+      throw new Error('Configuration not found');
+    }
+    this.payOS = new PayOS({
+      clientId: config.payos_client_id,
+      apiKey: config.payos_api_key,
+      checksumKey: config.payos_checksum_key,
+    }) as unknown as PayOSClient;
   }
 
   async createPaymentLink(
@@ -153,6 +167,11 @@ export class ImplPayosService implements PayosService {
       this.logger.error('Lỗi xác minh webhook:', error);
       throw error;
     }
+  }
+
+  async getExpiredDuration(): Promise<string | undefined> {
+    const config = await this.configurationService.getConfiguration();
+    return config?.payos_expired_duration;
   }
 
   async confirmWebhook(webhook_url: string): Promise<ServiceResponse<null>> {

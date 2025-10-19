@@ -53,7 +53,6 @@ const statusMap: Record<z.infer<typeof paymentSchema>['status'], string> = {
 };
 
 export const paymentViewSchema = paymentSchema.transform((p) => {
-  // Nếu expired_at < now và status là 'pending', map thành 'expired'
   const now = new Date();
   const effectiveStatus =
     p.expired_at && p.expired_at < now && p.status === 'pending'
@@ -61,7 +60,10 @@ export const paymentViewSchema = paymentSchema.transform((p) => {
       : p.status;
   return {
     ...p,
-    status: statusMap[effectiveStatus] ?? effectiveStatus,
+    status: {
+      code: effectiveStatus,
+      label: statusMap[effectiveStatus] ?? effectiveStatus,
+    },
   };
 });
 

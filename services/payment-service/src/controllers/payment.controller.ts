@@ -22,7 +22,6 @@ import type { CreatePaymentLinkData } from '../types/payos.types';
 import type { PayosService } from '../services/payos.service';
 import type { PaymentService } from '../services/payment.service';
 import { checkPermissions, generateRandomString } from 'src/libs/utils';
-import { PAYOS_EXPIRED_DURATION } from 'src/libs/payos.config';
 import { paymentViewSchema } from 'src/types/payment.types';
 import z from 'zod';
 import type { OrderItemService } from 'src/services/order-item.service';
@@ -64,7 +63,7 @@ export class PaymentController {
         parsed.data.order_code ??
         Math.floor(Math.random() * 10 ** ORDER_CODE_LENGTH);
 
-      const duration_str = PAYOS_EXPIRED_DURATION || '';
+      const duration_str = (await this.payosService.getExpiredDuration()) || '';
       let duration_seconds: number;
       if (duration_str.includes('*')) {
         const parts = duration_str.split('*').map((s) => parseInt(s.trim()));
