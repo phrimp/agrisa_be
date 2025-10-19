@@ -101,8 +101,13 @@ export class PaymentController {
         }
       }
 
+      // Remove item_id from items before sending to PayOS
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const items = parsed.data.items?.map(({ item_id, ...item }) => item);
+
       const payos_payload = {
         ...parsed.data,
+        items: items,
         order_code: order_code,
         return_url: parsed.data.return_url,
         cancel_url: `https://agrisa-api.phrimp.io.vn/payment/public/webhook/cancel?order_id=${order_code}&redirect=${encodeURIComponent(parsed.data.cancel_url!)}`,
