@@ -174,6 +174,11 @@ export class ImplPayosService implements PayosService, OnModuleInit {
     return config?.payos_expired_duration;
   }
 
+  async getOrderCodeLength(): Promise<number> {
+    const config = await this.configurationService.getConfiguration();
+    return config?.payos_order_code_length ?? 8;
+  }
+
   async confirmWebhook(webhook_url: string): Promise<ServiceResponse<null>> {
     try {
       await this.payOS.webhooks.confirm(webhook_url);

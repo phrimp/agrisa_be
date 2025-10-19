@@ -25,7 +25,6 @@ import { checkPermissions, generateRandomString } from 'src/libs/utils';
 import { paymentViewSchema } from 'src/types/payment.types';
 import z from 'zod';
 import type { OrderItemService } from 'src/services/order-item.service';
-const ORDER_CODE_LENGTH = 8;
 
 @Controller()
 export class PaymentController {
@@ -59,9 +58,11 @@ export class PaymentController {
     }
 
     try {
+      const order_code_length = await this.payosService.getOrderCodeLength();
+
       const order_code =
         parsed.data.order_code ??
-        Math.floor(Math.random() * 10 ** ORDER_CODE_LENGTH);
+        Math.floor(Math.random() * 10 ** order_code_length);
 
       const duration_str = (await this.payosService.getExpiredDuration()) || '';
       let duration_seconds: number;
@@ -111,7 +112,15 @@ export class PaymentController {
       const payos_response =
         await this.payosService.createPaymentLink(payos_payload);
 
-      if (payos_response.error === 0 && payos_response.data?.checkout_url) {
+      if (payos_response.error !== 0) {
+        this.logger.error('PayOS createPaymentLink failed', payos_response);
+        throw new HttpException(
+          payos_response.message || 'Tạo liên kết thanh toán thất bại',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (payos_response.data?.checkout_url) {
         await this.paymentService.update(payment_id, {
           checkout_url: payos_response.data.checkout_url,
         });
