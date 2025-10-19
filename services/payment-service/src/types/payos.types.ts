@@ -28,6 +28,7 @@ export const createPaymentLinkSchema = z.object({
   description: z.string(),
   return_url: z.string().url().optional(),
   cancel_url: z.string().url().optional(),
+  type: z.string().optional(),
   items: z
     .array(
       z.object({
@@ -35,7 +36,6 @@ export const createPaymentLinkSchema = z.object({
         name: z.string(),
         price: z.coerce.number().positive(),
         quantity: z.coerce.number().int().positive().default(1),
-        type: z.string().optional(),
       }),
     )
     .optional(),

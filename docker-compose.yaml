@@ -298,6 +298,9 @@ services:
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
     volumes:
       - ./logs/payment-service:/app/log
     networks:
@@ -316,6 +319,7 @@ services:
       - "traefik.http.routers.payment-protected.entrypoints=web"
       - "traefik.http.routers.payment-protected.service=payment-service"
       - "traefik.http.routers.payment-protected.middlewares=cors,auth-middleware"
+
   # Weather Service
   weather-service:
     build:

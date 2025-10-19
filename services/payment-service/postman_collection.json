@@ -29,7 +29,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"amount\": 200000,\n  \"description\": \"Test payment with multiple items\",\n  \"returnUrl\": \"https://example.com/success\",\n  \"cancelUrl\": \"https://example.com/cancel\",\n  \"items\": [\n    {\n      \"item_id\": \"item123\",\n      \"name\": \"Test Item 1\",\n      \"price\": 100000,\n      \"quantity\": 1,\n      \"type\": \"product\"\n    },\n    {\n      \"item_id\": \"item456\",\n      \"name\": \"Test Item 2\",\n      \"price\": 50000,\n      \"quantity\": 2,\n      \"type\": \"service\"\n    },\n    {\n      \"item_id\": \"item789\",\n      \"name\": \"Test Item 3\",\n      \"price\": 25000,\n      \"quantity\": 1,\n      \"type\": \"product\"\n    }\n  ]\n}"
+          "raw": "{\n  \"amount\": 200000,\n  \"description\": \"Test payment with multiple items\",\n  \"return_url\": \"https://example.com/success\",\n  \"cancel_url\": \"https://example.com/cancel\",\n  \"items\": [\n    {\n      \"item_id\": \"item123\",\n      \"name\": \"Test Item 1\",\n      \"price\": 100000,\n      \"quantity\": 1,\n      \"type\": \"product\"\n    },\n    {\n      \"item_id\": \"item456\",\n      \"name\": \"Test Item 2\",\n      \"price\": 50000,\n      \"quantity\": 2,\n      \"type\": \"service\"\n    },\n    {\n      \"item_id\": \"item789\",\n      \"name\": \"Test Item 3\",\n      \"price\": 25000,\n      \"quantity\": 1,\n      \"type\": \"product\"\n    }\n  ]\n}"
         },
         "url": {
           "raw": "{{base_url}}/payment/protected/link",
@@ -95,7 +95,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"code\": \"00\",\n  \"desc\": \"Thành công\",\n  \"success\": true,\n  \"data\": {\n    \"accountNumber\": \"123456789\",\n    \"amount\": 100000,\n    \"description\": \"Test payment\",\n    \"reference\": \"REF123\",\n    \"transactionDateTime\": \"2023-10-17T10:00:00Z\",\n    \"virtualAccountNumber\": \"123456789\",\n    \"counterAccountBankId\": null,\n    \"counterAccountBankName\": null,\n    \"counterAccountName\": null,\n    \"counterAccountNumber\": null,\n    \"virtualAccountName\": null,\n    \"currency\": \"VND\",\n    \"orderCode\": 123456,\n    \"paymentLinkId\": \"PAY123\",\n    \"code\": \"00\",\n    \"desc\": \"Thành công\"\n  },\n  \"signature\": \"signature_here\"\n}"
+          "raw": "{\n  \"code\": \"00\",\n  \"desc\": \"Thành công\",\n  \"success\": true,\n  \"data\": {\n    \"account_number\": \"123456789\",\n    \"amount\": 100000,\n    \"description\": \"Test payment\",\n    \"reference\": \"REF123\",\n    \"transaction_date_time\": \"2023-10-17T10:00:00Z\",\n    \"virtual_account_number\": \"123456789\",\n    \"counter_account_bank_id\": null,\n    \"counter_account_bank_name\": null,\n    \"counter_account_name\": null,\n    \"counter_account_number\": null,\n    \"virtual_account_name\": null,\n    \"currency\": \"VND\",\n    \"order_code\": 123456,\n    \"payment_link_id\": \"PAY123\",\n    \"code\": \"00\",\n    \"desc\": \"Thành công\"\n  },\n  \"signature\": \"signature_here\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/payment/public/webhook/verify",

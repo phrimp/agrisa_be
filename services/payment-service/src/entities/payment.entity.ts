@@ -43,6 +43,9 @@ export class Payment {
   @Column({ type: 'varchar', length: 255, nullable: true })
   order_code: string | null;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  type: string | null;
+
   @CreateDateColumn()
   created_at: Date;
 

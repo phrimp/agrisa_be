@@ -1,3 +1,6 @@
+DROP DATABASE IF EXISTS payment_service;
+CREATE DATABASE payment_service;
+
 CREATE TYPE payment_status AS ENUM ('pending', 'completed', 'failed', 'refunded', 'cancelled', 'expired');
 
 CREATE TABLE payments (
@@ -7,6 +10,7 @@ CREATE TABLE payments (
     status payment_status NOT NULL DEFAULT 'pending',
     user_id VARCHAR NOT NULL,
     checkout_url VARCHAR(255),
+    type VARCHAR(50),
     order_code VARCHAR(255),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -22,7 +26,6 @@ CREATE TABLE order_items (
     name VARCHAR NOT NULL,
     price DECIMAL(12,2) NOT NULL,
     quantity INT NOT NULL DEFAULT 1,
-    type VARCHAR(50),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP,

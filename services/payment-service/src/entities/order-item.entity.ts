@@ -33,9 +33,6 @@ export class OrderItem {
   @Column('int', { default: 1 })
   quantity: number;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
-  type: string | null;
-
   @CreateDateColumn()
   created_at: Date;
 

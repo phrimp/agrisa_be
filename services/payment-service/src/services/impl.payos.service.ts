@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { payOS } from '../libs/payos.config';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { PayOS } from '@payos/node';
 import {
   paymentLinkSchema,
   PaymentLinkDto,
@@ -8,6 +8,7 @@ import {
 } from '../types/payos.types';
 import { PayosService } from './payos.service';
 import { transformKeys, toCamelCase, toSnakeCase } from '../libs/utils';
+import { payosConfig, validatePayosConfig } from '../libs/payos.config';
 type PayOSClient = {
   paymentRequests: {
     create: (data: CreatePaymentLinkData) => Promise<unknown>;
@@ -30,12 +31,29 @@ type ServiceResponse<T = unknown> = {
 };
 
 @Injectable()
-export class ImplPayosService implements PayosService {
+export class ImplPayosService implements PayosService, OnModuleInit {
   private readonly logger = new Logger(ImplPayosService.name);
-  private readonly payOS: PayOSClient;
+  private payOS: PayOSClient;
 
-  constructor() {
-    this.payOS = payOS as unknown as PayOSClient;
+  constructor() {}
+
+  onModuleInit() {
+    validatePayosConfig();
+
+    this.logger.log('PayOS Configuration loaded:', {
+      hasClientId: !!payosConfig.clientId,
+      hasApiKey: !!payosConfig.apiKey,
+      hasChecksumKey: !!payosConfig.checksumKey,
+      clientIdLength: payosConfig.clientId?.length,
+      apiKeyLength: payosConfig.apiKey?.length,
+      checksumKeyLength: payosConfig.checksumKey?.length,
+    });
+
+    this.payOS = new PayOS({
+      clientId: payosConfig.clientId,
+      apiKey: payosConfig.apiKey,
+      checksumKey: payosConfig.checksumKey,
+    }) as unknown as PayOSClient;
   }
 
   async createPaymentLink(
@@ -46,12 +64,14 @@ export class ImplPayosService implements PayosService {
         ...data,
         expired_at: Math.floor(data.expired_at.getTime() / 1000),
       };
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+
+      delete (payosData as any).type;
+
       const camelData = transformKeys(payosData, toCamelCase);
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+      this.logger.log('Sending to PayOS:', JSON.stringify(camelData, null, 2));
+
       const raw = await this.payOS.paymentRequests.create(camelData);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const snakeRaw = transformKeys(raw, toSnakeCase);
       const parsed = paymentLinkSchema.safeParse(snakeRaw);
 
@@ -80,7 +100,6 @@ export class ImplPayosService implements PayosService {
   ): Promise<ServiceResponse<PaymentLinkDto>> {
     try {
       const raw = await this.payOS.paymentRequests.get(order_id);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const snakeRaw = transformKeys(raw, toSnakeCase);
       const parsed = paymentLinkSchema.safeParse(snakeRaw);
 
@@ -113,7 +132,6 @@ export class ImplPayosService implements PayosService {
       const raw = await this.payOS.paymentRequests.cancel(order_id, {
         cancellationReason: cancellation_reason,
       });
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const snakeRaw = transformKeys(raw, toSnakeCase);
       const parsed = paymentLinkSchema.safeParse(snakeRaw);
 
@@ -142,7 +160,6 @@ export class ImplPayosService implements PayosService {
   ): PaymentLinkDto | Record<string, unknown> {
     try {
       const raw = this.payOS.webhooks.verify(webhookData);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       const snakeRaw = transformKeys(raw, toSnakeCase);
       const parsed = paymentLinkSchema.safeParse(snakeRaw);
 
@@ -153,6 +170,14 @@ export class ImplPayosService implements PayosService {
       this.logger.error('Lỗi xác minh webhook:', error);
       throw error;
     }
+  }
+
+  getExpiredDuration(): string {
+    return payosConfig.expiredDuration;
+  }
+
+  getOrderCodeLength(): number {
+    return payosConfig.orderCodeLength;
   }
 
   async confirmWebhook(webhook_url: string): Promise<ServiceResponse<null>> {

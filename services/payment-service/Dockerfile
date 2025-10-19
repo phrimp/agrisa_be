@@ -1,6 +1,10 @@
 # Use an official Bun runtime as the base image
 FROM oven/bun:latest
 
+# Set timezone to Vietnam
+ENV TZ=Asia/Ho_Chi_Minh
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 # Set the working directory in the container
 WORKDIR /app
 

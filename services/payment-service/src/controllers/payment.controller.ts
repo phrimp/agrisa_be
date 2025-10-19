@@ -22,11 +22,10 @@ import type { CreatePaymentLinkData } from '../types/payos.types';
 import type { PayosService } from '../services/payos.service';
 import type { PaymentService } from '../services/payment.service';
 import { checkPermissions, generateRandomString } from 'src/libs/utils';
-import { PAYOS_EXPIRED_DURATION } from 'src/libs/payos.config';
 import { paymentViewSchema } from 'src/types/payment.types';
 import z from 'zod';
 import type { OrderItemService } from 'src/services/order-item.service';
-const ORDER_CODE_LENGTH = 8;
+import { payosConfig } from 'src/libs/payos.config';
 
 @Controller()
 export class PaymentController {
@@ -62,9 +61,9 @@ export class PaymentController {
     try {
       const order_code =
         parsed.data.order_code ??
-        Math.floor(Math.random() * 10 ** ORDER_CODE_LENGTH);
+        Math.floor(Math.random() * 10 ** payosConfig.orderCodeLength);
 
-      const duration_str = PAYOS_EXPIRED_DURATION || '';
+      const duration_str = this.payosService.getExpiredDuration();
       let duration_seconds: number;
       if (duration_str.includes('*')) {
         const parts = duration_str.split('*').map((s) => parseInt(s.trim()));
@@ -81,6 +80,7 @@ export class PaymentController {
         order_code: order_code.toString(),
         amount: parsed.data.amount,
         description: parsed.data.description,
+        type: payos_data.type,
         user_id: user_id,
         expired_at: expired_at,
       });
@@ -94,15 +94,19 @@ export class PaymentController {
             name: item.name,
             price: item.price,
             quantity: item.quantity ?? 1,
-            type: item.type,
             created_at: new Date(),
             updated_at: new Date(),
           });
         }
       }
 
+      // Remove item_id from items before sending to PayOS
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const items = parsed.data.items?.map(({ item_id, ...item }) => item);
+
       const payos_payload = {
         ...parsed.data,
+        items: items,
         order_code: order_code,
         return_url: parsed.data.return_url,
         cancel_url: `https://agrisa-api.phrimp.io.vn/payment/public/webhook/cancel?order_id=${order_code}&redirect=${encodeURIComponent(parsed.data.cancel_url!)}`,
@@ -112,7 +116,15 @@ export class PaymentController {
       const payos_response =
         await this.payosService.createPaymentLink(payos_payload);
 
-      if (payos_response.error === 0 && payos_response.data?.checkout_url) {
+      if (payos_response.error !== 0) {
+        this.logger.error('PayOS createPaymentLink failed', payos_response);
+        throw new HttpException(
+          payos_response.message || 'Tạo liên kết thanh toán thất bại',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (payos_response.data?.checkout_url) {
         await this.paymentService.update(payment_id, {
           checkout_url: payos_response.data.checkout_url,
         });
