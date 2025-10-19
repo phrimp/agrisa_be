@@ -6,13 +6,13 @@ const customLevels = {
   error: 0,
   warn: 1,
   info: 2,
-  log: 3,
+  http: 3,
   debug: 4,
   verbose: 5,
 };
 
 const winstonLogger = winston.createLogger({
-  level: 'log',
+  level: 'info',
   levels: customLevels,
   format: winston.format.combine(
     winston.format.timestamp(),
@@ -33,7 +33,7 @@ const winstonLogger = winston.createLogger({
 
 export class WinstonLoggerService implements LoggerService {
   log(message: any, context?: string) {
-    winstonLogger.log('log', String(message), { context });
+    winstonLogger.info(String(message), { context });
   }
 
   error(message: any, stack?: string, context?: string) {

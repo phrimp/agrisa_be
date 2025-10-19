@@ -1,7 +1,7 @@
 import { OrderItemService } from './order-item.service';
-import { OrderItem } from 'src/entities/order-item.entity';
+import { OrderItem } from '../entities/order-item.entity';
 import { Injectable } from '@nestjs/common';
-import { OrderItemRepository } from 'src/repositories/order-item.repository';
+import { OrderItemRepository } from '../repositories/order-item.repository';
 
 @Injectable()
 export class ImplOrderItemService implements OrderItemService {
