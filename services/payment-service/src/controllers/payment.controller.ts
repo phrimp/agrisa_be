@@ -25,6 +25,7 @@ import { checkPermissions, generateRandomString } from 'src/libs/utils';
 import { paymentViewSchema } from 'src/types/payment.types';
 import z from 'zod';
 import type { OrderItemService } from 'src/services/order-item.service';
+import { payosConfig } from 'src/libs/payos.config';
 
 @Controller()
 export class PaymentController {
@@ -58,11 +59,9 @@ export class PaymentController {
     }
 
     try {
-      const order_code_length = this.payosService.getOrderCodeLength();
-
       const order_code =
         parsed.data.order_code ??
-        Math.floor(Math.random() * 10 ** order_code_length);
+        Math.floor(Math.random() * 10 ** payosConfig.orderCodeLength);
 
       const duration_str = this.payosService.getExpiredDuration();
       let duration_seconds: number;
