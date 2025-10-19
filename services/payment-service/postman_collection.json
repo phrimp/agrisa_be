@@ -153,9 +153,9 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/payment/configuration",
+          "raw": "{{base_url}}/payment/protected/configuration",
           "host": ["{{base_url}}"],
-          "path": ["payment", "configuration"]
+          "path": ["payment", "protected", "configuration"]
         }
       }
     },
@@ -174,9 +174,9 @@
           "raw": "{\n  \"payos_client_id\": \"your_client_id\",\n  \"payos_api_key\": \"your_api_key\",\n  \"payos_checksum_key\": \"your_checksum_key\",\n  \"payos_expired_duration\": \"300\",\n  \"payos_order_code_length\": 8,\n  \"payment_cron_expression\": \"0 6 * * *\"\n}"
         },
         "url": {
-          "raw": "{{base_url}}/payment/configuration",
+          "raw": "{{base_url}}/payment/protected/configuration",
           "host": ["{{base_url}}"],
-          "path": ["payment", "configuration"]
+          "path": ["payment", "protected", "configuration"]
         }
       }
     }

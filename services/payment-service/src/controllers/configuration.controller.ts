@@ -2,7 +2,7 @@ import { Body, Controller, Get, Inject, Patch } from '@nestjs/common';
 import { Configuration } from '../entities/configuration.entity';
 import type { ConfigurationService } from '../services/configuration.service';
 
-@Controller('configuration')
+@Controller('/protected/configuration')
 export class ConfigurationController {
   constructor(
     @Inject('ConfigurationService')
