@@ -1,16 +1,17 @@
-import { Configuration } from './../entities/configuration.entity';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { Configuration } from '../entities/configuration.entity';
 
 @Injectable()
 export class ConfigurationRepository {
   constructor(
     @InjectRepository(Configuration)
-    private readonly configurationRepository: Repository<Configuration>,
+    private readonly configRepo: Repository<Configuration>,
   ) {}
+
   async getConfiguration(): Promise<Configuration | null> {
-    return await this.configurationRepository.findOne({});
+    return this.configRepo.findOne({ where: {} });
   }
 
   async updateConfiguration(
@@ -20,6 +21,6 @@ export class ConfigurationRepository {
     if (!config) {
       return null;
     }
-    return this.configurationRepository.save({ ...config, ...configuration });
+    return this.configRepo.save({ ...config, ...configuration });
   }
 }
