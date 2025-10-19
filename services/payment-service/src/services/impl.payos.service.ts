@@ -45,6 +45,23 @@ export class ImplPayosService implements PayosService, OnModuleInit {
     if (!config) {
       throw new Error('Configuration not found');
     }
+
+    this.logger.log('PayOS Configuration loaded:', {
+      hasClientId: !!config.payos_client_id,
+      hasApiKey: !!config.payos_api_key,
+      hasChecksumKey: !!config.payos_checksum_key,
+      clientIdLength: config.payos_client_id?.length,
+      apiKeyLength: config.payos_api_key?.length,
+      checksumKeyLength: config.payos_checksum_key?.length,
+    });
+
+    if (
+      !config.payos_client_id ||
+      !config.payos_api_key ||
+      !config.payos_checksum_key
+    ) {
+      throw new Error('PayOS configuration keys are missing');
+    }
     this.payOS = new PayOS({
       clientId: config.payos_client_id,
       apiKey: config.payos_api_key,
