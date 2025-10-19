@@ -58,13 +58,13 @@ export class PaymentController {
     }
 
     try {
-      const order_code_length = await this.payosService.getOrderCodeLength();
+      const order_code_length = this.payosService.getOrderCodeLength();
 
       const order_code =
         parsed.data.order_code ??
         Math.floor(Math.random() * 10 ** order_code_length);
 
-      const duration_str = (await this.payosService.getExpiredDuration()) || '';
+      const duration_str = this.payosService.getExpiredDuration();
       let duration_seconds: number;
       if (duration_str.includes('*')) {
         const parts = duration_str.split('*').map((s) => parseInt(s.trim()));

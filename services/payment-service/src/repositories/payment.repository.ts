@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, LessThan, Not } from 'typeorm';
+import { In, Repository, LessThan, Not, type FindManyOptions } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 
 @Injectable()
@@ -12,7 +12,7 @@ export class PaymentRepository {
 
   async create(payment: Partial<Payment>): Promise<Payment> {
     const newPayment = this.paymentRepo.create(payment);
-    return this.paymentRepo.save(newPayment);
+    return await this.paymentRepo.save(newPayment);
   }
 
   async find(
@@ -20,40 +20,40 @@ export class PaymentRepository {
     limit: number,
     status: string[],
   ): Promise<{ items: Payment[]; total: number }> {
-    const query: Record<string, unknown> = {};
-    if (status && status.length > 0) {
-      query.status = In(status);
-    }
-
     const page_num = Math.max(1, Number(page) || 1);
     const limit_num = Math.max(1, Number(limit) || 10);
     const skip = (page_num - 1) * limit_num;
 
-    const [items, total] = await this.paymentRepo.findAndCount({
-      where: query,
+    const options: FindManyOptions<Payment> = {
       skip,
       take: limit_num,
       order: { created_at: 'DESC' },
       relations: ['orderItems'],
-    });
+    };
+
+    if (status && status.length > 0) {
+      options.where = { status: In(status) };
+    }
+
+    const [items, total] = await this.paymentRepo.findAndCount(options);
 
     return { items, total };
   }
 
   async findById(id: string): Promise<Payment | null> {
-    return this.paymentRepo.findOne({
+    return await this.paymentRepo.findOne({
       where: { id },
       relations: ['orderItems'],
     });
   }
 
   async findByOrderCode(order_code: string): Promise<Payment | null> {
-    return this.paymentRepo.findOne({ where: { order_code } });
+    return await this.paymentRepo.findOne({ where: { order_code } });
   }
 
   async update(id: string, updates: Partial<Payment>): Promise<Payment | null> {
     await this.paymentRepo.update(id, updates);
-    return this.findById(id);
+    return await this.findById(id);
   }
 
   async delete(id: string): Promise<boolean> {
@@ -71,22 +71,24 @@ export class PaymentRepository {
     const limit_num = Math.max(1, Number(limit) || 10);
     const skip = (page_num - 1) * limit_num;
 
-    const query: Record<string, unknown> = { user_id };
-    if (status && status.length > 0) {
-      query.status = In(status);
-    }
-    const [items, total] = await this.paymentRepo.findAndCount({
-      where: query,
+    const options: FindManyOptions<Payment> = {
+      where: { user_id },
       skip,
       take: limit_num,
       order: { created_at: 'DESC' },
       relations: ['orderItems'],
-    });
+    };
+
+    if (status && status.length > 0) {
+      options.where = { user_id, status: In(status) };
+    }
+
+    const [items, total] = await this.paymentRepo.findAndCount(options);
     return { items, total };
   }
 
   async findExpired(): Promise<Payment[]> {
-    return this.paymentRepo.find({
+    return await this.paymentRepo.find({
       where: {
         expired_at: LessThan(new Date()),
         status: Not(In(['completed', 'cancelled', 'expired'])),
