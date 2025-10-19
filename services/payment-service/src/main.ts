@@ -2,11 +2,11 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ResponseInterceptor } from './common/response.interceptor';
 import { GlobalExceptionFilter } from './common/exception.filter';
-import { winstonLogger } from './logger';
+import { winstonLoggerService } from './logger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
-    logger: winstonLogger,
+    logger: winstonLoggerService,
   });
   app.setGlobalPrefix('payment');
   app.useGlobalInterceptors(new ResponseInterceptor());

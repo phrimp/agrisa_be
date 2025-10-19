@@ -1,17 +1,17 @@
 import * as winston from 'winston';
 import DailyRotateFile from 'winston-daily-rotate-file';
+import { LoggerService } from '@nestjs/common';
 
-// Define custom levels to match NestJS logger levels
 const customLevels = {
   error: 0,
   warn: 1,
-  log: 2,
-  info: 3,
+  info: 2,
+  log: 3,
   debug: 4,
   verbose: 5,
 };
 
-export const winstonLogger = winston.createLogger({
+const winstonLogger = winston.createLogger({
   level: 'log',
   levels: customLevels,
   format: winston.format.combine(
@@ -30,3 +30,27 @@ export const winstonLogger = winston.createLogger({
     }),
   ],
 });
+
+export class WinstonLoggerService implements LoggerService {
+  log(message: any, context?: string) {
+    winstonLogger.log('log', String(message), { context });
+  }
+
+  error(message: any, stack?: string, context?: string) {
+    winstonLogger.error(String(message), { stack, context });
+  }
+
+  warn(message: any, context?: string) {
+    winstonLogger.warn(String(message), { context });
+  }
+
+  debug(message: any, context?: string) {
+    winstonLogger.debug(String(message), { context });
+  }
+
+  verbose(message: any, context?: string) {
+    winstonLogger.verbose(String(message), { context });
+  }
+}
+
+export const winstonLoggerService = new WinstonLoggerService();
