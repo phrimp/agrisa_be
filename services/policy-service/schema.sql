@@ -214,6 +214,7 @@ CREATE TABLE base_policy (
     fix_premium_amount INT NOT NULL,
     is_per_hectare BOOLEAN NOT NULL DEFAULT false,
     premium_base_rate DECIMAL(10,4) NOT NULL,
+    max_premium_payment_prolong INT,
 
     -- Payout formula parameters
     fix_payout_amount INT NOT NULL, 
@@ -392,7 +393,8 @@ CREATE TABLE registered_policy (
     -- Status
     status policy_status DEFAULT 'draft',
     underwriting_status underwriting_status DEFAULT 'pending',
-    rejection_reason TEXT,
+    reason TEXT,
+    reason_evidence JSONB,
     
     -- Documents
     signed_policy_document_url VARCHAR(500),

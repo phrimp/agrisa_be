@@ -30,10 +30,10 @@ type RegisteredPolicy struct {
 	TotalDataCost           float64            `json:"total_data_cost" db:"total_data_cost"`
 	Status                  PolicyStatus       `json:"status" db:"status"`
 	UnderwritingStatus      UnderwritingStatus `json:"underwriting_status" db:"underwriting_status"`
-	RejectionReason         *string            `json:"rejection_reason,omitempty" db:"rejection_reason"`
+	Reason                  *string            `json:"reason,omitempty" db:"reason"`
+	ReasonEvidence          any                `json:"reason_evidence" db:"reason_evidence"`
 	SignedPolicyDocumentURL *string            `json:"signed_policy_document_url,omitempty" db:"signed_policy_document_url"`
 	CreatedAt               time.Time          `json:"created_at" db:"created_at"`
 	UpdatedAt               time.Time          `json:"updated_at" db:"updated_at"`
 	RegisteredBy            *string            `json:"registered_by,omitempty" db:"registered_by"`
 }
-

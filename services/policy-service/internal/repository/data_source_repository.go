@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"policy-service/internal/models"
 	"time"
 
@@ -23,6 +24,13 @@ func NewDataSourceRepository(db *sqlx.DB) *DataSourceRepository {
 // ============================================================================
 
 func (r *DataSourceRepository) CreateDataSource(dataSource *models.DataSource) error {
+	slog.Info("Creating data source",
+		"data_source_id", dataSource.ID,
+		"parameter_name", dataSource.ParameterName,
+		"data_source_type", dataSource.DataSource,
+		"data_tier_id", dataSource.DataTierID)
+	start := time.Now()
+
 	dataSource.CreatedAt = time.Now()
 	dataSource.UpdatedAt = time.Now()
 
@@ -43,9 +51,17 @@ func (r *DataSourceRepository) CreateDataSource(dataSource *models.DataSource) e
 
 	_, err := r.db.NamedExec(query, dataSource)
 	if err != nil {
+		slog.Error("Failed to create data source",
+			"data_source_id", dataSource.ID,
+			"parameter_name", dataSource.ParameterName,
+			"error", err)
 		return fmt.Errorf("failed to create data source: %w", err)
 	}
 
+	slog.Info("Successfully created data source",
+		"data_source_id", dataSource.ID,
+		"parameter_name", dataSource.ParameterName,
+		"duration", time.Since(start))
 	return nil
 }
 
@@ -104,6 +120,9 @@ func (r *DataSourceRepository) CreateDataSourcesBatch(dataSources []models.DataS
 // ============================================================================
 
 func (r *DataSourceRepository) GetDataSourceByID(id uuid.UUID) (*models.DataSource, error) {
+	slog.Debug("Retrieving data source by ID", "data_source_id", id)
+	start := time.Now()
+
 	var dataSource models.DataSource
 	query := `
 		SELECT 
@@ -118,11 +137,20 @@ func (r *DataSourceRepository) GetDataSourceByID(id uuid.UUID) (*models.DataSour
 	err := r.db.Get(&dataSource, query, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			slog.Warn("Data source not found", "data_source_id", id)
 			return nil, fmt.Errorf("data source not found")
 		}
+		slog.Error("Failed to get data source",
+			"data_source_id", id,
+			"error", err)
 		return nil, fmt.Errorf("failed to get data source: %w", err)
 	}
 
+	slog.Debug("Successfully retrieved data source",
+		"data_source_id", id,
+		"parameter_name", dataSource.ParameterName,
+		"data_source_type", dataSource.DataSource,
+		"duration", time.Since(start))
 	return &dataSource, nil
 }
 

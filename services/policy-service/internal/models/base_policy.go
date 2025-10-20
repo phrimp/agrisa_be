@@ -22,6 +22,7 @@ type BasePolicy struct {
 	FixPremiumAmount               int              `json:"fix_premium_amount" db:"fix_premium_amount"`
 	IsPerHectare                   bool             `json:"is_per_hectare" db:"is_per_hectare"`
 	PremiumBaseRate                float64          `json:"premium_base_rate" db:"premium_base_rate"`
+	MaxPremiumPaymentProlong       *int64           `json:"max_premium_payment_prolong" db:"max_premium_payment_prolong"`
 	FixPayoutAmount                int              `json:"fix_payout_amount" db:"fix_payout_amount"`
 	IsPayoutPerHectare             bool             `json:"is_payout_per_hectare" db:"is_payout_per_hectare"`
 	OverThresholdMultiplier        float64          `json:"over_threshold_multiplier" db:"over_threshold_multiplier"`
@@ -57,10 +58,10 @@ type BasePolicyTrigger struct {
 }
 
 type BasePolicyTriggerCondition struct {
-	ID                    uuid.UUID            `json:"id" db:"id"`
-	BasePolicyTriggerID   uuid.UUID            `json:"base_policy_trigger_id" db:"base_policy_trigger_id"`
-	DataSourceID          uuid.UUID            `json:"data_source_id" db:"data_source_id"`
-	
+	ID                  uuid.UUID `json:"id" db:"id"`
+	BasePolicyTriggerID uuid.UUID `json:"base_policy_trigger_id" db:"base_policy_trigger_id"`
+	DataSourceID        uuid.UUID `json:"data_source_id" db:"data_source_id"`
+
 	// Trigger condition fields
 	ThresholdOperator     ThresholdOperator    `json:"threshold_operator" db:"threshold_operator"`
 	ThresholdValue        float64              `json:"threshold_value" db:"threshold_value"`
@@ -72,16 +73,15 @@ type BasePolicyTriggerCondition struct {
 	BaselineFunction      *AggregationFunction `json:"baseline_function,omitempty" db:"baseline_function"`
 	ValidationWindowDays  int                  `json:"validation_window_days" db:"validation_window_days"`
 	ConditionOrder        int                  `json:"condition_order" db:"condition_order"`
-	
-	// Data usage cost tracking fields (merged from BasePolicyDataUsage)
-	BaseCost              float64              `json:"base_cost" db:"base_cost"`
-	CategoryMultiplier    float64              `json:"category_multiplier" db:"category_multiplier"`
-	TierMultiplier        float64              `json:"tier_multiplier" db:"tier_multiplier"`
-	CalculatedCost        float64              `json:"calculated_cost" db:"calculated_cost"`
-	
-	CreatedAt             time.Time            `json:"created_at" db:"created_at"`
-}
 
+	// Data usage cost tracking fields (merged from BasePolicyDataUsage)
+	BaseCost           float64 `json:"base_cost" db:"base_cost"`
+	CategoryMultiplier float64 `json:"category_multiplier" db:"category_multiplier"`
+	TierMultiplier     float64 `json:"tier_multiplier" db:"tier_multiplier"`
+	CalculatedCost     float64 `json:"calculated_cost" db:"calculated_cost"`
+
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+}
 
 type BasePolicyDocumentValidation struct {
 	ID                  uuid.UUID        `json:"id" db:"id"`
@@ -101,4 +101,3 @@ type BasePolicyDocumentValidation struct {
 	ValidationNotes     *string          `json:"validation_notes,omitempty" db:"validation_notes"`
 	CreatedAt           time.Time        `json:"created_at" db:"created_at"`
 }
-

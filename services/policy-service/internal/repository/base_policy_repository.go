@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"policy-service/internal/models"
 	"time"
 
@@ -19,6 +20,12 @@ func NewBasePolicyRepository(db *sqlx.DB) *BasePolicyRepository {
 }
 
 func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error {
+	slog.Info("Creating base policy",
+		"policy_id", policy.ID,
+		"provider_id", policy.InsuranceProviderID,
+		"product_name", policy.ProductName,
+		"crop_type", policy.CropType)
+
 	policy.CreatedAt = time.Now()
 	policy.UpdatedAt = time.Now()
 
@@ -26,7 +33,7 @@ func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error
 		INSERT INTO base_policy (
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
-			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
+			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
@@ -35,7 +42,7 @@ func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error
 		) VALUES (
 			:id, :insurance_provider_id, :product_name, :product_code, :product_description,
 			:crop_type, :coverage_currency, :coverage_duration_days, :fix_premium_amount,
-			:is_per_hectare, :premium_base_rate, :fix_payout_amount, :is_payout_per_hectare,
+			:is_per_hectare, :premium_base_rate, :max_premium_payment_prolong, :fix_payout_amount, :is_payout_per_hectare,
 			:over_threshold_multiplier, :payout_base_rate, :payout_cap, :enrollment_start_day,
 			:enrollment_end_day, :auto_renewal, :renewal_discount_rate, :base_policy_invalid_date,
 			:insurance_valid_from_day, :insurance_valid_to_day, :status, :template_document_url,
@@ -45,19 +52,29 @@ func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error
 
 	_, err := r.db.NamedExec(query, policy)
 	if err != nil {
+		slog.Error("Failed to create base policy",
+			"policy_id", policy.ID,
+			"error", err)
 		return fmt.Errorf("failed to create base policy: %w", err)
 	}
 
+	slog.Info("Successfully created base policy",
+		"policy_id", policy.ID,
+		"provider_id", policy.InsuranceProviderID,
+		"duration", time.Since(policy.CreatedAt))
 	return nil
 }
 
 func (r *BasePolicyRepository) GetBasePolicyByID(id uuid.UUID) (*models.BasePolicy, error) {
+	slog.Info("Retrieving base policy by ID", "policy_id", id)
+	start := time.Now()
+
 	var policy models.BasePolicy
 	query := `
 		SELECT 
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
-			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
+			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
@@ -69,21 +86,33 @@ func (r *BasePolicyRepository) GetBasePolicyByID(id uuid.UUID) (*models.BasePoli
 	err := r.db.Get(&policy, query, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			slog.Warn("Base policy not found", "policy_id", id)
 			return nil, fmt.Errorf("base policy not found")
 		}
+		slog.Error("Failed to get base policy",
+			"policy_id", id,
+			"error", err)
 		return nil, fmt.Errorf("failed to get base policy: %w", err)
 	}
 
+	slog.Info("Successfully retrieved base policy",
+		"policy_id", id,
+		"provider_id", policy.InsuranceProviderID,
+		"product_name", policy.ProductName,
+		"duration", time.Since(start))
 	return &policy, nil
 }
 
 func (r *BasePolicyRepository) GetAllBasePolicies() ([]models.BasePolicy, error) {
+	slog.Info("Retrieving all base policies")
+	start := time.Now()
+
 	var policies []models.BasePolicy
 	query := `
 		SELECT 
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
-			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
+			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
@@ -94,9 +123,13 @@ func (r *BasePolicyRepository) GetAllBasePolicies() ([]models.BasePolicy, error)
 
 	err := r.db.Select(&policies, query)
 	if err != nil {
+		slog.Error("Failed to get all base policies", "error", err)
 		return nil, fmt.Errorf("failed to get base policies: %w", err)
 	}
 
+	slog.Info("Successfully retrieved all base policies",
+		"count", len(policies),
+		"duration", time.Since(start))
 	return policies, nil
 }
 
@@ -106,7 +139,7 @@ func (r *BasePolicyRepository) GetBasePoliciesByProvider(providerID string) ([]m
 		SELECT 
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
-			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
+			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
@@ -130,7 +163,7 @@ func (r *BasePolicyRepository) GetBasePoliciesByStatus(status models.BasePolicyS
 		SELECT 
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
-			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
+			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
@@ -154,7 +187,7 @@ func (r *BasePolicyRepository) GetBasePoliciesByCropType(cropType string) ([]mod
 		SELECT 
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
-			is_per_hectare, premium_base_rate, fix_payout_amount, is_payout_per_hectare,
+			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
@@ -173,6 +206,12 @@ func (r *BasePolicyRepository) GetBasePoliciesByCropType(cropType string) ([]mod
 }
 
 func (r *BasePolicyRepository) UpdateBasePolicy(policy *models.BasePolicy) error {
+	slog.Info("Updating base policy",
+		"policy_id", policy.ID,
+		"provider_id", policy.InsuranceProviderID,
+		"product_name", policy.ProductName)
+	start := time.Now()
+
 	policy.UpdatedAt = time.Now()
 
 	query := `
@@ -187,6 +226,7 @@ func (r *BasePolicyRepository) UpdateBasePolicy(policy *models.BasePolicy) error
 			fix_premium_amount = :fix_premium_amount,
 			is_per_hectare = :is_per_hectare,
 			premium_base_rate = :premium_base_rate,
+			max_premium_payment_prolong = :max_premium_payment_prolong,
 			fix_payout_amount = :fix_payout_amount,
 			is_payout_per_hectare = :is_payout_per_hectare,
 			over_threshold_multiplier = :over_threshold_multiplier,
@@ -209,18 +249,29 @@ func (r *BasePolicyRepository) UpdateBasePolicy(policy *models.BasePolicy) error
 
 	result, err := r.db.NamedExec(query, policy)
 	if err != nil {
+		slog.Error("Failed to update base policy",
+			"policy_id", policy.ID,
+			"error", err)
 		return fmt.Errorf("failed to update base policy: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
+		slog.Error("Failed to get rows affected for update",
+			"policy_id", policy.ID,
+			"error", err)
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
+		slog.Warn("Base policy not found for update", "policy_id", policy.ID)
 		return fmt.Errorf("base policy not found")
 	}
 
+	slog.Info("Successfully updated base policy",
+		"policy_id", policy.ID,
+		"rows_affected", rowsAffected,
+		"duration", time.Since(start))
 	return nil
 }
 
@@ -450,14 +501,21 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerCondition(condition *model
 	return nil
 }
 
-func (r *BasePolicyRepository) CreateBasePolicyTriggerConditionsBatch(conditions []models.BasePolicyTriggerCondition) error {
+func (r *BasePolicyRepository) CreateBasePolicyTriggerConditionsBatch(conditions []*models.BasePolicyTriggerCondition) error {
+	slog.Info("Creating base policy trigger conditions batch",
+		"condition_count", len(conditions))
+	start := time.Now()
+
 	if len(conditions) == 0 {
+		slog.Warn("Empty conditions batch provided")
 		return nil
 	}
 
 	// Start transaction for batch operation
+	slog.Debug("Starting transaction for batch insert")
 	tx, err := r.db.Beginx()
 	if err != nil {
+		slog.Error("Failed to begin transaction for batch insert", "error", err)
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
@@ -484,18 +542,31 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerConditionsBatch(conditions
 		)`
 
 	// Execute batch insert
-	for _, condition := range conditions {
+	for i, condition := range conditions {
+		slog.Debug("Inserting condition",
+			"index", i+1,
+			"condition_id", condition.ID,
+			"data_source_id", condition.DataSourceID)
 		_, err := tx.NamedExec(query, condition)
 		if err != nil {
+			slog.Error("Failed to insert condition",
+				"condition_id", condition.ID,
+				"index", i+1,
+				"error", err)
 			return fmt.Errorf("failed to insert condition %s: %w", condition.ID, err)
 		}
 	}
 
 	// Commit transaction
+	slog.Debug("Committing batch transaction")
 	if err := tx.Commit(); err != nil {
+		slog.Error("Failed to commit batch transaction", "error", err)
 		return fmt.Errorf("failed to commit batch insert: %w", err)
 	}
 
+	slog.Info("Successfully created batch trigger conditions",
+		"condition_count", len(conditions),
+		"duration", time.Since(start))
 	return nil
 }
 
@@ -658,6 +729,113 @@ func (r *BasePolicyRepository) CheckBasePolicyTriggerConditionExists(id uuid.UUI
 	}
 
 	return count > 0, nil
+}
+
+// ============================================================================
+// TRANSACTION METHODS FOR COMPLETE POLICY CREATION
+// ============================================================================
+
+func (r *BasePolicyRepository) BeginTransaction() (*sqlx.Tx, error) {
+	slog.Debug("Beginning database transaction")
+	tx, err := r.db.Beginx()
+	if err != nil {
+		slog.Error("Failed to begin transaction", "error", err)
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	return tx, nil
+}
+
+func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.BasePolicy) error {
+	policy.CreatedAt = time.Now()
+	policy.UpdatedAt = time.Now()
+
+	query := `
+		INSERT INTO base_policy (
+			id, insurance_provider_id, product_name, product_code, product_description,
+			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
+			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
+			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
+			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
+			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
+			document_validation_status, document_validation_score, important_additional_information,
+			created_at, updated_at, created_by
+		) VALUES (
+			:id, :insurance_provider_id, :product_name, :product_code, :product_description,
+			:crop_type, :coverage_currency, :coverage_duration_days, :fix_premium_amount,
+			:is_per_hectare, :premium_base_rate, :max_premium_payment_prolong, :fix_payout_amount, :is_payout_per_hectare,
+			:over_threshold_multiplier, :payout_base_rate, :payout_cap, :enrollment_start_day,
+			:enrollment_end_day, :auto_renewal, :renewal_discount_rate, :base_policy_invalid_date,
+			:insurance_valid_from_day, :insurance_valid_to_day, :status, :template_document_url,
+			:document_validation_status, :document_validation_score, :important_additional_information,
+			:created_at, :updated_at, :created_by
+		)`
+
+	_, err := tx.NamedExec(query, policy)
+	return err
+}
+
+func (r *BasePolicyRepository) CreateBasePolicyTriggerTx(tx *sqlx.Tx, trigger *models.BasePolicyTrigger) error {
+	trigger.CreatedAt = time.Now()
+	trigger.UpdatedAt = time.Now()
+
+	query := `
+		INSERT INTO base_policy_trigger (
+			id, base_policy_id, logical_operator, growth_stage, 
+			monitor_frequency_value, monitor_frequency_unit, blackout_periods,
+			created_at, updated_at
+		) VALUES (
+			:id, :base_policy_id, :logical_operator, :growth_stage,
+			:monitor_frequency_value, :monitor_frequency_unit, :blackout_periods,
+			:created_at, :updated_at
+		)`
+
+	_, err := tx.NamedExec(query, trigger)
+	return err
+}
+
+func (r *BasePolicyRepository) CreateBasePolicyTriggerConditionsBatchTx(tx *sqlx.Tx, conditions []*models.BasePolicyTriggerCondition) error {
+	if len(conditions) == 0 {
+		return nil
+	}
+
+	now := time.Now()
+	for i := range conditions {
+		conditions[i].CreatedAt = now
+	}
+
+	query := `
+		INSERT INTO base_policy_trigger_condition (
+			id, base_policy_trigger_id, data_source_id, threshold_operator,
+			threshold_value, early_warning_threshold, aggregation_function,
+			aggregation_window_days, consecutive_required, baseline_window_days,
+			baseline_function, validation_window_days, condition_order,
+			base_cost, category_multiplier, tier_multiplier, calculated_cost, created_at
+		) VALUES (
+			:id, :base_policy_trigger_id, :data_source_id, :threshold_operator,
+			:threshold_value, :early_warning_threshold, :aggregation_function,
+			:aggregation_window_days, :consecutive_required, :baseline_window_days,
+			:baseline_function, :validation_window_days, :condition_order,
+			:base_cost, :category_multiplier, :tier_multiplier, :calculated_cost, :created_at
+		)`
+
+	for _, condition := range conditions {
+		if _, err := tx.NamedExec(query, condition); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *BasePolicyRepository) CalculateTotalBasePolicyDataCostTx(tx *sqlx.Tx, policyID uuid.UUID) (float64, error) {
+	var totalCost float64
+	query := `
+		SELECT COALESCE(SUM(btc.calculated_cost), 0) 
+		FROM base_policy_trigger_condition btc
+		JOIN base_policy_trigger bt ON bt.id = btc.base_policy_trigger_id
+		WHERE bt.base_policy_id = $1`
+
+	err := tx.Get(&totalCost, query, policyID)
+	return totalCost, err
 }
 
 // ============================================================================

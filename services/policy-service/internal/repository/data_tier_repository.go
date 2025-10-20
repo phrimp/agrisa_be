@@ -3,6 +3,7 @@ package repository
 import (
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"policy-service/internal/models"
 	"time"
 
@@ -35,6 +36,9 @@ func (r *DataTierRepository) CreateDataTierCategory(category *models.DataTierCat
 }
 
 func (r *DataTierRepository) GetDataTierCategoryByID(id uuid.UUID) (*models.DataTierCategory, error) {
+	slog.Debug("Retrieving data tier category by ID", "category_id", id)
+	start := time.Now()
+
 	var category models.DataTierCategory
 	query := `
 		SELECT id, category_name, category_description, category_cost_multiplier, created_at, updated_at
@@ -44,11 +48,20 @@ func (r *DataTierRepository) GetDataTierCategoryByID(id uuid.UUID) (*models.Data
 	err := r.db.Get(&category, query, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			slog.Warn("Data tier category not found", "category_id", id)
 			return nil, fmt.Errorf("data tier category not found")
 		}
+		slog.Error("Failed to get data tier category",
+			"category_id", id,
+			"error", err)
 		return nil, fmt.Errorf("failed to get data tier category: %w", err)
 	}
 
+	slog.Debug("Successfully retrieved data tier category",
+		"category_id", id,
+		"category_name", category.CategoryName,
+		"cost_multiplier", category.CategoryCostMultiplier,
+		"duration", time.Since(start))
 	return &category, nil
 }
 
@@ -132,6 +145,9 @@ func (r *DataTierRepository) CreateDataTier(tier *models.DataTier) error {
 }
 
 func (r *DataTierRepository) GetDataTierByID(id uuid.UUID) (*models.DataTier, error) {
+	slog.Debug("Retrieving data tier by ID", "data_tier_id", id)
+	start := time.Now()
+
 	var tier models.DataTier
 	query := `
 		SELECT id, data_tier_category_id, tier_level, tier_name, data_tier_multiplier, created_at, updated_at
@@ -141,11 +157,20 @@ func (r *DataTierRepository) GetDataTierByID(id uuid.UUID) (*models.DataTier, er
 	err := r.db.Get(&tier, query, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
+			slog.Warn("Data tier not found", "data_tier_id", id)
 			return nil, fmt.Errorf("data tier not found")
 		}
+		slog.Error("Failed to get data tier",
+			"data_tier_id", id,
+			"error", err)
 		return nil, fmt.Errorf("failed to get data tier: %w", err)
 	}
 
+	slog.Debug("Successfully retrieved data tier",
+		"data_tier_id", id,
+		"tier_name", tier.TierName,
+		"tier_level", tier.TierLevel,
+		"duration", time.Since(start))
 	return &tier, nil
 }
 

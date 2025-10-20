@@ -2,29 +2,54 @@ package services
 
 import (
 	"fmt"
+	"log/slog"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 type BasePolicyService struct {
 	basePolicyRepo *repository.BasePolicyRepository
+	dataSourceRepo *repository.DataSourceRepository
+	dataTierRepo   *repository.DataTierRepository
 }
 
-func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository) *BasePolicyService {
-	return &BasePolicyService{basePolicyRepo: basePolicyRepo}
+func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository) *BasePolicyService {
+	return &BasePolicyService{
+		basePolicyRepo: basePolicyRepo,
+		dataSourceRepo: dataSourceRepo,
+		dataTierRepo:   dataTierRepo,
+	}
 }
 
 func (s *BasePolicyService) CreateBasePolicy(policy *models.BasePolicy) error {
+	slog.Info("Creating base policy",
+		"policy_id", policy.ID,
+		"provider_id", policy.InsuranceProviderID,
+		"product_name", policy.ProductName,
+		"crop_type", policy.CropType)
+	start := time.Now()
+
 	if err := s.validateBasePolicy(policy); err != nil {
+		slog.Error("Base policy validation failed",
+			"policy_id", policy.ID,
+			"error", err)
 		return fmt.Errorf("validation error: %w", err)
 	}
 
 	if err := s.basePolicyRepo.CreateBasePolicy(policy); err != nil {
+		slog.Error("Failed to create base policy in repository",
+			"policy_id", policy.ID,
+			"error", err)
 		return fmt.Errorf("failed to create base policy: %w", err)
 	}
 
+	slog.Info("Successfully created base policy",
+		"policy_id", policy.ID,
+		"provider_id", policy.InsuranceProviderID,
+		"duration", time.Since(start))
 	return nil
 }
 
@@ -38,27 +63,42 @@ func (s *BasePolicyService) CreateDataSelectionGroup(basePolicyTrigger *models.B
 	return nil
 }
 
-func (s *BasePolicyService) DataSelection(dataSourceIDs []uuid.UUID) error {
-	// TODO: Implement data selection logic
-	return fmt.Errorf("not implemented")
-}
+func (s *BasePolicyService) DataSelection(selectedTriggerConditions []*models.BasePolicyTriggerCondition) error {
+	slog.Info("Processing data selection",
+		"condition_count", len(selectedTriggerConditions))
+	start := time.Now()
 
-func (s *BasePolicyService) CreateBasePolicyTriggerConditionsBatch(conditions []models.BasePolicyTriggerCondition) error {
-	if len(conditions) == 0 {
-		return fmt.Errorf("no conditions provided")
-	}
-
-	// Validate all conditions before batch insert
-	for i, condition := range conditions {
-		if err := s.validateBasePolicyTriggerCondition(&condition); err != nil {
-			return fmt.Errorf("validation error for condition %d: %w", i, err)
+	for i, selectedTriggerCondition := range selectedTriggerConditions {
+		slog.Debug("Validating trigger condition",
+			"index", i+1,
+			"condition_id", selectedTriggerCondition.ID,
+			"data_source_id", selectedTriggerCondition.DataSourceID)
+		if err := s.validateBasePolicyTriggerCondition(selectedTriggerCondition); err != nil {
+			slog.Error("Failed to validate trigger condition",
+				"condition_id", selectedTriggerCondition.ID,
+				"index", i+1,
+				"error", err)
+			return fmt.Errorf("failed to validate selected Trigger Condition: %w", err)
+		}
+		err := s.validateDataSource(selectedTriggerCondition)
+		if err != nil {
+			slog.Error("Data source validation failed",
+				"condition_id", selectedTriggerCondition.ID,
+				"data_source_id", selectedTriggerCondition.DataSourceID,
+				"error", err)
+			return fmt.Errorf("validate data source failed: %s --- err: %w", selectedTriggerCondition.DataSourceID, err)
 		}
 	}
-
-	if err := s.basePolicyRepo.CreateBasePolicyTriggerConditionsBatch(conditions); err != nil {
-		return fmt.Errorf("failed to create base policy trigger conditions batch: %w", err)
+	if err := s.basePolicyRepo.CreateBasePolicyTriggerConditionsBatch(selectedTriggerConditions); err != nil {
+		slog.Error("Failed to create batch trigger conditions",
+			"condition_count", len(selectedTriggerConditions),
+			"error", err)
+		return fmt.Errorf("failed to create batch trigger condition: %w", err)
 	}
 
+	slog.Info("Successfully completed data selection",
+		"condition_count", len(selectedTriggerConditions),
+		"duration", time.Since(start))
 	return nil
 }
 
@@ -230,4 +270,188 @@ func (s *BasePolicyService) validateBasePolicyTriggerCondition(condition *models
 		return fmt.Errorf("calculated cost cannot be negative")
 	}
 	return nil
+}
+
+func (s *BasePolicyService) validateDataSource(condition *models.BasePolicyTriggerCondition) error {
+	slog.Debug("Validating data source",
+		"condition_id", condition.ID,
+		"data_source_id", condition.DataSourceID)
+	start := time.Now()
+
+	dataSource, err := s.dataSourceRepo.GetDataSourceByID(condition.DataSourceID)
+	if err != nil {
+		slog.Error("Data source retrieval failed",
+			"data_source_id", condition.DataSourceID,
+			"error", err)
+		return fmt.Errorf("data source does not exist: %w", err)
+	}
+	if condition.BaseCost != dataSource.BaseCost {
+		slog.Error("Data source base cost mismatch",
+			"condition_id", condition.ID,
+			"expected_cost", dataSource.BaseCost,
+			"provided_cost", condition.BaseCost)
+		return fmt.Errorf("data base cost mistmatch")
+	}
+	dataTier, err := s.dataTierRepo.GetDataTierByID(dataSource.DataTierID)
+	if err != nil {
+		return fmt.Errorf("data tier retrive error: %w", err)
+	}
+	if condition.TierMultiplier != dataTier.DataTierMultiplier {
+		return fmt.Errorf("data tier multiplier mismatch")
+	}
+	dataCategory, err := s.dataTierRepo.GetDataTierCategoryByID(dataTier.DataTierCategoryID)
+	if err != nil {
+		return fmt.Errorf("data tier category retrive error: %w", err)
+	}
+	if condition.CategoryMultiplier != dataCategory.CategoryCostMultiplier {
+		return fmt.Errorf("data tier category multiplier mismatch")
+	}
+	totalCost := dataSource.BaseCost * dataTier.DataTierMultiplier * dataCategory.CategoryCostMultiplier
+	if condition.CalculatedCost != totalCost {
+		slog.Error("Total cost calculation mismatch",
+			"condition_id", condition.ID,
+			"expected_cost", totalCost,
+			"provided_cost", condition.CalculatedCost,
+			"base_cost", dataSource.BaseCost,
+			"tier_multiplier", dataTier.DataTierMultiplier,
+			"category_multiplier", dataCategory.CategoryCostMultiplier)
+		return fmt.Errorf("total cost mismatch")
+	}
+
+	slog.Debug("Data source validation successful",
+		"condition_id", condition.ID,
+		"data_source_id", condition.DataSourceID,
+		"total_cost", totalCost,
+		"duration", time.Since(start))
+	return nil
+}
+
+// ============================================================================
+// COMPLETE POLICY CREATION
+// ============================================================================
+
+func (s *BasePolicyService) CreateCompletePolicy(request *models.CompletePolicyCreationRequest) (*models.CompletePolicyCreationResponse, error) {
+	slog.Info("Creating complete policy",
+		"provider_id", request.BasePolicy.InsuranceProviderID,
+		"product_name", request.BasePolicy.ProductName,
+		"condition_count", len(request.Conditions))
+	start := time.Now()
+
+	// Generate IDs and establish relationships
+	basePolicyID := uuid.New()
+	triggerID := uuid.New()
+
+	request.BasePolicy.ID = basePolicyID
+	request.Trigger.ID = triggerID
+	request.Trigger.BasePolicyID = basePolicyID
+
+	conditionIDs := make([]uuid.UUID, len(request.Conditions))
+	for i := range request.Conditions {
+		conditionIDs[i] = uuid.New()
+		request.Conditions[i].ID = conditionIDs[i]
+		request.Conditions[i].BasePolicyTriggerID = triggerID
+	}
+
+	// Validate all entities
+	if err := s.validateBasePolicy(request.BasePolicy); err != nil {
+		slog.Error("Base policy validation failed",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("base policy validation: %w", err)
+	}
+	if err := s.validateBasePolicyTrigger(request.Trigger); err != nil {
+		slog.Error("Trigger validation failed",
+			"trigger_id", triggerID,
+			"error", err)
+		return nil, fmt.Errorf("trigger validation: %w", err)
+	}
+	for i, condition := range request.Conditions {
+		if err := s.validateBasePolicyTriggerCondition(condition); err != nil {
+			slog.Error("Condition validation failed",
+				"condition_id", condition.ID,
+				"condition_index", i+1,
+				"error", err)
+			return nil, fmt.Errorf("condition %d validation: %w", i+1, err)
+		}
+		if err := s.validateDataSource(condition); err != nil {
+			slog.Error("Condition data source validation failed",
+				"condition_id", condition.ID,
+				"condition_index", i+1,
+				"error", err)
+			return nil, fmt.Errorf("condition %d data source validation: %w", i+1, err)
+		}
+	}
+
+	// Begin transaction
+	tx, err := s.basePolicyRepo.BeginTransaction()
+	if err != nil {
+		slog.Error("Failed to begin transaction", "error", err)
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err != nil {
+			slog.Error("Rolling back transaction", "base_policy_id", basePolicyID, "error", err)
+			tx.Rollback()
+		}
+	}()
+
+	// Create entities in transaction
+	slog.Debug("Creating base policy in transaction", "base_policy_id", basePolicyID)
+	if err = s.basePolicyRepo.CreateBasePolicyTx(tx, request.BasePolicy); err != nil {
+		slog.Error("Failed to create base policy in transaction",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to create base policy: %w", err)
+	}
+
+	slog.Debug("Creating trigger in transaction", "trigger_id", triggerID)
+	if err = s.basePolicyRepo.CreateBasePolicyTriggerTx(tx, request.Trigger); err != nil {
+		slog.Error("Failed to create trigger in transaction",
+			"trigger_id", triggerID,
+			"error", err)
+		return nil, fmt.Errorf("failed to create trigger: %w", err)
+	}
+
+	slog.Debug("Creating conditions batch in transaction", "condition_count", len(request.Conditions))
+	if err = s.basePolicyRepo.CreateBasePolicyTriggerConditionsBatchTx(tx, request.Conditions); err != nil {
+		slog.Error("Failed to create conditions in transaction",
+			"condition_count", len(request.Conditions),
+			"error", err)
+		return nil, fmt.Errorf("failed to create conditions: %w", err)
+	}
+
+	// Calculate total cost
+	slog.Debug("Calculating total cost", "base_policy_id", basePolicyID)
+	totalCost, err := s.basePolicyRepo.CalculateTotalBasePolicyDataCostTx(tx, basePolicyID)
+	if err != nil {
+		slog.Error("Failed to calculate total cost",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to calculate total cost: %w", err)
+	}
+
+	// Commit transaction
+	slog.Debug("Committing transaction", "base_policy_id", basePolicyID)
+	if err = tx.Commit(); err != nil {
+		slog.Error("Failed to commit transaction",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	slog.Info("Successfully created complete policy",
+		"base_policy_id", basePolicyID,
+		"trigger_id", triggerID,
+		"total_conditions", len(request.Conditions),
+		"total_cost", totalCost,
+		"duration", time.Since(start))
+
+	return &models.CompletePolicyCreationResponse{
+		BasePolicyID:    basePolicyID,
+		TriggerID:       triggerID,
+		ConditionIDs:    conditionIDs,
+		TotalConditions: len(request.Conditions),
+		TotalDataCost:   totalCost,
+		CreatedAt:       time.Now(),
+	}, nil
 }
