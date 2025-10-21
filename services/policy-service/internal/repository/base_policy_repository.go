@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -9,14 +10,61 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/redis/go-redis/v9"
 )
 
 type BasePolicyRepository struct {
-	db *sqlx.DB
+	db          *sqlx.DB
+	redisClient *redis.Client
 }
 
-func NewBasePolicyRepository(db *sqlx.DB) *BasePolicyRepository {
-	return &BasePolicyRepository{db: db}
+func NewBasePolicyRepository(db *sqlx.DB, redisClient *redis.Client) *BasePolicyRepository {
+	return &BasePolicyRepository{
+		db:          db,
+		redisClient: redisClient,
+	}
+}
+
+func (r *BasePolicyRepository) CreateTempBasePolicyModels(ctx context.Context, model []byte, key string, expiration time.Duration) error {
+	err := r.redisClient.Set(ctx, key, model, expiration).Err()
+	return err
+}
+
+func (r *BasePolicyRepository) GetTempBasePolicyModels(ctx context.Context, key string) ([]byte, error) {
+	data, err := r.redisClient.Get(ctx, key).Bytes()
+	if err != nil {
+		return nil, err
+	}
+	return data, nil
+}
+
+func (r *BasePolicyRepository) DeleteTempBasePolicyModel(ctx context.Context, key string) error {
+	err := r.redisClient.Del(ctx, key).Err()
+	return err
+}
+
+func (r *BasePolicyRepository) CreateTempBasePolicyModelsWTransaction(ctx context.Context, model []byte, key string, tx redis.Pipeliner, expiration time.Duration) error {
+	err := tx.Set(ctx, key, model, expiration).Err()
+	return err
+}
+
+func (r *BasePolicyRepository) BeginRedisTransaction() redis.Pipeliner {
+	return r.redisClient.TxPipeline()
+}
+
+func (r *BasePolicyRepository) FindKeysByPattern(ctx context.Context, pattern string) ([]string, error) {
+	var keys []string
+
+	iter := r.redisClient.Scan(ctx, 0, pattern, 100).Iterator()
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+
+	if err := iter.Err(); err != nil {
+		return nil, fmt.Errorf("failed to scan keys: %w", err)
+	}
+
+	return keys, nil
 }
 
 func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error {
@@ -856,6 +904,248 @@ func (r *BasePolicyRepository) CalculateTotalBasePolicyDataCost(policyID uuid.UU
 	}
 
 	return totalCost, nil
+}
+
+// ============================================================================
+// BASE POLICY DOCUMENT VALIDATION CRUD OPERATIONS
+// ============================================================================
+
+func (r *BasePolicyRepository) CreateBasePolicyDocumentValidation(validation *models.BasePolicyDocumentValidation) error {
+	slog.Info("Creating base policy document validation",
+		"validation_id", validation.ID,
+		"base_policy_id", validation.BasePolicyID,
+		"validation_status", validation.ValidationStatus)
+
+	validation.CreatedAt = time.Now()
+
+	query := `
+		INSERT INTO base_policy_document_validation (
+			id, base_policy_id, validation_timestamp, validation_status, overall_score,
+			total_checks, passed_checks, failed_checks, warning_count, mismatches,
+			warnings, recommendations, extracted_parameters, validated_by,
+			validation_notes, created_at
+		) VALUES (
+			:id, :base_policy_id, :validation_timestamp, :validation_status, :overall_score,
+			:total_checks, :passed_checks, :failed_checks, :warning_count, :mismatches,
+			:warnings, :recommendations, :extracted_parameters, :validated_by,
+			:validation_notes, :created_at
+		)`
+
+	_, err := r.db.NamedExec(query, validation)
+	if err != nil {
+		slog.Error("Failed to create base policy document validation",
+			"validation_id", validation.ID,
+			"base_policy_id", validation.BasePolicyID,
+			"error", err)
+		return fmt.Errorf("failed to create base policy document validation: %w", err)
+	}
+
+	slog.Info("Successfully created base policy document validation",
+		"validation_id", validation.ID,
+		"base_policy_id", validation.BasePolicyID)
+	return nil
+}
+
+func (r *BasePolicyRepository) GetBasePolicyDocumentValidationByID(id uuid.UUID) (*models.BasePolicyDocumentValidation, error) {
+	slog.Debug("Retrieving base policy document validation by ID", "validation_id", id)
+
+	var validation models.BasePolicyDocumentValidation
+	query := `
+		SELECT 
+			id, base_policy_id, validation_timestamp, validation_status, overall_score,
+			total_checks, passed_checks, failed_checks, warning_count, mismatches,
+			warnings, recommendations, extracted_parameters, validated_by,
+			validation_notes, created_at
+		FROM base_policy_document_validation
+		WHERE id = $1`
+
+	err := r.db.Get(&validation, query, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			slog.Warn("Base policy document validation not found", "validation_id", id)
+			return nil, fmt.Errorf("base policy document validation not found")
+		}
+		slog.Error("Failed to get base policy document validation",
+			"validation_id", id,
+			"error", err)
+		return nil, fmt.Errorf("failed to get base policy document validation: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved base policy document validation",
+		"validation_id", id,
+		"base_policy_id", validation.BasePolicyID)
+	return &validation, nil
+}
+
+func (r *BasePolicyRepository) GetBasePolicyDocumentValidationsByPolicyID(basePolicyID uuid.UUID) ([]models.BasePolicyDocumentValidation, error) {
+	slog.Debug("Retrieving base policy document validations by policy ID", "base_policy_id", basePolicyID)
+
+	var validations []models.BasePolicyDocumentValidation
+	query := `
+		SELECT 
+			id, base_policy_id, validation_timestamp, validation_status, overall_score,
+			total_checks, passed_checks, failed_checks, warning_count, mismatches,
+			warnings, recommendations, extracted_parameters, validated_by,
+			validation_notes, created_at
+		FROM base_policy_document_validation
+		WHERE base_policy_id = $1
+		ORDER BY validation_timestamp DESC`
+
+	err := r.db.Select(&validations, query, basePolicyID)
+	if err != nil {
+		slog.Error("Failed to get base policy document validations",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get base policy document validations: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved base policy document validations",
+		"base_policy_id", basePolicyID,
+		"count", len(validations))
+	return validations, nil
+}
+
+func (r *BasePolicyRepository) GetLatestBasePolicyDocumentValidation(basePolicyID uuid.UUID) (*models.BasePolicyDocumentValidation, error) {
+	slog.Debug("Retrieving latest base policy document validation", "base_policy_id", basePolicyID)
+
+	var validation models.BasePolicyDocumentValidation
+	query := `
+		SELECT 
+			id, base_policy_id, validation_timestamp, validation_status, overall_score,
+			total_checks, passed_checks, failed_checks, warning_count, mismatches,
+			warnings, recommendations, extracted_parameters, validated_by,
+			validation_notes, created_at
+		FROM base_policy_document_validation
+		WHERE base_policy_id = $1
+		ORDER BY validation_timestamp DESC
+		LIMIT 1`
+
+	err := r.db.Get(&validation, query, basePolicyID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			slog.Debug("No document validation found for base policy", "base_policy_id", basePolicyID)
+			return nil, fmt.Errorf("no document validation found for base policy")
+		}
+		slog.Error("Failed to get latest base policy document validation",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get latest base policy document validation: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved latest base policy document validation",
+		"validation_id", validation.ID,
+		"base_policy_id", basePolicyID)
+	return &validation, nil
+}
+
+func (r *BasePolicyRepository) UpdateBasePolicyDocumentValidation(validation *models.BasePolicyDocumentValidation) error {
+	slog.Info("Updating base policy document validation",
+		"validation_id", validation.ID,
+		"base_policy_id", validation.BasePolicyID,
+		"validation_status", validation.ValidationStatus)
+
+	query := `
+		UPDATE base_policy_document_validation SET
+			validation_timestamp = :validation_timestamp,
+			validation_status = :validation_status,
+			overall_score = :overall_score,
+			total_checks = :total_checks,
+			passed_checks = :passed_checks,
+			failed_checks = :failed_checks,
+			warning_count = :warning_count,
+			mismatches = :mismatches,
+			warnings = :warnings,
+			recommendations = :recommendations,
+			extracted_parameters = :extracted_parameters,
+			validated_by = :validated_by,
+			validation_notes = :validation_notes
+		WHERE id = :id`
+
+	result, err := r.db.NamedExec(query, validation)
+	if err != nil {
+		slog.Error("Failed to update base policy document validation",
+			"validation_id", validation.ID,
+			"error", err)
+		return fmt.Errorf("failed to update base policy document validation: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		slog.Error("Failed to get rows affected for validation update",
+			"validation_id", validation.ID,
+			"error", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		slog.Warn("Base policy document validation not found for update", "validation_id", validation.ID)
+		return fmt.Errorf("base policy document validation not found")
+	}
+
+	slog.Info("Successfully updated base policy document validation",
+		"validation_id", validation.ID,
+		"base_policy_id", validation.BasePolicyID,
+		"rows_affected", rowsAffected)
+	return nil
+}
+
+func (r *BasePolicyRepository) DeleteBasePolicyDocumentValidation(id uuid.UUID) error {
+	slog.Info("Deleting base policy document validation", "validation_id", id)
+
+	query := `DELETE FROM base_policy_document_validation WHERE id = $1`
+
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		slog.Error("Failed to delete base policy document validation",
+			"validation_id", id,
+			"error", err)
+		return fmt.Errorf("failed to delete base policy document validation: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		slog.Error("Failed to get rows affected for validation deletion",
+			"validation_id", id,
+			"error", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		slog.Warn("Base policy document validation not found for deletion", "validation_id", id)
+		return fmt.Errorf("base policy document validation not found")
+	}
+
+	slog.Info("Successfully deleted base policy document validation",
+		"validation_id", id,
+		"rows_affected", rowsAffected)
+	return nil
+}
+
+func (r *BasePolicyRepository) DeleteBasePolicyDocumentValidationsByPolicyID(basePolicyID uuid.UUID) error {
+	slog.Info("Deleting base policy document validations by policy ID", "base_policy_id", basePolicyID)
+
+	query := `DELETE FROM base_policy_document_validation WHERE base_policy_id = $1`
+
+	result, err := r.db.Exec(query, basePolicyID)
+	if err != nil {
+		slog.Error("Failed to delete base policy document validations by policy ID",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return fmt.Errorf("failed to delete base policy document validations: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		slog.Error("Failed to get rows affected for validations deletion",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	slog.Info("Successfully deleted base policy document validations",
+		"base_policy_id", basePolicyID,
+		"rows_affected", rowsAffected)
+	return nil
 }
 
 func (r *BasePolicyRepository) GetBasePolicyDataSourceCount(policyID uuid.UUID) (int, error) {

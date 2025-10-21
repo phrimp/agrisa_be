@@ -5,7 +5,7 @@ import (
 	"policy-service/internal/models"
 	"policy-service/internal/services"
 
-	utils "agrisa_utils"
+	"policy-service/internal/utils"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"

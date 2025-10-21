@@ -132,6 +132,7 @@ type CompletePolicyCreationRequest struct {
 	BasePolicy *BasePolicy                   `json:"base_policy"`
 	Trigger    *BasePolicyTrigger            `json:"trigger"`
 	Conditions []*BasePolicyTriggerCondition `json:"conditions"`
+	IsArchive  bool                          `json:"is_archive"`
 }
 
 // CompletePolicyCreationResponse represents the successful creation result
@@ -142,6 +143,74 @@ type CompletePolicyCreationResponse struct {
 	TotalConditions int         `json:"total_conditions"`
 	TotalDataCost   float64     `json:"total_data_cost"`
 	CreatedAt       time.Time   `json:"created_at"`
+}
+
+// CompletePolicyData represents a complete policy with all related entities
+type CompletePolicyData struct {
+	BasePolicy *BasePolicy                   `json:"base_policy"`
+	Trigger    *BasePolicyTrigger            `json:"trigger,omitempty"`
+	Conditions []*BasePolicyTriggerCondition `json:"conditions,omitempty"`
+}
+
+// ValidatePolicyRequest represents the request for manual policy validation
+type ValidatePolicyRequest struct {
+	BasePolicyID        uuid.UUID        `json:"base_policy_id" validate:"required"`
+	ValidationStatus    ValidationStatus `json:"validation_status" validate:"required"`
+	ValidatedBy         string           `json:"validated_by" validate:"required"`
+	
+	// Validation metrics (user-controlled)
+	TotalChecks         int              `json:"total_checks" validate:"min=0"`
+	PassedChecks        int              `json:"passed_checks" validate:"min=0"`
+	FailedChecks        int              `json:"failed_checks" validate:"min=0"`
+	WarningCount        int              `json:"warning_count" validate:"min=0"`
+	
+	// Optional detailed validation data (JSONB)
+	Mismatches          interface{}      `json:"mismatches,omitempty"`
+	Warnings            interface{}      `json:"warnings,omitempty"`
+	Recommendations     interface{}      `json:"recommendations,omitempty"`
+	ExtractedParameters interface{}      `json:"extracted_parameters,omitempty"`
+	
+	// Optional metadata
+	ValidationNotes     *string          `json:"validation_notes,omitempty"`
+}
+
+func (r ValidatePolicyRequest) Validate() error {
+	if r.BasePolicyID == uuid.Nil {
+		return errors.New("base_policy_id is required")
+	}
+	
+	if r.ValidatedBy == "" {
+		return errors.New("validated_by is required")
+	}
+	
+	// Validate validation status
+	validStatuses := []ValidationStatus{
+		ValidationPending,
+		ValidationPassed,
+		ValidationFailed,
+		ValidationWarning,
+	}
+	isValidStatus := false
+	for _, status := range validStatuses {
+		if r.ValidationStatus == status {
+			isValidStatus = true
+			break
+		}
+	}
+	if !isValidStatus {
+		return errors.New("invalid validation_status")
+	}
+	
+	// Validate check counts consistency
+	if r.PassedChecks + r.FailedChecks > r.TotalChecks {
+		return errors.New("passed_checks + failed_checks cannot exceed total_checks")
+	}
+	
+	if r.TotalChecks < 0 || r.PassedChecks < 0 || r.FailedChecks < 0 || r.WarningCount < 0 {
+		return errors.New("check counts cannot be negative")
+	}
+	
+	return nil
 }
 
 // ============================================================================
@@ -290,13 +359,13 @@ func (r CreateDataSourceBatchRequest) Validate() error {
 }
 
 type DataSourceFiltersRequest struct {
-	TierID         *uuid.UUID       `json:"tier_id,omitempty"`
-	DataSourceType *DataSourceType  `json:"data_source_type,omitempty"`
-	ParameterName  *string          `json:"parameter_name,omitempty"`
-	ActiveOnly     bool             `json:"active_only"`
-	MinCost        *float64         `json:"min_cost,omitempty" validate:"omitempty,min=0"`
-	MaxCost        *float64         `json:"max_cost,omitempty" validate:"omitempty,min=0"`
-	MinAccuracy    *float64         `json:"min_accuracy,omitempty" validate:"omitempty,min=0,max=100"`
+	TierID         *uuid.UUID      `json:"tier_id,omitempty"`
+	DataSourceType *DataSourceType `json:"data_source_type,omitempty"`
+	ParameterName  *string         `json:"parameter_name,omitempty"`
+	ActiveOnly     bool            `json:"active_only"`
+	MinCost        *float64        `json:"min_cost,omitempty" validate:"omitempty,min=0"`
+	MaxCost        *float64        `json:"max_cost,omitempty" validate:"omitempty,min=0"`
+	MinAccuracy    *float64        `json:"min_accuracy,omitempty" validate:"omitempty,min=0,max=100"`
 }
 
 func (r DataSourceFiltersRequest) Validate() error {
@@ -313,4 +382,63 @@ func (r DataSourceFiltersRequest) Validate() error {
 		return errors.New("minimum accuracy must be between 0 and 100")
 	}
 	return nil
+}
+
+// ============================================================================
+// COMMIT POLICIES REQUESTS  
+// ============================================================================
+
+// CommitPoliciesRequest represents the request for committing policies from Redis to database
+type CommitPoliciesRequest struct {
+	// Filtering criteria for policies to commit
+	ProviderID    string `json:"provider_id,omitempty"`
+	BasePolicyID  string `json:"base_policy_id,omitempty"`
+	ArchiveStatus string `json:"archive_status,omitempty"`
+
+	// Operational options
+	DeleteFromRedis bool `json:"delete_from_redis"`     // Clean up after commit
+	ValidateOnly    bool `json:"validate_only"`         // Dry run mode
+	BatchSize       int  `json:"batch_size,omitempty"`  // Control batch processing (default: 10)
+}
+
+func (r CommitPoliciesRequest) Validate() error {
+	// At least one search parameter is required
+	if r.ProviderID == "" && r.BasePolicyID == "" && r.ArchiveStatus == "" {
+		return errors.New("at least one search parameter is required")
+	}
+
+	// Validate batch size
+	if r.BatchSize < 0 {
+		return errors.New("batch size cannot be negative")
+	}
+	if r.BatchSize > 100 {
+		return errors.New("batch size cannot exceed 100")
+	}
+
+	return nil
+}
+
+// CommitPoliciesResponse represents the response after committing policies
+type CommitPoliciesResponse struct {
+	CommittedPolicies   []CommittedPolicyInfo `json:"committed_policies"`
+	TotalPoliciesFound  int                   `json:"total_policies_found"`
+	TotalCommitted      int                   `json:"total_committed"`
+	TotalFailed         int                   `json:"total_failed"`
+	FailedPolicies      []FailedPolicyInfo    `json:"failed_policies,omitempty"`
+	ProcessingDuration  time.Duration         `json:"processing_duration"`
+	OperationTimestamp  time.Time             `json:"operation_timestamp"`
+}
+
+// CommittedPolicyInfo represents information about a successfully committed policy
+type CommittedPolicyInfo struct {
+	BasePolicyID   uuid.UUID `json:"base_policy_id"`
+	TriggerID      uuid.UUID `json:"trigger_id"`
+	ConditionCount int       `json:"condition_count"`
+}
+
+// FailedPolicyInfo represents information about a failed policy commit
+type FailedPolicyInfo struct {
+	BasePolicyID uuid.UUID `json:"base_policy_id"`
+	ErrorMessage string    `json:"error_message"`
+	FailureStage string    `json:"failure_stage"` // "discovery", "validation", "commit", "cleanup"
 }
