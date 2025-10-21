@@ -25,7 +25,7 @@ CREATE TYPE payout_status AS ENUM ('pending', 'processing', 'completed', 'failed
 CREATE TYPE data_quality AS ENUM ('good', 'acceptable', 'poor');
 CREATE TYPE farm_status AS ENUM ('active', 'inactive', 'archived');
 CREATE TYPE photo_type AS ENUM ('crop', 'boundary', 'land_certificate', 'other');
-CREATE TYPE monitor_frequency AS ENUM ('hour', 'day', 'week', 'month', 'year')
+CREATE TYPE monitor_frequency AS ENUM ('hour', 'day', 'week', 'month', 'year');
 
 -- ============================================================================
 -- CORE DATA SOURCE & PRICING TABLES
