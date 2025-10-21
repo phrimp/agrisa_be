@@ -1,0 +1,1201 @@
+package services
+
+import (
+	utils "agrisa_utils"
+	"context"
+	"fmt"
+	"log/slog"
+	"policy-service/internal/models"
+	"policy-service/internal/repository"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
+)
+
+type BasePolicyService struct {
+	basePolicyRepo *repository.BasePolicyRepository
+	dataSourceRepo *repository.DataSourceRepository
+	dataTierRepo   *repository.DataTierRepository
+}
+
+func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository) *BasePolicyService {
+	return &BasePolicyService{
+		basePolicyRepo: basePolicyRepo,
+		dataSourceRepo: dataSourceRepo,
+		dataTierRepo:   dataTierRepo,
+	}
+}
+
+func (s *BasePolicyService) CreateBasePolicy(policy *models.BasePolicy) error {
+	slog.Info("Creating base policy",
+		"policy_id", policy.ID,
+		"provider_id", policy.InsuranceProviderID,
+		"product_name", policy.ProductName,
+		"crop_type", policy.CropType)
+	start := time.Now()
+
+	if err := s.validateBasePolicy(policy); err != nil {
+		slog.Error("Base policy validation failed",
+			"policy_id", policy.ID,
+			"error", err)
+		return fmt.Errorf("validation error: %w", err)
+	}
+
+	if err := s.basePolicyRepo.CreateBasePolicy(policy); err != nil {
+		slog.Error("Failed to create base policy in repository",
+			"policy_id", policy.ID,
+			"error", err)
+		return fmt.Errorf("failed to create base policy: %w", err)
+	}
+
+	slog.Info("Successfully created base policy",
+		"policy_id", policy.ID,
+		"provider_id", policy.InsuranceProviderID,
+		"duration", time.Since(start))
+	return nil
+}
+
+func (s *BasePolicyService) CreateDataSelectionGroup(basePolicyTrigger *models.BasePolicyTrigger) error {
+	if err := s.validateBasePolicyTrigger(basePolicyTrigger); err != nil {
+		return fmt.Errorf("validate error: %w", err)
+	}
+	if err := s.basePolicyRepo.CreateBasePolicyTrigger(basePolicyTrigger); err != nil {
+		return fmt.Errorf("failed to create base policy trigger: %w", err)
+	}
+	return nil
+}
+
+func (s *BasePolicyService) DataSelection(selectedTriggerConditions []*models.BasePolicyTriggerCondition) error {
+	slog.Info("Processing data selection",
+		"condition_count", len(selectedTriggerConditions))
+	start := time.Now()
+
+	for i, selectedTriggerCondition := range selectedTriggerConditions {
+		slog.Debug("Validating trigger condition",
+			"index", i+1,
+			"condition_id", selectedTriggerCondition.ID,
+			"data_source_id", selectedTriggerCondition.DataSourceID)
+		if err := s.validateBasePolicyTriggerCondition(selectedTriggerCondition); err != nil {
+			slog.Error("Failed to validate trigger condition",
+				"condition_id", selectedTriggerCondition.ID,
+				"index", i+1,
+				"error", err)
+			return fmt.Errorf("failed to validate selected Trigger Condition: %w", err)
+		}
+		err := s.validateDataSource(selectedTriggerCondition)
+		if err != nil {
+			slog.Error("Data source validation failed",
+				"condition_id", selectedTriggerCondition.ID,
+				"data_source_id", selectedTriggerCondition.DataSourceID,
+				"error", err)
+			return fmt.Errorf("validate data source failed: %s --- err: %w", selectedTriggerCondition.DataSourceID, err)
+		}
+	}
+	if err := s.basePolicyRepo.CreateBasePolicyTriggerConditionsBatch(selectedTriggerConditions); err != nil {
+		slog.Error("Failed to create batch trigger conditions",
+			"condition_count", len(selectedTriggerConditions),
+			"error", err)
+		return fmt.Errorf("failed to create batch trigger condition: %w", err)
+	}
+
+	slog.Info("Successfully completed data selection",
+		"condition_count", len(selectedTriggerConditions),
+		"duration", time.Since(start))
+	return nil
+}
+
+func (s *BasePolicyService) GetBasePolicyCount() (int, error) {
+	count, err := s.basePolicyRepo.GetBasePolicyCount()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get base policy count: %w", err)
+	}
+
+	return count, nil
+}
+
+func (s *BasePolicyService) GetBasePolicyCountByStatus(status models.BasePolicyStatus) (int, error) {
+	if !s.isValidBasePolicyStatus(status) {
+		return 0, fmt.Errorf("invalid base policy status: %s", status)
+	}
+
+	count, err := s.basePolicyRepo.GetBasePolicyCountByStatus(status)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get base policy count by status: %w", err)
+	}
+
+	return count, nil
+}
+
+// ============================================================================
+// VALIDATION HELPERS
+// ============================================================================
+
+func (s *BasePolicyService) validateBasePolicy(policy *models.BasePolicy) error {
+	if policy.InsuranceProviderID == "" {
+		return fmt.Errorf("insurance provider ID is required")
+	}
+	if policy.ProductName == "" {
+		return fmt.Errorf("product name is required")
+	}
+	if policy.CropType == "" {
+		return fmt.Errorf("crop type is required")
+	}
+	if policy.CoverageCurrency == "" {
+		return fmt.Errorf("coverage currency is required")
+	}
+	if policy.CoverageDurationDays <= 0 {
+		return fmt.Errorf("coverage duration must be greater than 0")
+	}
+	if policy.FixPremiumAmount < 0 {
+		return fmt.Errorf("fix premium amount cannot be negative")
+	}
+	if policy.PremiumBaseRate < 0 {
+		return fmt.Errorf("premium base rate cannot be negative")
+	}
+	if policy.FixPayoutAmount < 0 {
+		return fmt.Errorf("fix payout amount cannot be negative")
+	}
+	if policy.PayoutBaseRate < 0 {
+		return fmt.Errorf("payout base rate cannot be negative")
+	}
+	if policy.OverThresholdMultiplier < 0 {
+		return fmt.Errorf("over threshold multiplier cannot be negative")
+	}
+	if !s.isValidBasePolicyStatus(policy.Status) {
+		return fmt.Errorf("invalid status: %s", policy.Status)
+	}
+	if !s.isValidValidationStatus(policy.DocumentValidationStatus) {
+		return fmt.Errorf("invalid document validation status: %s", policy.DocumentValidationStatus)
+	}
+
+	return nil
+}
+
+func (s *BasePolicyService) validateBasePolicyTrigger(triggerGr *models.BasePolicyTrigger) error {
+	if !s.isValidTriggerGroupLogicalOperator(triggerGr.LogicalOperator) {
+		return fmt.Errorf("invalid operator: %s", triggerGr.LogicalOperator)
+	}
+	if triggerGr.MonitorFrequencyValue <= 0 {
+		return fmt.Errorf("monitor frequency must be greater than 0")
+	}
+	if !s.isValidMonitorFrequencyUnit(triggerGr.MonitorFrequencyUnit) {
+		return fmt.Errorf("invalid monitor frequency unit: %s", triggerGr.MonitorFrequencyUnit)
+	}
+	return nil
+}
+
+func (s *BasePolicyService) isValidMonitorFrequencyUnit(unit models.MonitorFrequency) bool {
+	switch unit {
+	case models.MonitorFrequencyDay, models.MonitorFrequencyHour, models.MonitorFrequencyMonth, models.MonitorFrequencyWeek, models.MonitorFrequencyYear:
+		return true
+	default:
+		return false
+	}
+}
+
+// validateCompletePolicyForCommit validates a complete policy before database commit
+func (s *BasePolicyService) validateCompletePolicyForCommit(policy *models.CompletePolicyData) error {
+	if policy == nil {
+		return fmt.Errorf("policy data is nil")
+	}
+
+	if policy.BasePolicy == nil {
+		return fmt.Errorf("base policy is nil")
+	}
+
+	// Validate base policy
+	if err := s.validateBasePolicy(policy.BasePolicy); err != nil {
+		return fmt.Errorf("base policy validation failed: %w", err)
+	}
+
+	// Validate trigger if present
+	if policy.Trigger != nil {
+		if err := s.validateBasePolicyTrigger(policy.Trigger); err != nil {
+			return fmt.Errorf("trigger validation failed: %w", err)
+		}
+
+		// Ensure trigger is linked to base policy
+		if policy.Trigger.BasePolicyID != policy.BasePolicy.ID {
+			return fmt.Errorf("trigger is not linked to base policy")
+		}
+	}
+
+	// Validate conditions if present
+	if policy.Conditions != nil {
+		for i, condition := range policy.Conditions {
+			if err := s.validateBasePolicyTriggerCondition(condition); err != nil {
+				return fmt.Errorf("condition %d validation failed: %w", i+1, err)
+			}
+
+			// Ensure condition is linked to trigger
+			if policy.Trigger != nil && condition.BasePolicyTriggerID != policy.Trigger.ID {
+				return fmt.Errorf("condition %d is not linked to trigger", i+1)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (s *BasePolicyService) isValidTriggerGroupLogicalOperator(operator models.LogicalOperator) bool {
+	switch operator {
+	case models.LogicalAND, models.LogicalOR:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *BasePolicyService) isValidBasePolicyStatus(status models.BasePolicyStatus) bool {
+	switch status {
+	case models.BasePolicyDraft, models.BasePolicyActive, models.BasePolicyArchived:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *BasePolicyService) isValidValidationStatus(status models.ValidationStatus) bool {
+	switch status {
+	case models.ValidationPending, models.ValidationPassed, models.ValidationFailed, models.ValidationWarning:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *BasePolicyService) isValidThresholdOperator(operator models.ThresholdOperator) bool {
+	switch operator {
+	case models.ThresholdLT, models.ThresholdGT, models.ThresholdLTE, models.ThresholdGTE,
+		models.ThresholdEQ, models.ThresholdNE, models.ThresholdChangeGT, models.ThresholdChangeLT:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *BasePolicyService) isValidAggregationFunction(function models.AggregationFunction) bool {
+	switch function {
+	case models.AggregationSum, models.AggregationAvg, models.AggregationMin,
+		models.AggregationMax, models.AggregationChange:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *BasePolicyService) validateBasePolicyTriggerCondition(condition *models.BasePolicyTriggerCondition) error {
+	if condition.BasePolicyTriggerID == uuid.Nil {
+		return fmt.Errorf("base policy trigger ID is required")
+	}
+	if condition.DataSourceID == uuid.Nil {
+		return fmt.Errorf("data source ID is required")
+	}
+	if !s.isValidThresholdOperator(condition.ThresholdOperator) {
+		return fmt.Errorf("invalid threshold operator: %s", condition.ThresholdOperator)
+	}
+	if !s.isValidAggregationFunction(condition.AggregationFunction) {
+		return fmt.Errorf("invalid aggregation function: %s", condition.AggregationFunction)
+	}
+	if condition.AggregationWindowDays <= 0 {
+		return fmt.Errorf("aggregation window days must be greater than 0")
+	}
+	if condition.ValidationWindowDays <= 0 {
+		return fmt.Errorf("validation window days must be greater than 0")
+	}
+	if condition.BaseCost < 0 {
+		return fmt.Errorf("base cost cannot be negative")
+	}
+	if condition.CategoryMultiplier <= 0 {
+		return fmt.Errorf("category multiplier must be greater than 0")
+	}
+	if condition.TierMultiplier <= 0 {
+		return fmt.Errorf("tier multiplier must be greater than 0")
+	}
+	if condition.CalculatedCost < 0 {
+		return fmt.Errorf("calculated cost cannot be negative")
+	}
+	return nil
+}
+
+func (s *BasePolicyService) validateDataSource(condition *models.BasePolicyTriggerCondition) error {
+	slog.Debug("Validating data source",
+		"condition_id", condition.ID,
+		"data_source_id", condition.DataSourceID)
+	start := time.Now()
+
+	dataSource, err := s.dataSourceRepo.GetDataSourceByID(condition.DataSourceID)
+	if err != nil {
+		slog.Error("Data source retrieval failed",
+			"data_source_id", condition.DataSourceID,
+			"error", err)
+		return fmt.Errorf("data source does not exist: %w", err)
+	}
+	if condition.BaseCost != dataSource.BaseCost {
+		slog.Error("Data source base cost mismatch",
+			"condition_id", condition.ID,
+			"expected_cost", dataSource.BaseCost,
+			"provided_cost", condition.BaseCost)
+		return fmt.Errorf("data base cost mistmatch")
+	}
+	dataTier, err := s.dataTierRepo.GetDataTierByID(dataSource.DataTierID)
+	if err != nil {
+		return fmt.Errorf("data tier retrive error: %w", err)
+	}
+	if condition.TierMultiplier != dataTier.DataTierMultiplier {
+		return fmt.Errorf("data tier multiplier mismatch")
+	}
+	dataCategory, err := s.dataTierRepo.GetDataTierCategoryByID(dataTier.DataTierCategoryID)
+	if err != nil {
+		return fmt.Errorf("data tier category retrive error: %w", err)
+	}
+	if condition.CategoryMultiplier != dataCategory.CategoryCostMultiplier {
+		return fmt.Errorf("data tier category multiplier mismatch")
+	}
+	totalCost := dataSource.BaseCost * dataTier.DataTierMultiplier * dataCategory.CategoryCostMultiplier
+	if condition.CalculatedCost != totalCost {
+		slog.Error("Total cost calculation mismatch",
+			"condition_id", condition.ID,
+			"expected_cost", totalCost,
+			"provided_cost", condition.CalculatedCost,
+			"base_cost", dataSource.BaseCost,
+			"tier_multiplier", dataTier.DataTierMultiplier,
+			"category_multiplier", dataCategory.CategoryCostMultiplier)
+		return fmt.Errorf("total cost mismatch")
+	}
+
+	slog.Debug("Data source validation successful",
+		"condition_id", condition.ID,
+		"data_source_id", condition.DataSourceID,
+		"total_cost", totalCost,
+		"duration", time.Since(start))
+	return nil
+}
+
+// ============================================================================
+// BUSINESS PROCESS
+// ============================================================================
+
+func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *models.CompletePolicyCreationRequest, expiration time.Duration) (*models.CompletePolicyCreationResponse, error) {
+	slog.Info("Creating complete policy",
+		"provider_id", request.BasePolicy.InsuranceProviderID,
+		"product_name", request.BasePolicy.ProductName,
+		"condition_count", len(request.Conditions))
+	start := time.Now()
+
+	// Generate IDs and establish relationships
+	basePolicyID := uuid.New()
+	triggerID := uuid.New()
+
+	request.BasePolicy.ID = basePolicyID
+	request.Trigger.ID = triggerID
+	request.Trigger.BasePolicyID = basePolicyID
+
+	conditionIDs := make([]uuid.UUID, len(request.Conditions))
+	for i := range request.Conditions {
+		conditionIDs[i] = uuid.New()
+		request.Conditions[i].ID = conditionIDs[i]
+		request.Conditions[i].BasePolicyTriggerID = triggerID
+	}
+
+	// Validate all entities
+	if err := s.validateBasePolicy(request.BasePolicy); err != nil {
+		slog.Error("Base policy validation failed",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("base policy validation: %w", err)
+	}
+	if err := s.validateBasePolicyTrigger(request.Trigger); err != nil {
+		slog.Error("Trigger validation failed",
+			"trigger_id", triggerID,
+			"error", err)
+		return nil, fmt.Errorf("trigger validation: %w", err)
+	}
+	for i, condition := range request.Conditions {
+		if err := s.validateBasePolicyTriggerCondition(condition); err != nil {
+			slog.Error("Condition validation failed",
+				"condition_id", condition.ID,
+				"condition_index", i+1,
+				"error", err)
+			return nil, fmt.Errorf("condition %d validation: %w", i+1, err)
+		}
+		if err := s.validateDataSource(condition); err != nil {
+			slog.Error("Condition data source validation failed",
+				"condition_id", condition.ID,
+				"condition_index", i+1,
+				"error", err)
+			return nil, fmt.Errorf("condition %d data source validation: %w", i+1, err)
+		}
+	}
+	// Add default value for entities
+	request.BasePolicy.Status = models.BasePolicyDraft
+	request.BasePolicy.DocumentValidationStatus = models.ValidationPending
+
+	// Begin Redis transaction
+	slog.Debug("Starting Redis transaction for complete policy creation",
+		"base_policy_id", basePolicyID,
+		"trigger_id", triggerID,
+		"provider_id", request.BasePolicy.InsuranceProviderID)
+
+	tx := s.basePolicyRepo.BeginRedisTransaction()
+	shouldCommit := false
+
+	defer func() {
+		if shouldCommit {
+			slog.Debug("Executing Redis transaction commit",
+				"base_policy_id", basePolicyID,
+				"provider_id", request.BasePolicy.InsuranceProviderID)
+			_, err := tx.Exec(ctx)
+			if err != nil {
+				slog.Error("Redis transaction commit failed",
+					"base_policy_id", basePolicyID,
+					"provider_id", request.BasePolicy.InsuranceProviderID,
+					"error", err)
+			} else {
+				slog.Info("Redis transaction committed successfully",
+					"base_policy_id", basePolicyID,
+					"provider_id", request.BasePolicy.InsuranceProviderID)
+			}
+		} else {
+			slog.Debug("Discarding Redis transaction due to error",
+				"base_policy_id", basePolicyID,
+				"provider_id", request.BasePolicy.InsuranceProviderID)
+			tx.Discard()
+		}
+	}()
+
+	// Serialize and store BasePolicy
+	slog.Debug("Serializing base policy",
+		"base_policy_id", basePolicyID,
+		"product_name", request.BasePolicy.ProductName,
+		"crop_type", request.BasePolicy.CropType)
+
+	basePolicyByte, err := utils.SerializeModel(request.BasePolicy)
+	if err != nil {
+		slog.Error("Base policy serialization failed",
+			"base_policy_id", basePolicyID,
+			"provider_id", request.BasePolicy.InsuranceProviderID,
+			"error", err)
+		return nil, fmt.Errorf("base policy serialization failed: %w", err)
+	}
+
+	basePolicyKey := fmt.Sprintf("%s--%s--BasePolicy--archive:%v", request.BasePolicy.InsuranceProviderID, basePolicyID, request.IsArchive)
+	slog.Debug("Storing base policy in Redis transaction",
+		"base_policy_id", basePolicyID,
+		"key", basePolicyKey,
+		"data_size_bytes", len(basePolicyByte),
+		"expiration", expiration)
+
+	if err := s.basePolicyRepo.CreateTempBasePolicyModelsWTransaction(ctx, basePolicyByte, basePolicyKey, tx, expiration); err != nil {
+		slog.Error("Base policy storage in transaction failed",
+			"base_policy_id", basePolicyID,
+			"key", basePolicyKey,
+			"error", err)
+		return nil, fmt.Errorf("base policy creation failed: %w", err)
+	}
+
+	// Serialize and store BasePolicyTrigger
+	slog.Debug("Serializing base policy trigger",
+		"trigger_id", triggerID,
+		"base_policy_id", basePolicyID,
+		"logical_operator", request.Trigger.LogicalOperator,
+		"monitor_frequency", request.Trigger.MonitorFrequencyValue)
+
+	basePolicyTriggerByte, err := utils.SerializeModel(request.Trigger)
+	if err != nil {
+		slog.Error("Base policy trigger serialization failed",
+			"trigger_id", triggerID,
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("base policy trigger serialization failed: %w", err)
+	}
+
+	triggerKey := fmt.Sprintf("%s--%s--BasePolicyTrigger--%s--archive:%v", request.BasePolicy.InsuranceProviderID, triggerID, basePolicyID, request.IsArchive)
+	slog.Debug("Storing base policy trigger in Redis transaction",
+		"trigger_id", triggerID,
+		"key", triggerKey,
+		"data_size_bytes", len(basePolicyTriggerByte),
+		"expiration", expiration)
+
+	if err := s.basePolicyRepo.CreateTempBasePolicyModelsWTransaction(ctx, basePolicyTriggerByte, triggerKey, tx, expiration); err != nil {
+		slog.Error("Base policy trigger storage in transaction failed",
+			"trigger_id", triggerID,
+			"key", triggerKey,
+			"error", err)
+		return nil, fmt.Errorf("base policy trigger creation failed: %w", err)
+	}
+
+	// Serialize and store each condition in transaction
+	slog.Debug("Creating conditions in transaction", "condition_count", len(request.Conditions))
+	for i, condition := range request.Conditions {
+		conditionByte, err := utils.SerializeModel(condition)
+		if err != nil {
+			slog.Error("Failed to serialize condition",
+				"condition_id", condition.ID,
+				"condition_index", i+1,
+				"error", err)
+			return nil, fmt.Errorf("condition %d serialization failed: %w", i+1, err)
+		}
+
+		conditionKey := fmt.Sprintf("%s--%s--BasePolicyTriggerCondition--%d--%s--archive:%v", request.BasePolicy.InsuranceProviderID, condition.ID, i+1, basePolicyID, request.IsArchive)
+		if err := s.basePolicyRepo.CreateTempBasePolicyModelsWTransaction(ctx, conditionByte, conditionKey, tx, expiration); err != nil {
+			slog.Error("Failed to store condition in transaction",
+				"condition_id", condition.ID,
+				"condition_index", i+1,
+				"error", err)
+			return nil, fmt.Errorf("condition %d storage failed: %w", i+1, err)
+		}
+
+		slog.Debug("Condition stored in transaction",
+			"condition_id", condition.ID,
+			"condition_index", i+1,
+			"key", conditionKey)
+	}
+
+	// Calculate total cost
+	slog.Debug("Calculating total cost", "base_policy_id", basePolicyID)
+	totalCost := s.CalculateBasePolicyTotalCost(request.Conditions)
+
+	// Create and store response metadata in transaction
+	response := &models.CompletePolicyCreationResponse{
+		BasePolicyID:    basePolicyID,
+		TriggerID:       triggerID,
+		ConditionIDs:    conditionIDs,
+		TotalConditions: len(request.Conditions),
+		TotalDataCost:   totalCost,
+		CreatedAt:       time.Now(),
+	}
+
+	responseByte, err := utils.SerializeModel(response)
+	if err != nil {
+		slog.Error("Failed to serialize response metadata",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("response metadata serialization failed: %w", err)
+	}
+
+	responseKey := fmt.Sprintf("%s--%s--CompletePolicyResponse", request.BasePolicy.InsuranceProviderID, basePolicyID)
+	if err := s.basePolicyRepo.CreateTempBasePolicyModelsWTransaction(ctx, responseByte, responseKey, tx, expiration); err != nil {
+		slog.Error("Failed to store response metadata in transaction",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("response metadata storage failed: %w", err)
+	}
+
+	slog.Debug("Response metadata stored in transaction",
+		"base_policy_id", basePolicyID,
+		"key", responseKey)
+
+	// Mark transaction for commit
+	shouldCommit = true
+
+	slog.Info("Successfully created complete policy",
+		"base_policy_id", basePolicyID,
+		"trigger_id", triggerID,
+		"total_conditions", len(request.Conditions),
+		"total_cost", totalCost,
+		"duration", time.Since(start))
+
+	return response, nil
+}
+
+func (s *BasePolicyService) CalculateBasePolicyTotalCost(datas []*models.BasePolicyTriggerCondition) float64 {
+	total_cost := 0.0
+	for _, data := range datas {
+		total_cost += data.CalculatedCost
+	}
+	return total_cost
+}
+
+func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, providerID, basePolicyID, archiveStatus string) ([]*models.CompletePolicyData, error) {
+	slog.Info("Getting draft policies from provider",
+		"provider_id", providerID,
+		"base_policy_id", basePolicyID,
+		"archive_status", archiveStatus)
+	start := time.Now()
+
+	// Validate input parameters
+	if providerID == "" && basePolicyID == "" && archiveStatus == "" {
+		return nil, fmt.Errorf("at least one search parameter is required")
+	}
+
+	// Build flexible pattern with wildcards
+	provider := providerID
+	if provider == "" {
+		provider = "*"
+	}
+
+	policy := basePolicyID
+	if policy == "" {
+		policy = "*"
+	}
+
+	archive := archiveStatus
+	if archive == "" {
+		archive = "*"
+	}
+
+	// Build Redis key pattern for specific policy
+	policyPattern := fmt.Sprintf("%s--%s--BasePolicy--archive:%s", providerID, basePolicyID, archiveStatus)
+	policyKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, policyPattern)
+	if err != nil {
+		slog.Error("Failed to find policy keys",
+			"provider_id", providerID,
+			"base_policy_id", basePolicyID,
+			"archive_status", archiveStatus,
+			"pattern", policyPattern,
+			"error", err)
+		return nil, fmt.Errorf("error getting policy %s from provider %s with archive status %s: %w", basePolicyID, providerID, archiveStatus, err)
+	}
+
+	// Check if policy was found
+	if len(policyKeys) == 0 {
+		slog.Debug("No policy found with given parameters",
+			"provider_id", providerID,
+			"base_policy_id", basePolicyID,
+			"archive_status", archiveStatus)
+		return []*models.CompletePolicyData{}, nil
+	}
+
+	var completePolicies []*models.CompletePolicyData
+
+	for _, key := range policyKeys {
+		// Get base policy
+		basePolicyByte, err := s.basePolicyRepo.GetTempBasePolicyModels(ctx, key)
+		if err != nil {
+			slog.Debug("Failed to get base policy data", "key", key, "error", err)
+			continue
+		}
+
+		var basePolicy models.BasePolicy
+		if err := utils.DeserializeModel(basePolicyByte, &basePolicy); err != nil {
+			slog.Debug("Failed to deserialize base policy", "key", key, "error", err)
+			continue
+		}
+
+		// Filter for draft policies only
+		if basePolicy.Status != models.BasePolicyDraft {
+			continue
+		}
+
+		completePolicy := &models.CompletePolicyData{
+			BasePolicy: &basePolicy,
+		}
+
+		// Get trigger for this policy
+		triggerPattern := fmt.Sprintf("%s--*--BasePolicyTrigger--%s--archive:%s", providerID, basePolicy.ID, archiveStatus)
+		triggerKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, triggerPattern)
+		if err == nil && len(triggerKeys) > 0 {
+			triggerByte, err := s.basePolicyRepo.GetTempBasePolicyModels(ctx, triggerKeys[0])
+			if err == nil {
+				var trigger models.BasePolicyTrigger
+				if err := utils.DeserializeModel(triggerByte, &trigger); err == nil {
+					completePolicy.Trigger = &trigger
+				}
+			}
+		}
+
+		// Get conditions for this policy
+		conditionPattern := fmt.Sprintf("%s--*--BasePolicyTriggerCondition--*--%s--archive:%s", providerID, basePolicy.ID, archiveStatus)
+		conditionKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, conditionPattern)
+		if err == nil && len(conditionKeys) > 0 {
+			var conditions []*models.BasePolicyTriggerCondition
+			for _, condKey := range conditionKeys {
+				conditionByte, err := s.basePolicyRepo.GetTempBasePolicyModels(ctx, condKey)
+				if err != nil {
+					continue
+				}
+				var condition models.BasePolicyTriggerCondition
+				if err := utils.DeserializeModel(conditionByte, &condition); err == nil {
+					conditions = append(conditions, &condition)
+				}
+			}
+			completePolicy.Conditions = conditions
+		}
+
+		completePolicies = append(completePolicies, completePolicy)
+	}
+
+	slog.Info("Successfully retrieved policy data",
+		"provider_id", providerID,
+		"base_policy_id", basePolicyID,
+		"archive_status", archiveStatus,
+		"policy_count", len(completePolicies),
+		"duration", time.Since(start))
+
+	return completePolicies, nil
+}
+
+// UpdateBasePolicyValidationStatus updates the document validation status of a base policy
+func (s *BasePolicyService) UpdateBasePolicyValidationStatus(ctx context.Context, basePolicyID uuid.UUID, validationStatus models.ValidationStatus, validationScore *float64) error {
+	slog.Info("Updating base policy document validation status",
+		"base_policy_id", basePolicyID,
+		"validation_status", validationStatus,
+		"validation_score", validationScore)
+	start := time.Now()
+
+	// Validate the validation status
+	if !s.isValidValidationStatus(validationStatus) {
+		slog.Error("Invalid validation status provided",
+			"base_policy_id", basePolicyID,
+			"validation_status", validationStatus)
+		return fmt.Errorf("invalid validation status: %s", validationStatus)
+	}
+
+	// Validate score if provided
+	if validationScore != nil && (*validationScore < 0 || *validationScore > 100) {
+		slog.Error("Invalid validation score provided",
+			"base_policy_id", basePolicyID,
+			"validation_score", *validationScore)
+		return fmt.Errorf("validation score must be between 0 and 100, got: %f", *validationScore)
+	}
+
+	// Get the existing base policy
+	basePolicy, err := s.basePolicyRepo.GetBasePolicyByID(basePolicyID)
+	if err != nil {
+		slog.Error("Failed to retrieve base policy for validation status update",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return fmt.Errorf("failed to get base policy: %w", err)
+	}
+
+	// Update the validation fields
+	oldStatus := basePolicy.DocumentValidationStatus
+	oldScore := basePolicy.DocumentValidationScore
+
+	basePolicy.DocumentValidationStatus = validationStatus
+	basePolicy.DocumentValidationScore = validationScore
+	basePolicy.UpdatedAt = time.Now()
+
+	// Update in database
+	if err := s.basePolicyRepo.UpdateBasePolicy(basePolicy); err != nil {
+		slog.Error("Failed to update base policy validation status in database",
+			"base_policy_id", basePolicyID,
+			"validation_status", validationStatus,
+			"error", err)
+		return fmt.Errorf("failed to update base policy: %w", err)
+	}
+
+	slog.Info("Successfully updated base policy document validation status",
+		"base_policy_id", basePolicyID,
+		"old_status", oldStatus,
+		"new_status", validationStatus,
+		"old_score", oldScore,
+		"new_score", validationScore,
+		"duration", time.Since(start))
+
+	return nil
+}
+
+// ValidatePolicy performs manual policy validation with user-controlled metrics
+func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.ValidatePolicyRequest) (*models.BasePolicyDocumentValidation, error) {
+	slog.Info("Starting policy validation",
+		"base_policy_id", request.BasePolicyID,
+		"validation_status", request.ValidationStatus,
+		"validated_by", request.ValidatedBy,
+		"total_checks", request.TotalChecks,
+		"passed_checks", request.PassedChecks,
+		"failed_checks", request.FailedChecks,
+		"warning_count", request.WarningCount)
+	start := time.Now()
+
+	// Validate input parameters
+	if err := request.Validate(); err != nil {
+		slog.Error("Input validation failed",
+			"base_policy_id", request.BasePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("validation failed: %w", err)
+	}
+
+	// Verify policy exists
+	var basePolicy *models.BasePolicy
+
+	policyPattern := fmt.Sprintf("*--%s--BasePolicy--*", request.BasePolicyID)
+	policyKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, policyPattern)
+	if err != nil {
+		slog.Error("Failed to find policy keys", "policy id", request.BasePolicyID, "error", err)
+		basePolicy, err = s.basePolicyRepo.GetBasePolicyByID(request.BasePolicyID)
+		if err != nil {
+			slog.Error("Failed to get base policy",
+				"base_policy_id", request.BasePolicyID,
+				"error", err)
+			return nil, fmt.Errorf("failed to get base policy: %w", err)
+		}
+	} else {
+		if len(policyKeys) > 1 {
+			return nil, fmt.Errorf("logic error: many matching policies exist in cache: %v", policyKeys)
+		}
+		basePolicyByte, err := s.basePolicyRepo.GetTempBasePolicyModels(ctx, policyKeys[0])
+		if err != nil {
+			slog.Debug("Failed to get base policy data", "key", policyKeys[0], "error", err)
+			return nil, fmt.Errorf("failed to get base policy: %w", err)
+		}
+
+		if err := utils.DeserializeModel(basePolicyByte, basePolicy); err != nil {
+			slog.Debug("Failed to deserialize base policy", "key", policyKeys[0], "error", err)
+			return nil, fmt.Errorf("failed to deserialize base policy: %w", err)
+		}
+	}
+
+	slog.Debug("Retrieved base policy for validation",
+		"base_policy_id", request.BasePolicyID,
+		"product_name", basePolicy.ProductName,
+		"current_status", basePolicy.DocumentValidationStatus)
+
+	// Begin transaction
+	tx, err := s.basePolicyRepo.BeginTransaction()
+	if err != nil {
+		slog.Error("Failed to begin transaction",
+			"base_policy_id", request.BasePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	// Create validation record
+	validation := &models.BasePolicyDocumentValidation{
+		ID:                  uuid.New(),
+		BasePolicyID:        request.BasePolicyID,
+		ValidationTimestamp: time.Now().Unix(),
+		ValidationStatus:    request.ValidationStatus,
+		OverallScore:        nil, // Deprecated - always nil
+		TotalChecks:         request.TotalChecks,
+		PassedChecks:        request.PassedChecks,
+		FailedChecks:        request.FailedChecks,
+		WarningCount:        request.WarningCount,
+		Mismatches:          request.Mismatches,
+		Warnings:            request.Warnings,
+		Recommendations:     request.Recommendations,
+		ExtractedParameters: request.ExtractedParameters,
+		ValidatedBy:         &request.ValidatedBy,
+		ValidationNotes:     request.ValidationNotes,
+		CreatedAt:           time.Now(),
+	}
+
+	slog.Debug("Created validation record",
+		"validation_id", validation.ID,
+		"base_policy_id", request.BasePolicyID,
+		"validation_status", request.ValidationStatus)
+
+	// Commit temporary draft policy data if present
+	if len(policyKeys) > 0 {
+		slog.Debug("policies data are in temp cache, begin to commit before further operations")
+		result, err := s.CommitPolicies(ctx, &models.CommitPoliciesRequest{
+			BasePolicyID:    basePolicy.ID.String(),
+			DeleteFromRedis: true,
+		})
+		if err != nil {
+			slog.Error("commit temp policy data failed", "error", err)
+			return nil, fmt.Errorf("commit temp policy data failed: %w", err)
+		}
+		slog.Info("commit temp policy data successfully", "result", result)
+	}
+
+	// Save validation record
+	if err := s.basePolicyRepo.CreateBasePolicyDocumentValidation(validation); err != nil {
+		slog.Error("Failed to create validation record",
+			"base_policy_id", request.BasePolicyID,
+			"validation_id", validation.ID,
+			"error", err)
+		return nil, fmt.Errorf("failed to create validation record: %w", err)
+	}
+
+	// Update policy status (without score - score is deprecated)
+	if err := s.UpdateBasePolicyValidationStatus(ctx, request.BasePolicyID, request.ValidationStatus, nil); err != nil {
+		slog.Error("Failed to update policy validation status",
+			"base_policy_id", request.BasePolicyID,
+			"validation_status", request.ValidationStatus,
+			"error", err)
+		return nil, fmt.Errorf("failed to update policy validation status: %w", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		slog.Error("Failed to commit transaction",
+			"base_policy_id", request.BasePolicyID,
+			"validation_id", validation.ID,
+			"error", err)
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	slog.Info("Successfully completed policy validation",
+		"base_policy_id", request.BasePolicyID,
+		"validation_id", validation.ID,
+		"validation_status", request.ValidationStatus,
+		"total_checks", request.TotalChecks,
+		"passed_checks", request.PassedChecks,
+		"failed_checks", request.FailedChecks,
+		"warning_count", request.WarningCount,
+		"duration", time.Since(start))
+
+	return validation, nil
+}
+
+// CommitPolicies transfers temporary policy data from Redis to PostgreSQL database
+func (s *BasePolicyService) CommitPolicies(ctx context.Context, request *models.CommitPoliciesRequest) (*models.CommitPoliciesResponse, error) {
+	slog.Info("Starting policy commit operation",
+		"provider_id", request.ProviderID,
+		"base_policy_id", request.BasePolicyID,
+		"archive_status", request.ArchiveStatus,
+		"validate_only", request.ValidateOnly,
+		"delete_from_redis", request.DeleteFromRedis,
+		"batch_size", request.BatchSize)
+	start := time.Now()
+
+	// Validate request
+	if err := request.Validate(); err != nil {
+		slog.Error("Request validation failed", "error", err)
+		return nil, fmt.Errorf("invalid request: %w", err)
+	}
+
+	// Set default batch size
+	batchSize := request.BatchSize
+	if batchSize <= 0 {
+		batchSize = 10
+	}
+
+	response := &models.CommitPoliciesResponse{
+		CommittedPolicies:  make([]models.CommittedPolicyInfo, 0),
+		FailedPolicies:     make([]models.FailedPolicyInfo, 0),
+		OperationTimestamp: time.Now(),
+	}
+
+	// Phase 1: Discovery - Find policies from Redis
+	slog.Debug("Phase 1: Discovering policies from Redis")
+	completePolicies, err := s.GetAllDraftPolicyWFilter(ctx, request.ProviderID, request.BasePolicyID, request.ArchiveStatus)
+	if err != nil {
+		slog.Error("Failed to discover policies from Redis", "error", err)
+		return nil, fmt.Errorf("failed to discover policies: %w", err)
+	}
+
+	response.TotalPoliciesFound = len(completePolicies)
+	slog.Info("Policy discovery completed", "policies_found", response.TotalPoliciesFound)
+
+	if response.TotalPoliciesFound == 0 {
+		slog.Info("No policies found to commit")
+		response.ProcessingDuration = time.Since(start)
+		return response, nil
+	}
+
+	// Phase 2: Validation (if validate_only mode or before commit)
+	slog.Debug("Phase 2: Validating policies", "policy_count", len(completePolicies))
+	validPolicies := make([]*models.CompletePolicyData, 0)
+
+	for _, policy := range completePolicies {
+		if err := s.validateCompletePolicyForCommit(policy); err != nil {
+			slog.Error("Policy validation failed",
+				"base_policy_id", policy.BasePolicy.ID,
+				"error", err)
+			response.FailedPolicies = append(response.FailedPolicies, models.FailedPolicyInfo{
+				BasePolicyID: policy.BasePolicy.ID,
+				ErrorMessage: err.Error(),
+				FailureStage: "validation",
+			})
+			response.TotalFailed++
+			continue
+		}
+		validPolicies = append(validPolicies, policy)
+	}
+
+	slog.Info("Policy validation completed",
+		"valid_policies", len(validPolicies),
+		"failed_policies", response.TotalFailed)
+
+	// If validate_only mode, return without committing
+	if request.ValidateOnly {
+		slog.Info("Validation-only mode completed")
+		response.ProcessingDuration = time.Since(start)
+		return response, nil
+	}
+
+	// Phase 3: Database Transaction Processing
+	slog.Debug("Phase 3: Starting database transaction processing")
+
+	// Process policies in batches
+	for i := 0; i < len(validPolicies); i += batchSize {
+		end := min(i+batchSize, len(validPolicies))
+
+		batch := validPolicies[i:end]
+		slog.Debug("Processing batch",
+			"batch_number", (i/batchSize)+1,
+			"batch_size", len(batch),
+			"start_index", i,
+			"end_index", end)
+
+		// Begin database transaction for this batch
+		tx, err := s.basePolicyRepo.BeginTransaction()
+		if err != nil {
+			slog.Error("Failed to begin database transaction", "error", err)
+			// Mark all policies in this batch as failed
+			for _, policy := range batch {
+				response.FailedPolicies = append(response.FailedPolicies, models.FailedPolicyInfo{
+					BasePolicyID: policy.BasePolicy.ID,
+					ErrorMessage: fmt.Sprintf("failed to begin transaction: %v", err),
+					FailureStage: "commit",
+				})
+				response.TotalFailed++
+			}
+			continue
+		}
+
+		// Process each policy in the batch
+		batchSuccess := true
+		for _, policy := range batch {
+			if err := s.commitSinglePolicyInTransaction(ctx, tx, policy); err != nil {
+				slog.Error("Failed to commit policy in transaction",
+					"base_policy_id", policy.BasePolicy.ID,
+					"error", err)
+				response.FailedPolicies = append(response.FailedPolicies, models.FailedPolicyInfo{
+					BasePolicyID: policy.BasePolicy.ID,
+					ErrorMessage: err.Error(),
+					FailureStage: "commit",
+				})
+				response.TotalFailed++
+				batchSuccess = false
+				break // Exit batch on first failure
+			}
+		}
+
+		// Commit or rollback transaction
+		if batchSuccess {
+			if err := tx.Commit(); err != nil {
+				slog.Error("Failed to commit transaction", "error", err)
+				// Mark all policies in this batch as failed
+				for _, policy := range batch {
+					response.FailedPolicies = append(response.FailedPolicies, models.FailedPolicyInfo{
+						BasePolicyID: policy.BasePolicy.ID,
+						ErrorMessage: fmt.Sprintf("transaction commit failed: %v", err),
+						FailureStage: "commit",
+					})
+					response.TotalFailed++
+				}
+			} else {
+				// Mark all policies in this batch as successfully committed
+				for _, policy := range batch {
+					conditionCount := 0
+					if policy.Conditions != nil {
+						conditionCount = len(policy.Conditions)
+					}
+
+					triggerID := uuid.Nil
+					if policy.Trigger != nil {
+						triggerID = policy.Trigger.ID
+					}
+
+					response.CommittedPolicies = append(response.CommittedPolicies, models.CommittedPolicyInfo{
+						BasePolicyID:   policy.BasePolicy.ID,
+						TriggerID:      triggerID,
+						ConditionCount: conditionCount,
+					})
+					response.TotalCommitted++
+				}
+
+				slog.Info("Batch committed successfully",
+					"batch_size", len(batch),
+					"batch_number", (i/batchSize)+1)
+			}
+		} else {
+			tx.Rollback()
+			slog.Warn("Batch rolled back due to failure",
+				"batch_size", len(batch),
+				"batch_number", (i/batchSize)+1)
+		}
+	}
+
+	// Phase 4: Cleanup (Optional Redis cleanup)
+	if request.DeleteFromRedis && response.TotalCommitted > 0 {
+		slog.Debug("Phase 4: Cleaning up Redis data")
+		if err := s.cleanupCommittedPoliciesFromRedis(ctx, response.CommittedPolicies); err != nil {
+			slog.Warn("Failed to cleanup Redis data", "error", err)
+			// Not a critical failure, just log and continue
+		} else {
+			slog.Info("Redis cleanup completed successfully",
+				"cleaned_policies", response.TotalCommitted)
+		}
+	}
+
+	response.ProcessingDuration = time.Since(start)
+
+	slog.Info("Policy commit operation completed",
+		"total_found", response.TotalPoliciesFound,
+		"total_committed", response.TotalCommitted,
+		"total_failed", response.TotalFailed,
+		"duration", response.ProcessingDuration)
+
+	return response, nil
+}
+
+// commitSinglePolicyInTransaction commits a single policy within an existing transaction
+func (s *BasePolicyService) commitSinglePolicyInTransaction(ctx context.Context, tx *sqlx.Tx, policy *models.CompletePolicyData) error {
+	slog.Debug("Committing single policy",
+		"base_policy_id", policy.BasePolicy.ID,
+		"product_name", policy.BasePolicy.ProductName)
+
+	// 1. Insert BasePolicy
+	if err := s.basePolicyRepo.CreateBasePolicyTx(tx, policy.BasePolicy); err != nil {
+		return fmt.Errorf("failed to insert base policy: %w", err)
+	}
+
+	// 2. Insert BasePolicyTrigger if present
+	if policy.Trigger != nil {
+		if err := s.basePolicyRepo.CreateBasePolicyTriggerTx(tx, policy.Trigger); err != nil {
+			return fmt.Errorf("failed to insert base policy trigger: %w", err)
+		}
+	}
+
+	// 3. Insert BasePolicyTriggerConditions if present
+	if len(policy.Conditions) > 0 {
+		if err := s.basePolicyRepo.CreateBasePolicyTriggerConditionsBatchTx(tx, policy.Conditions); err != nil {
+			return fmt.Errorf("failed to insert base policy trigger conditions: %w", err)
+		}
+	}
+
+	slog.Debug("Policy committed successfully",
+		"base_policy_id", policy.BasePolicy.ID,
+		"trigger_present", policy.Trigger != nil,
+		"condition_count", len(policy.Conditions))
+
+	return nil
+}
+
+// cleanupCommittedPoliciesFromRedis removes successfully committed policies from Redis
+func (s *BasePolicyService) cleanupCommittedPoliciesFromRedis(ctx context.Context, committedPolicies []models.CommittedPolicyInfo) error {
+	slog.Debug("Starting Redis cleanup", "policy_count", len(committedPolicies))
+
+	for _, policy := range committedPolicies {
+		// Find and delete all Redis keys for this policy
+		patterns := []string{
+			fmt.Sprintf("*--%s--BasePolicy--*", policy.BasePolicyID),
+			fmt.Sprintf("*--%s--BasePolicyTrigger--*", policy.TriggerID),
+			fmt.Sprintf("*--*--BasePolicyTriggerCondition--*--%s--*", policy.BasePolicyID),
+			fmt.Sprintf("*--%s--CompletePolicyResponse", policy.BasePolicyID),
+		}
+
+		for _, pattern := range patterns {
+			keys, err := s.basePolicyRepo.FindKeysByPattern(ctx, pattern)
+			if err != nil {
+				slog.Warn("Failed to find keys for cleanup",
+					"pattern", pattern,
+					"base_policy_id", policy.BasePolicyID,
+					"error", err)
+				continue
+			}
+
+			for _, key := range keys {
+				if err := s.basePolicyRepo.DeleteTempBasePolicyModel(ctx, key); err != nil {
+					slog.Warn("Failed to delete Redis key",
+						"key", key,
+						"base_policy_id", policy.BasePolicyID,
+						"error", err)
+				}
+			}
+		}
+
+		slog.Debug("Policy cleanup completed",
+			"base_policy_id", policy.BasePolicyID,
+			"patterns_processed", len(patterns))
+	}
+
+	return nil
+}

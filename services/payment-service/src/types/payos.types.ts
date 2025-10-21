@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const paymentLinkSchema = z.object({
   bin: z.string().nullable().optional(),
-  checkout_url: z.string().url().nullable().optional(),
+  checkout_url: z.url().nullable().optional(),
   account_number: z.string().nullable().optional(),
   account_name: z.string().nullable().optional(),
   amount: z.coerce.number().nullable().optional(),
@@ -28,6 +28,17 @@ export const createPaymentLinkSchema = z.object({
   description: z.string(),
   return_url: z.string().url().optional(),
   cancel_url: z.string().url().optional(),
+  type: z.string().optional(),
+  items: z
+    .array(
+      z.object({
+        item_id: z.string().optional(),
+        name: z.string(),
+        price: z.coerce.number().positive(),
+        quantity: z.coerce.number().int().positive().default(1),
+      }),
+    )
+    .optional(),
 });
 
 export type CreatePaymentLinkData = z.infer<typeof createPaymentLinkSchema> & {
@@ -52,6 +63,15 @@ export const paymentLinkResponseSchema = z.object({
       if (typeof val === 'number') return new Date(val * 1000);
       return val;
     }),
+  items: z
+    .array(
+      z.object({
+        name: z.string(),
+        price: z.coerce.number().positive(),
+        quantity: z.coerce.number().int().positive().default(1),
+      }),
+    )
+    .optional(),
 });
 
 export type PaymentLinkResponse = z.infer<typeof paymentLinkResponseSchema>;
@@ -78,11 +98,10 @@ export type ServicePaymentLinkDtoResponse = z.infer<
   typeof servicePaymentLinkDtoResponseSchema
 >;
 
-// Schema cho payload webhook từ PayOS (dùng camelCase cho data, match payload thực tế)
 export const webhookPayloadSchema = z.object({
-  code: z.string(), // "00" = success
+  code: z.string(),
   desc: z.string(),
-  success: z.boolean().optional(), // Thêm success (optional)
+  success: z.boolean().optional(),
   data: z.object({
     accountNumber: z.string(),
     amount: z.number(),

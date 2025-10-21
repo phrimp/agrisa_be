@@ -25,4 +25,5 @@ export interface PayosService {
     webhookData: unknown,
   ): PaymentLinkDto | Record<string, unknown>;
   confirmWebhook(webhook_url: string): Promise<ServiceResponse<null>>;
+  getExpiredDuration(): string;
 }

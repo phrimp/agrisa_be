@@ -34,6 +34,7 @@ export const paymentSchema = z.object({
     .default('pending'),
   user_id: z.string(),
   checkout_url: z.string().max(255).nullable().optional(),
+  type: z.string().max(50).nullable().optional(),
   order_code: z.string().max(255).nullable().optional(),
   created_at: z.date(),
   updated_at: z.date(),
@@ -52,7 +53,6 @@ const statusMap: Record<z.infer<typeof paymentSchema>['status'], string> = {
 };
 
 export const paymentViewSchema = paymentSchema.transform((p) => {
-  // Nếu expired_at < now và status là 'pending', map thành 'expired'
   const now = new Date();
   const effectiveStatus =
     p.expired_at && p.expired_at < now && p.status === 'pending'
@@ -60,7 +60,10 @@ export const paymentViewSchema = paymentSchema.transform((p) => {
       : p.status;
   return {
     ...p,
-    status: statusMap[effectiveStatus] ?? effectiveStatus,
+    status: {
+      code: effectiveStatus,
+      label: statusMap[effectiveStatus] ?? effectiveStatus,
+    },
   };
 });
 

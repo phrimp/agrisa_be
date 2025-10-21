@@ -132,7 +132,12 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-example}
     networks:
       - traefik-net
-    command: redis-server --requirepass ${REDIS_PASSWORD:-example} --loglevel ${REDIS_LOG_LEVEL:-notice} --logfile /var/log/redis/redis.log
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD:-example} 
+      --loglevel ${REDIS_LOG_LEVEL:-notice} 
+      --logfile /var/log/redis/redis.log
+      --notify-keyspace-events Ex
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-example}", "ping"]
       interval: 10s
@@ -206,6 +211,7 @@ services:
 
     volumes:
       - ./logs/auth-service:/agrisa/log/auth_service
+      - ./services/auth-service/schema.sql:/app/schema.sql:ro
     networks:
       - traefik-net
     depends_on:
@@ -293,10 +299,14 @@ services:
       - PAYOS_API_KEY=${PAYOS_API_KEY}
       - PAYOS_CHECKSUM_KEY=${PAYOS_CHECKSUM_KEY}
       - PAYOS_EXPIRED_DURATION=${PAYOS_EXPIRED_DURATION:-60*5}
+      - PAYMENT_CRON_EXPRESSION=${PAYMENT_CRON_EXPRESSION:-"0 6 * * *"}
       - POSTGRES_HOST=${POSTGRES_HOST}
       - POSTGRES_PORT=${POSTGRES_PORT}
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
     volumes:
       - ./logs/payment-service:/app/log
     networks:
@@ -315,6 +325,7 @@ services:
       - "traefik.http.routers.payment-protected.entrypoints=web"
       - "traefik.http.routers.payment-protected.service=payment-service"
       - "traefik.http.routers.payment-protected.middlewares=cors,auth-middleware"
+
   # Weather Service
   weather-service:
     build:
@@ -427,6 +438,55 @@ services:
       - "traefik.http.routers.profile-protected.entrypoints=web"
       - "traefik.http.routers.profile-protected.service=profile-service"
       - "traefik.http.routers.profile-protected.middlewares=cors,auth-middleware"
+
+  policy-service:
+    build:
+      context: ./
+      dockerfile: services/policy-service/Dockerfile
+    container_name: agrisa-policy-service
+    restart: unless-stopped
+    ports:
+      - "${POLICY_SERVICE_PORT:-8083}:8089"
+    environment:
+      - PORT=8089
+      - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
+      - POSTGRES_PORT=${POSTGRES_PORT:-9406}
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POLICY_SERVICE_DB_NAME:-agrisa}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-example}
+      - MINIO_ENDPOINT=${MINIO_URL}
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+      - MINIO_LOCATION=${MINIO_LOCATION}
+      - MINIO_SECURE=${MINIO_SECURE}
+      - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
+
+    volumes:
+      - ./logs/policy_service:/agrisa/log/policy_service
+      - ./services/policy-service/schema.sql:/app/schema.sql:ro
+    networks:
+      - traefik-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.policy-service.loadbalancer.server.port=8089"
+
+      - "traefik.http.routers.policy-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/policy/public`)"
+      - "traefik.http.routers.policy-public.entrypoints=web"
+      - "traefik.http.routers.policy-public.service=policy-service"
+      - "traefik.http.routers.policy-public.middlewares=cors"
+
+      - "traefik.http.routers.policy-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/policy/protected`)"
+      - "traefik.http.routers.policy-protected.entrypoints=web"
+      - "traefik.http.routers.policy-protected.service=policy-service"
+      - "traefik.http.routers.policy-protected.middlewares=cors,auth-middleware"
 
 networks:
   traefik-net:

@@ -1,14 +1,20 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
-	"time"
-
 	"policy-service/internal/config"
 	"policy-service/internal/database/postgres"
+	"policy-service/internal/database/redis"
+	"policy-service/internal/handlers"
+	"policy-service/internal/repository"
+	"policy-service/internal/services"
+	"syscall"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -74,4 +80,55 @@ func main() {
 	app.Get("/checkhealth", func(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).SendString("Policy service is healthy")
 	})
+	redisClient, err := redis.NewRedisClient(cfg.RedisCfg.Host, cfg.RedisCfg.Port, cfg.RedisCfg.Password, cfg.RedisCfg.DB)
+	if err != nil {
+		log.Printf("error connect to redis: %w", err)
+	}
+
+	// Initialize repositories
+	dataTierRepo := repository.NewDataTierRepository(db)
+	basePolicyRepo := repository.NewBasePolicyRepository(db, redisClient.GetClient())
+	dataSourceRepo := repository.NewDataSourceRepository(db)
+
+	// Initialize services
+	dataTierService := services.NewDataTierService(dataTierRepo)
+	dataSourceService := services.NewDataSourceService(dataSourceRepo)
+	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo)
+	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService)
+
+	// Expiration Listener
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := expirationService.StartListener(ctx); err != nil {
+			log.Printf("Expiration service error: %v", err)
+		}
+	}()
+
+	// Initialize handlers
+	dataTierHandler := handlers.NewDataTierHandler(dataTierService)
+	dataSourceHandler := handlers.NewDataSourceHandler(dataSourceService)
+	basePolicyHandler := handlers.NewBasePolicyHandler(basePolicyService)
+
+	// Register routes
+	dataTierHandler.Register(app)
+	dataSourceHandler.Register(app)
+	basePolicyHandler.Register(app)
+
+	shutdownChan := make(chan os.Signal, 1)
+	doneChan := make(chan bool, 1)
+
+	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM)
+
+	go func() {
+		log.Printf("Starting server on port %s", cfg.Port)
+		if err := app.Listen(fmt.Sprintf("0.0.0.0:%s", cfg.Port)); err != nil {
+			log.Fatalf("Error starting server: %v", err)
+		}
+		doneChan <- true
+	}()
+
+	<-shutdownChan
+	log.Println("Shutting down server...")
 }

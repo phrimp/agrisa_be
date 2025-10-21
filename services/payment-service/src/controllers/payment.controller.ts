@@ -22,10 +22,10 @@ import type { CreatePaymentLinkData } from '../types/payos.types';
 import type { PayosService } from '../services/payos.service';
 import type { PaymentService } from '../services/payment.service';
 import { checkPermissions, generateRandomString } from 'src/libs/utils';
-import { PAYOS_EXPIRED_DURATION } from 'src/libs/payos.config';
 import { paymentViewSchema } from 'src/types/payment.types';
 import z from 'zod';
-const ORDER_CODE_LENGTH = 8;
+import type { OrderItemService } from 'src/services/order-item.service';
+import { payosConfig } from 'src/libs/payos.config';
 
 @Controller()
 export class PaymentController {
@@ -34,6 +34,8 @@ export class PaymentController {
   constructor(
     @Inject('PayosService') private readonly payosService: PayosService,
     @Inject('PaymentService') private readonly paymentService: PaymentService,
+    @Inject('OrderItemService')
+    private readonly orderItemService: OrderItemService,
   ) {}
 
   @Post('protected/link')
@@ -59,9 +61,9 @@ export class PaymentController {
     try {
       const order_code =
         parsed.data.order_code ??
-        Math.floor(Math.random() * 10 ** ORDER_CODE_LENGTH);
+        Math.floor(Math.random() * 10 ** payosConfig.orderCodeLength);
 
-      const duration_str = PAYOS_EXPIRED_DURATION || '';
+      const duration_str = this.payosService.getExpiredDuration();
       let duration_seconds: number;
       if (duration_str.includes('*')) {
         const parts = duration_str.split('*').map((s) => parseInt(s.trim()));
@@ -78,12 +80,33 @@ export class PaymentController {
         order_code: order_code.toString(),
         amount: parsed.data.amount,
         description: parsed.data.description,
+        type: payos_data.type,
         user_id: user_id,
         expired_at: expired_at,
       });
 
+      if (parsed.data.items && parsed.data.items.length > 0) {
+        for (const item of parsed.data.items) {
+          await this.orderItemService.create({
+            id: generateRandomString(),
+            payment_id: payment_id,
+            item_id: item.item_id,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity ?? 1,
+            created_at: new Date(),
+            updated_at: new Date(),
+          });
+        }
+      }
+
+      // Remove item_id from items before sending to PayOS
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const items = parsed.data.items?.map(({ item_id, ...item }) => item);
+
       const payos_payload = {
         ...parsed.data,
+        items: items,
         order_code: order_code,
         return_url: parsed.data.return_url,
         cancel_url: `https://agrisa-api.phrimp.io.vn/payment/public/webhook/cancel?order_id=${order_code}&redirect=${encodeURIComponent(parsed.data.cancel_url!)}`,
@@ -93,7 +116,15 @@ export class PaymentController {
       const payos_response =
         await this.payosService.createPaymentLink(payos_payload);
 
-      if (payos_response.error === 0 && payos_response.data?.checkout_url) {
+      if (payos_response.error !== 0) {
+        this.logger.error('PayOS createPaymentLink failed', payos_response);
+        throw new HttpException(
+          payos_response.message || 'Tạo liên kết thanh toán thất bại',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (payos_response.data?.checkout_url) {
         await this.paymentService.update(payment_id, {
           checkout_url: payos_response.data.checkout_url,
         });
@@ -155,16 +186,10 @@ export class PaymentController {
   @Post('public/webhook/verify')
   async verifyWebhook(@Body() body: unknown) {
     try {
-      this.logger.log('Received webhook payload', { body });
-
       this.payosService.verifyPaymentWebhookData(body);
 
       const parsed = webhookPayloadSchema.safeParse(body);
       if (parsed.success) {
-        this.logger.log('Webhook parsed successfully', {
-          parsedData: parsed.data,
-        });
-
         if (parsed.data.data && parsed.data.data.orderCode) {
           const payment = await this.paymentService.findByOrderCode(
             parsed.data.data.orderCode.toString(),
@@ -175,17 +200,10 @@ export class PaymentController {
                 status: 'completed',
                 paid_at: new Date(),
               });
-              this.logger.log('Payment status updated to completed', {
-                orderCode: parsed.data.data.orderCode,
-              });
-            } else {
-              this.logger.log('Payment code not 00, no status update', {
-                code: parsed.data.data.code,
-                orderCode: parsed.data.data.orderCode,
-              });
+              console.log('DATA:', parsed.data.data);
             }
           } else {
-            this.logger.warn('Payment not found for orderCode', {
+            this.logger.warn('Không tìm thấy order_code', {
               orderCode: parsed.data.data.orderCode,
             });
           }
@@ -195,14 +213,14 @@ export class PaymentController {
       }
 
       this.logger.warn('Webhook payload validation failed', {
-        errors: parsed.error.format(),
-      }); // Thêm log cho lỗi validation
+        errors: parsed.error,
+      });
       throw new HttpException(
         'Dữ liệu webhook không hợp lệ',
         HttpStatus.BAD_REQUEST,
       );
     } catch (error) {
-      this.logger.error('Failed to verify webhook', error);
+      this.logger.error('Thất bại xác minh webhook', error);
       throw new HttpException(
         'Xác minh webhook thất bại',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -213,10 +231,7 @@ export class PaymentController {
   @Post('public/webhook/confirm')
   async confirmWebhook(@Body('webhook_url') webhook_url: string) {
     if (!webhook_url) {
-      throw new HttpException(
-        'webhook_url is required',
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new HttpException('yêu cầu webhook_url', HttpStatus.BAD_REQUEST);
     }
 
     return this.payosService

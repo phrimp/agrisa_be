@@ -5,7 +5,9 @@ import {
   UpdateDateColumn,
   PrimaryColumn,
   DeleteDateColumn,
+  OneToMany,
 } from 'typeorm';
+import { OrderItem } from './order-item.entity';
 
 @Entity('payments')
 export class Payment {
@@ -41,6 +43,9 @@ export class Payment {
   @Column({ type: 'varchar', length: 255, nullable: true })
   order_code: string | null;
 
+  @Column({ type: 'varchar', length: 100, nullable: true })
+  type: string | null;
+
   @CreateDateColumn()
   created_at: Date;
 
@@ -55,4 +60,9 @@ export class Payment {
 
   @Column({ type: 'timestamp', nullable: true })
   expired_at: Date | null;
+
+  @OneToMany(() => OrderItem, (orderItem) => orderItem.payment_id, {
+    cascade: true,
+  })
+  orderItems: OrderItem[];
 }

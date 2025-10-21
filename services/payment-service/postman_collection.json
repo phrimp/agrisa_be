@@ -11,9 +11,9 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/ping",
+          "raw": "{{base_url}}/payment/public/ping",
           "host": ["{{base_url}}"],
-          "path": ["ping"]
+          "path": ["payment", "public", "ping"]
         }
       }
     },
@@ -29,12 +29,12 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"orderCode\": \"ADS213ASD\",\n  \"amount\": 100000,\n  \"description\": \"Test payment\",\n  \"returnUrl\": \"https://example.com/success\",\n  \"cancelUrl\": \"https://example.com/cancel\",\n  \"userId\": \"user123\"\n}"
+          "raw": "{\n  \"amount\": 200000,\n  \"description\": \"Test payment with multiple items\",\n  \"return_url\": \"https://example.com/success\",\n  \"cancel_url\": \"https://example.com/cancel\",\n  \"items\": [\n    {\n      \"item_id\": \"item123\",\n      \"name\": \"Test Item 1\",\n      \"price\": 100000,\n      \"quantity\": 1,\n      \"type\": \"product\"\n    },\n    {\n      \"item_id\": \"item456\",\n      \"name\": \"Test Item 2\",\n      \"price\": 50000,\n      \"quantity\": 2,\n      \"type\": \"service\"\n    },\n    {\n      \"item_id\": \"item789\",\n      \"name\": \"Test Item 3\",\n      \"price\": 25000,\n      \"quantity\": 1,\n      \"type\": \"product\"\n    }\n  ]\n}"
         },
         "url": {
-          "raw": "{{base_url}}/payment/link",
+          "raw": "{{base_url}}/payment/protected/link",
           "host": ["{{base_url}}"],
-          "path": ["payment", "link"]
+          "path": ["payment", "protected", "link"]
         }
       }
     },
@@ -44,9 +44,9 @@
         "method": "GET",
         "header": [],
         "url": {
-          "raw": "{{base_url}}/payment/link/:orderId",
+          "raw": "{{base_url}}/payment/protected/link/:orderId",
           "host": ["{{base_url}}"],
-          "path": ["payment", "link", ":orderId"],
+          "path": ["payment", "protected", "link", ":orderId"],
           "variable": [
             {
               "key": "orderId",
@@ -59,7 +59,7 @@
     {
       "name": "Cancel Payment Link",
       "request": {
-        "method": "POST",
+        "method": "DELETE",
         "header": [
           {
             "key": "Content-Type",
@@ -68,12 +68,12 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"cancellationReason\": \"User cancelled\"\n}"
+          "raw": "{\n  \"cancellation_reason\": \"User cancelled\"\n}"
         },
         "url": {
-          "raw": "{{base_url}}/payment/link/:orderId/cancel",
+          "raw": "{{base_url}}/payment/protected/link/:orderId",
           "host": ["{{base_url}}"],
-          "path": ["payment", "link", ":orderId", "cancel"],
+          "path": ["payment", "protected", "link", ":orderId"],
           "variable": [
             {
               "key": "orderId",
@@ -95,12 +95,12 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{}"
+          "raw": "{\n  \"code\": \"00\",\n  \"desc\": \"Thành công\",\n  \"success\": true,\n  \"data\": {\n    \"account_number\": \"123456789\",\n    \"amount\": 100000,\n    \"description\": \"Test payment\",\n    \"reference\": \"REF123\",\n    \"transaction_date_time\": \"2023-10-17T10:00:00Z\",\n    \"virtual_account_number\": \"123456789\",\n    \"counter_account_bank_id\": null,\n    \"counter_account_bank_name\": null,\n    \"counter_account_name\": null,\n    \"counter_account_number\": null,\n    \"virtual_account_name\": null,\n    \"currency\": \"VND\",\n    \"order_code\": 123456,\n    \"payment_link_id\": \"PAY123\",\n    \"code\": \"00\",\n    \"desc\": \"Thành công\"\n  },\n  \"signature\": \"signature_here\"\n}"
         },
         "url": {
-          "raw": "{{base_url}}/payment/webhook/verify",
+          "raw": "{{base_url}}/payment/public/webhook/verify",
           "host": ["{{base_url}}"],
-          "path": ["payment", "webhook", "verify"]
+          "path": ["payment", "public", "webhook", "verify"]
         }
       }
     },
@@ -116,7 +116,7 @@
         ],
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"webhookUrl\": \"https://example.com/webhook\"\n}"
+          "raw": "{\n  \"webhook_url\": \"https://example.com/webhook\"\n}"
         },
         "url": {
           "raw": "{{base_url}}/payment/webhook/confirm",
@@ -124,12 +124,34 @@
           "path": ["payment", "webhook", "confirm"]
         }
       }
+    },
+    {
+      "name": "Get Orders",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/payment/protected/orders?page=1&limit=10",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "protected", "orders"],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            }
+          ]
+        }
+      }
     }
   ],
   "variable": [
     {
       "key": "base_url",
-      "value": "http://localhost:3000",
+      "value": "https://agrisa-api.phrimp.io.vn",
       "type": "string"
     }
   ]

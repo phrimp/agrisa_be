@@ -25,11 +25,13 @@ type RegisteredPolicy struct {
 	TotalFarmerPremium      float64            `json:"total_farmer_premium" db:"total_farmer_premium"`
 	PremiumPaidByFarmer     bool               `json:"premium_paid_by_farmer" db:"premium_paid_by_farmer"`
 	PremiumPaidAt           *int64             `json:"premium_paid_at,omitempty" db:"premium_paid_at"`
+	DataComplexityScore     int                `json:"data_complexity_score" db:"data_complexity_score"`
 	MonthlyDataCost         float64            `json:"monthly_data_cost" db:"monthly_data_cost"`
 	TotalDataCost           float64            `json:"total_data_cost" db:"total_data_cost"`
 	Status                  PolicyStatus       `json:"status" db:"status"`
 	UnderwritingStatus      UnderwritingStatus `json:"underwriting_status" db:"underwriting_status"`
-	RejectionReason         *string            `json:"rejection_reason,omitempty" db:"rejection_reason"`
+	Reason                  *string            `json:"reason,omitempty" db:"reason"`
+	ReasonEvidence          any                `json:"reason_evidence" db:"reason_evidence"`
 	SignedPolicyDocumentURL *string            `json:"signed_policy_document_url,omitempty" db:"signed_policy_document_url"`
 	CreatedAt               time.Time          `json:"created_at" db:"created_at"`
 	UpdatedAt               time.Time          `json:"updated_at" db:"updated_at"`

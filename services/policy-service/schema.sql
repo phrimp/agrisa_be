@@ -25,6 +25,7 @@ CREATE TYPE payout_status AS ENUM ('pending', 'processing', 'completed', 'failed
 CREATE TYPE data_quality AS ENUM ('good', 'acceptable', 'poor');
 CREATE TYPE farm_status AS ENUM ('active', 'inactive', 'archived');
 CREATE TYPE photo_type AS ENUM ('crop', 'boundary', 'land_certificate', 'other');
+CREATE TYPE monitor_frequency AS ENUM ('hour', 'day', 'week', 'month', 'year');
 
 -- ============================================================================
 -- CORE DATA SOURCE & PRICING TABLES
@@ -210,12 +211,28 @@ CREATE TABLE base_policy (
     coverage_duration_days INT NOT NULL,
     
     -- Premium formula parameters
+    fix_premium_amount INT NOT NULL,
+    is_per_hectare BOOLEAN NOT NULL DEFAULT false,
     premium_base_rate DECIMAL(10,4) NOT NULL,
+    max_premium_payment_prolong INT,
+
+    -- Payout formula parameters
+    fix_payout_amount INT NOT NULL, 
+    is_payout_per_hectare BOOLEAN NOT NULL DEFAULT false,
+    over_threshold_multiplier DECIMAL(10,4) NOT NULL,
+    payout_base_rate DECIMAL(10,4) NOT NULL,
+    payout_cap INT,
     
-    -- Data complexity (calculated from base_policy_data_usage)
-    data_complexity_score INT DEFAULT 0,
-    monthly_data_cost DECIMAL(10,2) DEFAULT 0,
+    -- Enrollment date
+    enrollment_start_day INT,
+    enrollment_end_day INT,
     
+    -- Lifecycle
+    auto_renewal BOOLEAN DEFAULT false,
+    renewal_discount_rate DECIMAL(3,2),
+    base_policy_invalid_date INT,
+    insurance_valid_from_day INT,
+    insurance_valid_to_day INT,
     -- Status
     status base_policy_status DEFAULT 'draft',
     
@@ -223,6 +240,7 @@ CREATE TABLE base_policy (
     template_document_url VARCHAR(500),
     document_validation_status validation_status DEFAULT 'pending',
     document_validation_score DECIMAL(3,2),
+    important_additional_information JSONB,
     
     -- Metadata
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -230,19 +248,14 @@ CREATE TABLE base_policy (
     created_by VARCHAR(100),
     
     CONSTRAINT positive_premium_rate CHECK (premium_base_rate >= 0),
-    CONSTRAINT positive_duration CHECK (coverage_duration_days > 0),
-    CONSTRAINT positive_complexity CHECK (data_complexity_score >= 0),
-    CONSTRAINT positive_data_cost CHECK (monthly_data_cost >= 0)
+    CONSTRAINT positive_duration CHECK (coverage_duration_days > 0)
 );
 
 CREATE INDEX idx_base_policy_provider ON base_policy(insurance_provider_id);
 CREATE INDEX idx_base_policy_status ON base_policy(status);
 CREATE INDEX idx_base_policy_crop ON base_policy(crop_type);
-CREATE INDEX idx_base_policy_complexity ON base_policy(data_complexity_score);
 
 COMMENT ON TABLE base_policy IS 'Policy templates - data_tier removed, can use multiple data sources from different tiers';
-COMMENT ON COLUMN base_policy.data_complexity_score IS 'Number of unique data sources used (calculated)';
-COMMENT ON COLUMN base_policy.monthly_data_cost IS 'Total monthly cost for all data sources (calculated)';
 
 -- Base policy trigger (ONE trigger group per policy)
 CREATE TABLE base_policy_trigger (
@@ -252,21 +265,17 @@ CREATE TABLE base_policy_trigger (
     -- Logic operator for combining conditions
     logical_operator logical_operator NOT NULL DEFAULT 'AND',
     
-    -- Payout
-    payout_percentage DECIMAL(5,2) NOT NULL,
-    
     -- Time constraints
-    valid_from_day INT,
-    valid_to_day INT,
     growth_stage VARCHAR(50),
+    monitor_frequency_value INT DEFAULT 1,
+    monitor_frequency_unit monitor_frequency NOT NULL DEFAULT 'day',
+    blackout_periods JSONB,
     
     -- Metadata
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
-    CONSTRAINT one_trigger_per_base_policy UNIQUE (base_policy_id),
-    CONSTRAINT valid_payout_percentage CHECK (payout_percentage >= 0 AND payout_percentage <= 100),
-    CONSTRAINT valid_day_range CHECK (valid_to_day IS NULL OR valid_from_day IS NULL OR valid_to_day >= valid_from_day)
+    CONSTRAINT one_trigger_per_base_policy UNIQUE (base_policy_id)
 );
 
 CREATE INDEX idx_base_policy_trigger_policy ON base_policy_trigger(base_policy_id);
@@ -274,6 +283,7 @@ CREATE INDEX idx_base_policy_trigger_policy ON base_policy_trigger(base_policy_i
 COMMENT ON TABLE base_policy_trigger IS 'ONE trigger group per base policy, contains multiple conditions';
 
 -- Base policy trigger conditions (multiple conditions per trigger)
+-- MERGED: Now includes data usage cost tracking (previously in base_policy_data_usage)
 CREATE TABLE base_policy_trigger_condition (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     base_policy_trigger_id UUID NOT NULL REFERENCES base_policy_trigger(id) ON DELETE CASCADE,
@@ -284,6 +294,7 @@ CREATE TABLE base_policy_trigger_condition (
     -- Threshold configuration
     threshold_operator threshold_operator NOT NULL,
     threshold_value DECIMAL(10,4) NOT NULL,
+    early_warning_threshold DECIMAL(10,4),
     
     -- Aggregation
     aggregation_function aggregation_function NOT NULL DEFAULT 'avg',
@@ -300,42 +311,25 @@ CREATE TABLE base_policy_trigger_condition (
     -- Order
     condition_order INT DEFAULT 0,
     
+    -- Data usage cost tracking (merged from base_policy_data_usage)
+    base_cost DECIMAL(8,4) NOT NULL DEFAULT 0.0,
+    category_multiplier DECIMAL(4,2) NOT NULL DEFAULT 1.0,
+    tier_multiplier DECIMAL(4,2) NOT NULL DEFAULT 1.0,
+    calculated_cost DECIMAL(10,4) NOT NULL DEFAULT 0.0,
+    
     -- Metadata
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     
-    CONSTRAINT positive_window CHECK (aggregation_window_days > 0)
+    CONSTRAINT positive_window CHECK (aggregation_window_days > 0),
+    CONSTRAINT positive_costs CHECK (calculated_cost >= 0 AND base_cost >= 0)
 );
 
 CREATE INDEX idx_base_trigger_condition_trigger ON base_policy_trigger_condition(base_policy_trigger_id);
 CREATE INDEX idx_base_trigger_condition_data_source ON base_policy_trigger_condition(data_source_id);
 CREATE INDEX idx_base_trigger_condition_order ON base_policy_trigger_condition(base_policy_trigger_id, condition_order);
 
-COMMENT ON TABLE base_policy_trigger_condition IS 'Multiple conditions in a trigger group, each condition references a data_source';
-
--- Track data sources used in base policy (ONE row per data source per policy)
-CREATE TABLE base_policy_data_usage (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    base_policy_id UUID NOT NULL REFERENCES base_policy(id) ON DELETE CASCADE,
-    data_source_id UUID NOT NULL REFERENCES data_source(id),
-    
-    -- Cost snapshot at time of selection
-    base_cost DECIMAL(8,4) NOT NULL,
-    category_multiplier DECIMAL(4,2) NOT NULL,
-    tier_multiplier DECIMAL(4,2) NOT NULL,
-    calculated_cost DECIMAL(10,4) NOT NULL,
-    
-    -- Metadata
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    
-    CONSTRAINT positive_costs CHECK (calculated_cost >= 0),
-    CONSTRAINT unique_data_source_per_policy UNIQUE (base_policy_id, data_source_id)
-);
-
-CREATE INDEX idx_base_policy_data_usage_policy ON base_policy_data_usage(base_policy_id);
-CREATE INDEX idx_base_policy_data_usage_data_source ON base_policy_data_usage(data_source_id);
-
-COMMENT ON TABLE base_policy_data_usage IS 'Tracks which data sources are used in base policy (one row per data source)';
-COMMENT ON COLUMN base_policy_data_usage.calculated_cost IS 'base_cost × category_multiplier × tier_multiplier per month';
+COMMENT ON TABLE base_policy_trigger_condition IS 'Multiple conditions in a trigger group, each condition references a data_source and includes cost tracking';
+COMMENT ON COLUMN base_policy_trigger_condition.calculated_cost IS 'base_cost × category_multiplier × tier_multiplier per month';
 
 -- Document validation for base policy
 CREATE TABLE base_policy_document_validation (
@@ -399,7 +393,8 @@ CREATE TABLE registered_policy (
     -- Status
     status policy_status DEFAULT 'draft',
     underwriting_status underwriting_status DEFAULT 'pending',
-    rejection_reason TEXT,
+    reason TEXT,
+    reason_evidence JSONB,
     
     -- Documents
     signed_policy_document_url VARCHAR(500),
@@ -441,6 +436,9 @@ CREATE TABLE claim (
     base_policy_trigger_id UUID NOT NULL REFERENCES base_policy_trigger(id),
     
     trigger_timestamp INT NOT NULL,
+    over_threshold_value DECIMAL(10,4),
+    calculated_fix_payout DECIMAL(12,2),
+    calculated_threshold_payout DECIMAL(12,2),
     claim_amount DECIMAL(12,2) NOT NULL,
     
     status claim_status DEFAULT 'generated',
