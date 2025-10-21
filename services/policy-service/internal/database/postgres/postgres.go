@@ -4,7 +4,10 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 	"policy-service/internal/config"
+	"strings"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -56,9 +59,86 @@ func ConnectAndCreateDB(cfg config.PostgresConfig) (*sqlx.DB, error) {
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping target database: %w", err)
 	}
-	DBStatus = true
 
+	// Execute schema.sql if database was newly created
+	if !exists {
+		if err := executeSchema(db); err != nil {
+			log.Printf("Warning: Failed to execute schema.sql: %v", err)
+			// Don't return error, just log warning to allow manual schema setup
+		}
+	}
+
+	DBStatus = true
 	return db, nil
+}
+
+// executeSchema reads and executes the schema.sql file
+func executeSchema(db *sqlx.DB) error {
+	// Find schema.sql file - check multiple possible locations
+	schemaLocations := []string{
+		"schema.sql",          // Current directory
+		"./schema.sql",        // Relative to current directory
+		"../../../schema.sql", // Relative to this file location
+		"/app/schema.sql",     // Docker container location
+		filepath.Join(os.Getenv("PWD"), "schema.sql"), // Working directory
+	}
+
+	var schemaPath string
+	var schemaContent []byte
+	var err error
+
+	// Try to find schema.sql in possible locations
+	for _, location := range schemaLocations {
+		if _, err := os.Stat(location); err == nil {
+			schemaPath = location
+			break
+		}
+	}
+
+	if schemaPath == "" {
+		return fmt.Errorf("schema.sql not found in any expected locations: %v", schemaLocations)
+	}
+
+	// Read schema file
+	schemaContent, err = os.ReadFile(schemaPath)
+	if err != nil {
+		return fmt.Errorf("failed to read schema.sql from %s: %w", schemaPath, err)
+	}
+
+	log.Printf("Executing schema from: %s", schemaPath)
+
+	// Split schema into individual statements (split by semicolon)
+	statements := strings.Split(string(schemaContent), ";")
+
+	successCount := 0
+	for i, statement := range statements {
+		// Clean up the statement
+		statement = strings.TrimSpace(statement)
+		if statement == "" || strings.HasPrefix(statement, "--") {
+			continue // Skip empty lines and comments
+		}
+
+		// Execute each statement
+		_, err := db.Exec(statement)
+		if err != nil {
+			log.Printf("Warning: Failed to execute statement %d: %v", i+1, err)
+			log.Printf("Statement: %s", statement[:min(100, len(statement))])
+			// Continue executing other statements even if one fails
+		} else {
+			successCount++
+		}
+	}
+
+	log.Printf("Schema execution completed. Successfully executed %d statements", successCount)
+	return nil
+}
+
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func RetryConnectOnFailed(wait_amount time.Duration, db **sqlx.DB, cfg config.PostgresConfig) {

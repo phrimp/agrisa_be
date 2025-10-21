@@ -5,7 +5,7 @@ import (
 	"policy-service/internal/models"
 	"policy-service/internal/services"
 
-	"policy-service/internal/utils"
+	utils "agrisa_utils"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
@@ -39,7 +39,7 @@ func (dsh *DataSourceHandler) Register(app *fiber.App) {
 	dataSourceGroup.Get("/type/:type", dsh.GetDataSourcesByType)
 	dataSourceGroup.Get("/tier/:tierId", dsh.GetDataSourcesByTierID)
 	dataSourceGroup.Get("/parameter/:parameterName", dsh.GetDataSourcesByParameterName)
-	
+
 	// Utility routes
 	dataSourceGroup.Get("/count/total", dsh.GetDataSourceCount)
 	dataSourceGroup.Get("/count/active", dsh.GetActiveDataSourceCount)
