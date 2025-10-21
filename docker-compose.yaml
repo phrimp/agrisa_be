@@ -132,7 +132,12 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD:-example}
     networks:
       - traefik-net
-    command: redis-server --requirepass ${REDIS_PASSWORD:-example} --loglevel ${REDIS_LOG_LEVEL:-notice} --logfile /var/log/redis/redis.log
+    command: >
+      redis-server 
+      --requirepass ${REDIS_PASSWORD:-example} 
+      --loglevel ${REDIS_LOG_LEVEL:-notice} 
+      --logfile /var/log/redis/redis.log
+      --notify-keyspace-events Ex
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-example}", "ping"]
       interval: 10s
