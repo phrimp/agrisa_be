@@ -127,8 +127,10 @@ func ConnectAndCreateDB(cfg config.PostgresConfig) (*sqlx.DB, error) {
 	}
 
 	// Execute schema.sql file to create tables and indexes
-	if err := executeSchemaFile(db); err != nil {
-		return nil, fmt.Errorf("failed to execute schema.sql: %w", err)
+	if !exists {
+		if err := executeSchemaFile(db); err != nil {
+			return nil, fmt.Errorf("failed to execute schema.sql: %w", err)
+		}
 	}
 
 	DB_Status = true
