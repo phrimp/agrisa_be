@@ -13,7 +13,6 @@ import (
 var DB_Status bool
 
 func ConnectAndCreateDB(cfg config.PostgresConfig) (*sqlx.DB, error) {
-
 	targetConnStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=profile_service sslmode=disable",
 		cfg.Host, cfg.Port, cfg.Username, cfg.Password)
 

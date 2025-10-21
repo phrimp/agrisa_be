@@ -82,7 +82,7 @@ func findSchemaFile(startDir string) string {
 }
 
 func ConnectAndCreateDB(cfg config.PostgresConfig) (*sqlx.DB, error) {
-	defaultConnStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=auth_service sslmode=disable",
+	defaultConnStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=postgres sslmode=disable",
 		cfg.Host, cfg.Port, cfg.Username, cfg.Password)
 
 	// Logging the connection string values (excluding password for security)
