@@ -81,15 +81,18 @@ func main() {
 
 	//repositories
 	insurancePartnerRepository := repository.NewInsurancePartnerRepository(db)
+	userRepository := repository.NewUserRepository(db)
 
 	//services
 	insurancePartnerService := services.NewInsurancePartnerService(insurancePartnerRepository)
-
+	userService := services.NewUserService(userRepository)
 	// handlers
 	insurancePartnerHandler := handlers.NewInsurancePartnerHandler(insurancePartnerService)
+	userProfileHandler := handlers.NewUserProfileHandler(userService)
 
 	// Register routes
 	insurancePartnerHandler.RegisterRoutes(r)
+	userProfileHandler.RegisterRoutes(r)
 	serverPort := os.Getenv("PROFILE_SERVICE_PORT")
 	if serverPort == "" {
 		serverPort = "8087"
