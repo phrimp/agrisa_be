@@ -211,6 +211,7 @@ services:
 
     volumes:
       - ./logs/auth-service:/agrisa/log/auth_service
+      - ./services/auth-service/schema.sql:/app/schema.sql:ro
     networks:
       - traefik-net
     depends_on:
@@ -465,6 +466,7 @@ services:
 
     volumes:
       - ./logs/policy_service:/agrisa/log/policy_service
+      - ./services/policy-service/schema.sql:/app/schema.sql:ro
     networks:
       - traefik-net
     depends_on:
