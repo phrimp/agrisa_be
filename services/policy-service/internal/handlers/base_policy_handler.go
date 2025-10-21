@@ -59,6 +59,10 @@ func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 			expiration = hours
 		}
 	}
+	err := req.Validate()
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("VALIDATION_FAILED", err.Error()))
+	}
 
 	response, err := bph.basePolicyService.CreateCompletePolicy(c.Context(), &req, expiration)
 	if err != nil {
