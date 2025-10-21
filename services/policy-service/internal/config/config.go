@@ -3,11 +3,12 @@ package config
 import "os"
 
 type PolicyServiceConfig struct {
-	Port        string
-	PostgresCfg PostgresConfig
-	RabbitMQCfg RabbitMQConfig
-	RedisCfg    RedisConfig
-	MinioCfg    MinioConfig
+	Port         string
+	PostgresCfg  PostgresConfig
+	RabbitMQCfg  RabbitMQConfig
+	RedisCfg     RedisConfig
+	MinioCfg     MinioConfig
+	GeminiAPICfg GeminiAPIConfig
 }
 
 type MinioConfig struct {
@@ -40,6 +41,12 @@ type RedisConfig struct {
 	DB       int
 }
 
+type GeminiAPIConfig struct {
+	APIKey    string
+	FlashName string
+	ProName   string
+}
+
 func New() *PolicyServiceConfig {
 	return &PolicyServiceConfig{
 		Port: getEnvOrDefault("PORT", "8083"),
@@ -68,6 +75,11 @@ func New() *PolicyServiceConfig {
 			MinioLocation:    getEnvOrDefault("MINIO_LOCATION", "us-east-1"),
 			MinioSecure:      getEnvOrDefault("MINIO_SECURE", "false"),
 			MinioResourceURL: getEnvOrDefault("MINIO_RESOURCE_URL", "http://localhost:9407/"),
+		},
+		GeminiAPICfg: GeminiAPIConfig{
+			APIKey:    getEnvOrDefault("GEMINI_KEY", ""),
+			FlashName: getEnvOrDefault("GEMINI_FLASH_MODEL", "gemini-2.5-flash"),
+			ProName:   getEnvOrDefault("GEMINI_PRO_MODEL", "gemini-2.5-pro"),
 		},
 	}
 }
