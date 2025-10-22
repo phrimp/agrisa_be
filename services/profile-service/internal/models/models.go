@@ -1,34 +1,60 @@
 package models
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/lib/pq"
+)
 
 // InsurancePartner
 type InsurancePartner struct {
-	PartnerID             string     `json:"partner_id" db:"partner_id"`
-	PartnerName           string     `json:"partner_name" db:"partner_name"`
-	PartnerLogoURL        *string    `json:"partner_logo_url,omitempty" db:"partner_logo_url"`
-	CoverPhotoURL         *string    `json:"cover_photo_url,omitempty" db:"cover_photo_url"`
-	PartnerTagline        *string    `json:"partner_tagline,omitempty" db:"partner_tagline"`
-	PartnerDescription    *string    `json:"partner_description,omitempty" db:"partner_description"`
-	PartnerPhone          *string    `json:"partner_phone,omitempty" db:"partner_phone"`
-	PartnerEmail          *string    `json:"partner_email,omitempty" db:"partner_email"`
-	PartnerAddress        *string    `json:"partner_address,omitempty" db:"partner_address"`
-	PartnerWebsite        *string    `json:"partner_website,omitempty" db:"partner_website"`
-	PartnerRatingScore    *float64   `json:"partner_rating_score,omitempty" db:"partner_rating_score"`
-	PartnerRatingCount    int        `json:"partner_rating_count" db:"partner_rating_count"`
-	TrustMetricExperience *int       `json:"trust_metric_experience,omitempty" db:"trust_metric_experience"`
-	TrustMetricClients    *int       `json:"trust_metric_clients,omitempty" db:"trust_metric_clients"`
-	TrustMetricClaimRate  *int       `json:"trust_metric_claim_rate,omitempty" db:"trust_metric_claim_rate"`
-	TotalPayouts          *string    `json:"total_payouts,omitempty" db:"total_payouts"`
-	AveragePayoutTime     *string    `json:"average_payout_time,omitempty" db:"average_payout_time"`
-	ConfirmationTimeline  *string    `json:"confirmation_timeline,omitempty" db:"confirmation_timeline"`
-	Hotline               *string    `json:"hotline,omitempty" db:"hotline"`
-	SupportHours          *string    `json:"support_hours,omitempty" db:"support_hours"`
-	CoverageAreas         *string    `json:"coverage_areas,omitempty" db:"coverage_areas"`
-	IsSuspended           bool       `json:"is_suspended" db:"is_suspended"`
-	SuspendedAt           *time.Time `json:"suspended_at,omitempty" db:"suspended_at"`
-	CreatedAt             time.Time  `json:"created_at" db:"created_at"`
-	UpdatedAt             time.Time  `json:"updated_at" db:"updated_at"`
+	PartnerID                  uuid.UUID      `db:"partner_id"`
+	LegalCompanyName           string         `db:"legal_company_name"`
+	PartnerTradingName         string         `db:"partner_trading_name"`
+	PartnerDisplayName         string         `db:"partner_display_name"`
+	PartnerLogoURL             string         `db:"partner_logo_url"`
+	CoverPhotoURL              string         `db:"cover_photo_url"`
+	CompanyType                string         `db:"company_type"`
+	IncorporationDate          *time.Time     `db:"incorporation_date"`
+	TaxIdentificationNumber    string         `db:"tax_identification_number"`
+	BusinessRegistrationNumber string         `db:"business_registration_number"`
+	PartnerTagline             string         `db:"partner_tagline"`
+	PartnerDescription         string         `db:"partner_description"`
+	PartnerPhone               string         `db:"partner_phone"`
+	PartnerOfficialEmail       string         `db:"partner_official_email"`
+	HeadOfficeAddress          string         `db:"head_office_address"`
+	ProvinceCode               string         `db:"province_code"`
+	ProvinceName               string         `db:"province_name"`
+	WardCode                   string         `db:"ward_code"`
+	WardName                   string         `db:"ward_name"`
+	PostalCode                 string         `db:"postal_code"`
+	FaxNumber                  string         `db:"fax_number"`
+	CustomerServiceHotline     string         `db:"customer_service_hotline"`
+	InsuranceLicenseNumber     string         `db:"insurance_license_number"`
+	LicenseIssueDate           *time.Time     `db:"license_issue_date"`
+	LicenseExpiryDate          *time.Time     `db:"license_expiry_date"`
+	AuthorizedInsuranceLines   pq.StringArray `db:"authorized_insurance_lines"`
+	OperatingProvinces         pq.StringArray `db:"operating_provinces"`
+	YearEstablished            int            `db:"year_established"`
+	PartnerWebsite             string         `db:"partner_website"`
+	PartnerRatingScore         float32        `db:"partner_rating_score"`
+	PartnerRatingCount         int            `db:"partner_rating_count"`
+	TrustMetricExperience      int            `db:"trust_metric_experience"`
+	TrustMetricClients         int            `db:"trust_metric_clients"`
+	TrustMetricClaimRate       int            `db:"trust_metric_claim_rate"`
+	TotalPayouts               string         `db:"total_payouts"`
+	AveragePayoutTime          string         `db:"average_payout_time"`
+	ConfirmationTimeline       string         `db:"confirmation_timeline"`
+	Hotline                    string         `db:"hotline"`
+	SupportHours               string         `db:"support_hours"`
+	CoverageAreas              string         `db:"coverage_areas"`
+	Status                     string         `db:"status"`
+	CreatedAt                  time.Time      `db:"created_at"`
+	UpdatedAt                  time.Time      `db:"updated_at"`
+	LastUpdatedByID            *uuid.UUID     `db:"last_updated_by_id"`
+	LastUpdatedByName          *string        `db:"last_updated_by_name"`
+	LegalDocumentURLs          pq.StringArray `db:"legal_document_urls"`
 }
 
 type Product struct {
@@ -52,4 +78,32 @@ type PartnerReview struct {
 	ReviewContent     *string   `json:"review_content,omitempty" db:"review_content"`
 	CreatedAt         time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at" db:"updated_at"`
+}
+
+type UserProfile struct {
+	ProfileID         uuid.UUID  `json:"profile_id" db:"profile_id"`
+	UserID            string     `json:"user_id" db:"user_id"`
+	RoleID            string     `json:"role_id" db:"role_id"`
+	PartnerID         *uuid.UUID `json:"partner_id" db:"partner_id"`
+	FullName          string     `json:"full_name" db:"full_name"`
+	DisplayName       string     `json:"display_name" db:"display_name"`
+	DateOfBirth       *time.Time `json:"date_of_birth" db:"date_of_birth"`
+	Gender            string     `json:"gender" db:"gender"`
+	Nationality       string     `json:"nationality" db:"nationality"`
+	PrimaryPhone      string     `json:"primary_phone" db:"primary_phone"`
+	AlternatePhone    string     `json:"alternate_phone" db:"alternate_phone"`
+	Email             string     `json:"email" db:"email"`
+	PermanentAddress  string     `json:"permanent_address" db:"permanent_address"`
+	CurrentAddress    string     `json:"current_address" db:"current_address"`
+	ProvinceCode      string     `json:"province_code" db:"province_code"`
+	ProvinceName      string     `json:"province_name" db:"province_name"`
+	DistrictCode      string     `json:"district_code" db:"district_code"`
+	DistrictName      string     `json:"district_name" db:"district_name"`
+	WardCode          string     `json:"ward_code" db:"ward_code"`
+	WardName          string     `json:"ward_name" db:"ward_name"`
+	PostalCode        string     `json:"postal_code" db:"postal_code"`
+	CreatedAt         time.Time  `json:"created_at" db:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
+	LastUpdatedBy     string     `json:"last_updated_by" db:"last_updated_by"`
+	LastUpdatedByName string     `json:"last_updated_by_name" db:"last_updated_by_name"`
 }
