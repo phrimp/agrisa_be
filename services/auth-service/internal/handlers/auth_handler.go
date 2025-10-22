@@ -264,7 +264,7 @@ func (a *AuthHandler) mapRegisterError(err error) (int, string) {
 		return http.StatusBadRequest, "INVALID_PASSWORD_FORMAT"
 	case strings.Contains(errorMsg, "cccd format"):
 		return http.StatusBadRequest, "INVALID_NATIONAL_ID"
-	case strings.Contains(errorMsg, "creating new user"):
+	case strings.Contains(errorMsg, "exist"):
 		return http.StatusConflict, "USER_ALREADY_EXISTS"
 	default:
 		return http.StatusInternalServerError, "INTERNAL_ERROR"

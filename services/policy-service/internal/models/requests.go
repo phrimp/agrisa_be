@@ -70,19 +70,19 @@ func (r CreateDataTierCategoryRequest) Validate() error {
 	if err := trimAndValidateString(r.CategoryName, "category_name", 1, 100); err != nil {
 		return err
 	}
-	
+
 	if r.CategoryDescription != nil && len(strings.TrimSpace(*r.CategoryDescription)) > 500 {
 		return errors.New("category_description must be 500 characters or less")
 	}
-	
+
 	if r.CategoryCostMultiplier <= 0 {
 		return errors.New("category_cost_multiplier must be greater than 0")
 	}
-	
+
 	if r.CategoryCostMultiplier > 100 {
 		return errors.New("category_cost_multiplier must be 100 or less")
 	}
-	
+
 	return nil
 }
 
@@ -98,11 +98,11 @@ func (r UpdateDataTierCategoryRequest) Validate() error {
 			return err
 		}
 	}
-	
+
 	if r.CategoryDescription != nil && len(strings.TrimSpace(*r.CategoryDescription)) > 500 {
 		return errors.New("category_description must be 500 characters or less")
 	}
-	
+
 	if r.CategoryCostMultiplier != nil {
 		if *r.CategoryCostMultiplier <= 0 {
 			return errors.New("category_cost_multiplier must be greater than 0")
@@ -111,7 +111,7 @@ func (r UpdateDataTierCategoryRequest) Validate() error {
 			return errors.New("category_cost_multiplier must be 100 or less")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -126,27 +126,27 @@ func (r CreateDataTierRequest) Validate() error {
 	if r.DataTierCategoryID == uuid.Nil {
 		return errors.New("data_tier_category_id is required")
 	}
-	
+
 	if r.TierLevel < 1 {
 		return errors.New("tier_level must be at least 1")
 	}
-	
+
 	if r.TierLevel > 100 {
 		return errors.New("tier_level must be 100 or less")
 	}
-	
+
 	if err := trimAndValidateString(r.TierName, "tier_name", 1, 100); err != nil {
 		return err
 	}
-	
+
 	if r.DataTierMultiplier <= 0 {
 		return errors.New("data_tier_multiplier must be greater than 0")
 	}
-	
+
 	if r.DataTierMultiplier > 100 {
 		return errors.New("data_tier_multiplier must be 100 or less")
 	}
-	
+
 	return nil
 }
 
@@ -166,13 +166,13 @@ func (r UpdateDataTierRequest) Validate() error {
 			return errors.New("tier_level must be 100 or less")
 		}
 	}
-	
+
 	if r.TierName != nil {
 		if err := trimAndValidateString(*r.TierName, "tier_name", 1, 100); err != nil {
 			return err
 		}
 	}
-	
+
 	if r.DataTierMultiplier != nil {
 		if *r.DataTierMultiplier <= 0 {
 			return errors.New("data_tier_multiplier must be greater than 0")
@@ -181,7 +181,7 @@ func (r UpdateDataTierRequest) Validate() error {
 			return errors.New("data_tier_multiplier must be 100 or less")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -227,35 +227,35 @@ type CompletePolicyData struct {
 
 // ValidatePolicyRequest represents the request for manual policy validation
 type ValidatePolicyRequest struct {
-	BasePolicyID        uuid.UUID        `json:"base_policy_id" validate:"required"`
-	ValidationStatus    ValidationStatus `json:"validation_status" validate:"required"`
-	ValidatedBy         string           `json:"validated_by" validate:"required"`
-	
+	BasePolicyID     uuid.UUID        `json:"base_policy_id" validate:"required"`
+	ValidationStatus ValidationStatus `json:"validation_status" validate:"required"`
+	ValidatedBy      string           `json:"validated_by" validate:"required"`
+
 	// Validation metrics (user-controlled)
-	TotalChecks         int              `json:"total_checks" validate:"min=0"`
-	PassedChecks        int              `json:"passed_checks" validate:"min=0"`
-	FailedChecks        int              `json:"failed_checks" validate:"min=0"`
-	WarningCount        int              `json:"warning_count" validate:"min=0"`
-	
+	TotalChecks  int `json:"total_checks" validate:"min=0"`
+	PassedChecks int `json:"passed_checks" validate:"min=0"`
+	FailedChecks int `json:"failed_checks" validate:"min=0"`
+	WarningCount int `json:"warning_count" validate:"min=0"`
+
 	// Optional detailed validation data (JSONB)
-	Mismatches          interface{}      `json:"mismatches,omitempty"`
-	Warnings            interface{}      `json:"warnings,omitempty"`
-	Recommendations     interface{}      `json:"recommendations,omitempty"`
-	ExtractedParameters interface{}      `json:"extracted_parameters,omitempty"`
-	
+	Mismatches          interface{} `json:"mismatches,omitempty"`
+	Warnings            interface{} `json:"warnings,omitempty"`
+	Recommendations     interface{} `json:"recommendations,omitempty"`
+	ExtractedParameters interface{} `json:"extracted_parameters,omitempty"`
+
 	// Optional metadata
-	ValidationNotes     *string          `json:"validation_notes,omitempty"`
+	ValidationNotes *string `json:"validation_notes,omitempty"`
 }
 
 func (r ValidatePolicyRequest) Validate() error {
 	if r.BasePolicyID == uuid.Nil {
 		return errors.New("base_policy_id is required")
 	}
-	
+
 	if err := trimAndValidateString(r.ValidatedBy, "validated_by", 1, 100); err != nil {
 		return err
 	}
-	
+
 	// Validate validation status
 	validStatuses := []ValidationStatus{
 		ValidationPending,
@@ -271,15 +271,15 @@ func (r ValidatePolicyRequest) Validate() error {
 		}
 	}
 	if !isValidStatus {
-		return fmt.Errorf("validation_status must be one of: %s, %s, %s, %s", 
+		return fmt.Errorf("validation_status must be one of: %s, %s, %s, %s",
 			ValidationPending, ValidationPassed, ValidationFailed, ValidationWarning)
 	}
-	
+
 	// Validate check counts consistency
-	if r.PassedChecks + r.FailedChecks > r.TotalChecks {
+	if r.PassedChecks+r.FailedChecks > r.TotalChecks {
 		return errors.New("passed_checks + failed_checks cannot exceed total_checks")
 	}
-	
+
 	if r.TotalChecks < 0 || r.PassedChecks < 0 || r.FailedChecks < 0 || r.WarningCount < 0 {
 		return errors.New("all check counts (total_checks, passed_checks, failed_checks, warning_count) must be non-negative")
 	}
@@ -288,7 +288,7 @@ func (r ValidatePolicyRequest) Validate() error {
 	if r.ValidationNotes != nil && len(strings.TrimSpace(*r.ValidationNotes)) > 1000 {
 		return errors.New("validation_notes must be 1000 characters or less")
 	}
-	
+
 	return nil
 }
 
@@ -317,12 +317,12 @@ type CreateDataSourceRequest struct {
 func (r CreateDataSourceRequest) Validate() error {
 	// Validate enum values
 	if !isValidDataSourceType(r.DataSource) {
-		return fmt.Errorf("invalid data_source: must be one of %s, %s, %s", 
+		return fmt.Errorf("invalid data_source: must be one of %s, %s, %s",
 			DataSourceWeather, DataSourceSatellite, DataSourceDerived)
 	}
-	
+
 	if !isValidParameterType(r.ParameterType) {
-		return fmt.Errorf("invalid parameter_type: must be one of %s, %s, %s", 
+		return fmt.Errorf("invalid parameter_type: must be one of %s, %s, %s",
 			ParameterNumeric, ParameterBoolean, ParameterCategorical)
 	}
 
@@ -330,11 +330,11 @@ func (r CreateDataSourceRequest) Validate() error {
 	if err := trimAndValidateString(r.ParameterName, "parameter_name", 1, 100); err != nil {
 		return err
 	}
-	
+
 	if r.DataTierID == uuid.Nil {
 		return errors.New("data_tier_id is required")
 	}
-	
+
 	if r.BaseCost < 0 {
 		return errors.New("base_cost cannot be negative")
 	}
@@ -343,8 +343,8 @@ func (r CreateDataSourceRequest) Validate() error {
 	if r.MinValue != nil && r.MaxValue != nil && *r.MinValue > *r.MaxValue {
 		return errors.New("min_value cannot be greater than max_value")
 	}
-	
-	if r.AccuracyRating != nil && (*r.AccuracyRating < 0 || *r.AccuracyRating > 100) {
+
+	if r.AccuracyRating != nil && (*r.AccuracyRating < 0 || *r.AccuracyRating > 1) {
 		return errors.New("accuracy_rating must be between 0 and 100")
 	}
 
@@ -352,23 +352,23 @@ func (r CreateDataSourceRequest) Validate() error {
 	if r.Unit != nil && len(strings.TrimSpace(*r.Unit)) > 50 {
 		return errors.New("unit must be 50 characters or less")
 	}
-	
+
 	if r.DisplayNameVi != nil && len(strings.TrimSpace(*r.DisplayNameVi)) > 200 {
 		return errors.New("display_name_vi must be 200 characters or less")
 	}
-	
+
 	if r.DescriptionVi != nil && len(strings.TrimSpace(*r.DescriptionVi)) > 1000 {
 		return errors.New("description_vi must be 1000 characters or less")
 	}
-	
+
 	if r.UpdateFrequency != nil && len(strings.TrimSpace(*r.UpdateFrequency)) > 100 {
 		return errors.New("update_frequency must be 100 characters or less")
 	}
-	
+
 	if r.SpatialResolution != nil && len(strings.TrimSpace(*r.SpatialResolution)) > 100 {
 		return errors.New("spatial_resolution must be 100 characters or less")
 	}
-	
+
 	if r.DataProvider != nil && len(strings.TrimSpace(*r.DataProvider)) > 200 {
 		return errors.New("data_provider must be 200 characters or less")
 	}
@@ -383,7 +383,7 @@ func (r CreateDataSourceRequest) Validate() error {
 			return errors.New("api_endpoint must be a valid URL")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -409,12 +409,12 @@ type UpdateDataSourceRequest struct {
 func (r UpdateDataSourceRequest) Validate() error {
 	// Validate enum values if provided
 	if r.DataSource != nil && !isValidDataSourceType(*r.DataSource) {
-		return fmt.Errorf("invalid data_source: must be one of %s, %s, %s", 
+		return fmt.Errorf("invalid data_source: must be one of %s, %s, %s",
 			DataSourceWeather, DataSourceSatellite, DataSourceDerived)
 	}
-	
+
 	if r.ParameterType != nil && !isValidParameterType(*r.ParameterType) {
-		return fmt.Errorf("invalid parameter_type: must be one of %s, %s, %s", 
+		return fmt.Errorf("invalid parameter_type: must be one of %s, %s, %s",
 			ParameterNumeric, ParameterBoolean, ParameterCategorical)
 	}
 
@@ -424,15 +424,15 @@ func (r UpdateDataSourceRequest) Validate() error {
 			return err
 		}
 	}
-	
+
 	if r.BaseCost != nil && *r.BaseCost < 0 {
 		return errors.New("base_cost cannot be negative")
 	}
-	
+
 	if r.MinValue != nil && r.MaxValue != nil && *r.MinValue > *r.MaxValue {
 		return errors.New("min_value cannot be greater than max_value")
 	}
-	
+
 	if r.AccuracyRating != nil && (*r.AccuracyRating < 0 || *r.AccuracyRating > 100) {
 		return errors.New("accuracy_rating must be between 0 and 100")
 	}
@@ -441,23 +441,23 @@ func (r UpdateDataSourceRequest) Validate() error {
 	if r.Unit != nil && len(strings.TrimSpace(*r.Unit)) > 50 {
 		return errors.New("unit must be 50 characters or less")
 	}
-	
+
 	if r.DisplayNameVi != nil && len(strings.TrimSpace(*r.DisplayNameVi)) > 200 {
 		return errors.New("display_name_vi must be 200 characters or less")
 	}
-	
+
 	if r.DescriptionVi != nil && len(strings.TrimSpace(*r.DescriptionVi)) > 1000 {
 		return errors.New("description_vi must be 1000 characters or less")
 	}
-	
+
 	if r.UpdateFrequency != nil && len(strings.TrimSpace(*r.UpdateFrequency)) > 100 {
 		return errors.New("update_frequency must be 100 characters or less")
 	}
-	
+
 	if r.SpatialResolution != nil && len(strings.TrimSpace(*r.SpatialResolution)) > 100 {
 		return errors.New("spatial_resolution must be 100 characters or less")
 	}
-	
+
 	if r.DataProvider != nil && len(strings.TrimSpace(*r.DataProvider)) > 200 {
 		return errors.New("data_provider must be 200 characters or less")
 	}
@@ -472,7 +472,7 @@ func (r UpdateDataSourceRequest) Validate() error {
 			return errors.New("api_endpoint must be a valid URL")
 		}
 	}
-	
+
 	return nil
 }
 
@@ -508,7 +508,7 @@ type DataSourceFiltersRequest struct {
 func (r DataSourceFiltersRequest) Validate() error {
 	// Validate data source type if provided
 	if r.DataSourceType != nil && !isValidDataSourceType(*r.DataSourceType) {
-		return fmt.Errorf("invalid data_source_type: must be one of %s, %s, %s", 
+		return fmt.Errorf("invalid data_source_type: must be one of %s, %s, %s",
 			DataSourceWeather, DataSourceSatellite, DataSourceDerived)
 	}
 
@@ -535,12 +535,12 @@ func (r DataSourceFiltersRequest) Validate() error {
 	if r.MinAccuracy != nil && (*r.MinAccuracy < 0 || *r.MinAccuracy > 100) {
 		return errors.New("min_accuracy must be between 0 and 100")
 	}
-	
+
 	return nil
 }
 
 // ============================================================================
-// COMMIT POLICIES REQUESTS  
+// COMMIT POLICIES REQUESTS
 // ============================================================================
 
 // CommitPoliciesRequest represents the request for committing policies from Redis to database
@@ -551,9 +551,9 @@ type CommitPoliciesRequest struct {
 	ArchiveStatus string `json:"archive_status,omitempty"`
 
 	// Operational options
-	DeleteFromRedis bool `json:"delete_from_redis"`     // Clean up after commit
-	ValidateOnly    bool `json:"validate_only"`         // Dry run mode
-	BatchSize       int  `json:"batch_size,omitempty"`  // Control batch processing (default: 10)
+	DeleteFromRedis bool `json:"delete_from_redis"`    // Clean up after commit
+	ValidateOnly    bool `json:"validate_only"`        // Dry run mode
+	BatchSize       int  `json:"batch_size,omitempty"` // Control batch processing (default: 10)
 }
 
 func (r CommitPoliciesRequest) Validate() error {
@@ -602,13 +602,13 @@ func (r CommitPoliciesRequest) Validate() error {
 
 // CommitPoliciesResponse represents the response after committing policies
 type CommitPoliciesResponse struct {
-	CommittedPolicies   []CommittedPolicyInfo `json:"committed_policies"`
-	TotalPoliciesFound  int                   `json:"total_policies_found"`
-	TotalCommitted      int                   `json:"total_committed"`
-	TotalFailed         int                   `json:"total_failed"`
-	FailedPolicies      []FailedPolicyInfo    `json:"failed_policies,omitempty"`
-	ProcessingDuration  time.Duration         `json:"processing_duration"`
-	OperationTimestamp  time.Time             `json:"operation_timestamp"`
+	CommittedPolicies  []CommittedPolicyInfo `json:"committed_policies"`
+	TotalPoliciesFound int                   `json:"total_policies_found"`
+	TotalCommitted     int                   `json:"total_committed"`
+	TotalFailed        int                   `json:"total_failed"`
+	FailedPolicies     []FailedPolicyInfo    `json:"failed_policies,omitempty"`
+	ProcessingDuration time.Duration         `json:"processing_duration"`
+	OperationTimestamp time.Time             `json:"operation_timestamp"`
 }
 
 // CommittedPolicyInfo represents information about a successfully committed policy
