@@ -152,3 +152,35 @@ type PrivatePartnerProfile struct {
 	LastUpdatedByID   string     `db:"last_updated_by_id" json:"last_updated_by_id"`
 	LastUpdatedByName string     `db:"last_updated_by_name" json:"last_updated_by_name"`
 }
+
+type CreateUserProfileRequest struct {
+	// Identity
+	UserID string `json:"user_id" db:"user_id"`
+	RoleID string `json:"role_id" db:"role_id"`
+
+	// Company Association
+	PartnerID *string `json:"partner_id,omitempty" db:"partner_id"`
+
+	// Basic Personal Information
+	FullName    string  `json:"full_name" db:"full_name"`
+	DisplayName *string `json:"display_name,omitempty" db:"display_name"`
+	DateOfBirth *string `json:"date_of_birth,omitempty" db:"date_of_birth"`
+	Gender      *string `json:"gender,omitempty" db:"gender"`
+	Nationality string  `json:"nationality" db:"nationality"`
+
+	// Contact Information
+	PrimaryPhone   string  `json:"primary_phone" db:"primary_phone"`
+	AlternatePhone *string `json:"alternate_phone,omitempty" db:"alternate_phone"`
+	Email          *string `json:"email,omitempty" db:"email"`
+
+	// Address Information
+	PermanentAddress *string `json:"permanent_address,omitempty" db:"permanent_address"`
+	CurrentAddress   *string `json:"current_address,omitempty" db:"current_address"`
+	ProvinceCode     *string `json:"province_code,omitempty" db:"province_code"`
+	ProvinceName     *string `json:"province_name,omitempty" db:"province_name"`
+	DistrictCode     *string `json:"district_code,omitempty" db:"district_code"`
+	DistrictName     *string `json:"district_name,omitempty" db:"district_name"`
+	WardCode         *string `json:"ward_code,omitempty" db:"ward_code"`
+	WardName         *string `json:"ward_name,omitempty" db:"ward_name"`
+	PostalCode       *string `json:"postal_code,omitempty" db:"postal_code"`
+}
