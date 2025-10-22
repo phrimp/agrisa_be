@@ -23,7 +23,7 @@ func (r *DataTierRepository) CreateDataTierCategory(category *models.DataTierCat
 	if category.ID == uuid.Nil {
 		category.ID = uuid.New()
 	}
-	
+
 	category.CreatedAt = time.Now()
 	category.UpdatedAt = time.Now()
 
@@ -40,7 +40,7 @@ func (r *DataTierRepository) CreateDataTierCategory(category *models.DataTierCat
 }
 
 func (r *DataTierRepository) GetDataTierCategoryByID(id uuid.UUID) (*models.DataTierCategory, error) {
-	slog.Debug("Retrieving data tier category by ID", "category_id", id)
+	slog.Info("Retrieving data tier category by ID", "category_id", id)
 	start := time.Now()
 
 	var category models.DataTierCategory
@@ -61,7 +61,7 @@ func (r *DataTierRepository) GetDataTierCategoryByID(id uuid.UUID) (*models.Data
 		return nil, fmt.Errorf("failed to get data tier category: %w", err)
 	}
 
-	slog.Debug("Successfully retrieved data tier category",
+	slog.Info("Successfully retrieved data tier category",
 		"category_id", id,
 		"category_name", category.CategoryName,
 		"cost_multiplier", category.CategoryCostMultiplier,
@@ -136,7 +136,7 @@ func (r *DataTierRepository) CreateDataTier(tier *models.DataTier) error {
 	if tier.ID == uuid.Nil {
 		tier.ID = uuid.New()
 	}
-	
+
 	tier.CreatedAt = time.Now()
 	tier.UpdatedAt = time.Now()
 
@@ -153,7 +153,7 @@ func (r *DataTierRepository) CreateDataTier(tier *models.DataTier) error {
 }
 
 func (r *DataTierRepository) GetDataTierByID(id uuid.UUID) (*models.DataTier, error) {
-	slog.Debug("Retrieving data tier by ID", "data_tier_id", id)
+	slog.Info("Retrieving data tier by ID", "data_tier_id", id)
 	start := time.Now()
 
 	var tier models.DataTier
@@ -174,7 +174,7 @@ func (r *DataTierRepository) GetDataTierByID(id uuid.UUID) (*models.DataTier, er
 		return nil, fmt.Errorf("failed to get data tier: %w", err)
 	}
 
-	slog.Debug("Successfully retrieved data tier",
+	slog.Info("Successfully retrieved data tier",
 		"data_tier_id", id,
 		"tier_name", tier.TierName,
 		"tier_level", tier.TierLevel,

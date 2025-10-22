@@ -222,7 +222,7 @@ func (r *BasePolicyRepository) GetAllBasePolicies() ([]models.BasePolicy, error)
 	policies := make([]models.BasePolicy, len(dbPolicies))
 	for i, dbPolicy := range dbPolicies {
 		policies[i] = dbPolicy.BasePolicy
-		
+
 		if len(dbPolicy.ImportantAdditionalInformationRaw) > 0 {
 			infoMap, err := utils.DeserializeBytesToMap(dbPolicy.ImportantAdditionalInformationRaw)
 			if err != nil {
@@ -265,7 +265,7 @@ func (r *BasePolicyRepository) GetBasePoliciesByProvider(providerID string) ([]m
 	policies := make([]models.BasePolicy, len(dbPolicies))
 	for i, dbPolicy := range dbPolicies {
 		policies[i] = dbPolicy.BasePolicy
-		
+
 		if len(dbPolicy.ImportantAdditionalInformationRaw) > 0 {
 			infoMap, err := utils.DeserializeBytesToMap(dbPolicy.ImportantAdditionalInformationRaw)
 			if err != nil {
@@ -305,7 +305,7 @@ func (r *BasePolicyRepository) GetBasePoliciesByStatus(status models.BasePolicyS
 	policies := make([]models.BasePolicy, len(dbPolicies))
 	for i, dbPolicy := range dbPolicies {
 		policies[i] = dbPolicy.BasePolicy
-		
+
 		if len(dbPolicy.ImportantAdditionalInformationRaw) > 0 {
 			infoMap, err := utils.DeserializeBytesToMap(dbPolicy.ImportantAdditionalInformationRaw)
 			if err != nil {
@@ -345,7 +345,7 @@ func (r *BasePolicyRepository) GetBasePoliciesByCropType(cropType string) ([]mod
 	policies := make([]models.BasePolicy, len(dbPolicies))
 	for i, dbPolicy := range dbPolicies {
 		policies[i] = dbPolicy.BasePolicy
-		
+
 		if len(dbPolicy.ImportantAdditionalInformationRaw) > 0 {
 			infoMap, err := utils.DeserializeBytesToMap(dbPolicy.ImportantAdditionalInformationRaw)
 			if err != nil {
@@ -602,7 +602,7 @@ func (r *BasePolicyRepository) GetBasePolicyTriggersByPolicyID(policyID uuid.UUI
 	triggers := make([]models.BasePolicyTrigger, len(dbTriggers))
 	for i, dbTrigger := range dbTriggers {
 		triggers[i] = dbTrigger.BasePolicyTrigger
-		
+
 		if len(dbTrigger.BlackoutPeriodsRaw) > 0 {
 			blackoutMap, err := utils.DeserializeBytesToMap(dbTrigger.BlackoutPeriodsRaw)
 			if err != nil {
@@ -752,7 +752,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerConditionsBatch(conditions
 	}
 
 	// Start transaction for batch operation
-	slog.Debug("Starting transaction for batch insert")
+	slog.Info("Starting transaction for batch insert")
 	tx, err := r.db.Beginx()
 	if err != nil {
 		slog.Error("Failed to begin transaction for batch insert", "error", err)
@@ -783,7 +783,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerConditionsBatch(conditions
 
 	// Execute batch insert
 	for i, condition := range conditions {
-		slog.Debug("Inserting condition",
+		slog.Info("Inserting condition",
 			"index", i+1,
 			"condition_id", condition.ID,
 			"data_source_id", condition.DataSourceID)
@@ -798,7 +798,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerConditionsBatch(conditions
 	}
 
 	// Commit transaction
-	slog.Debug("Committing batch transaction")
+	slog.Info("Committing batch transaction")
 	if err := tx.Commit(); err != nil {
 		slog.Error("Failed to commit batch transaction", "error", err)
 		return fmt.Errorf("failed to commit batch insert: %w", err)
@@ -976,7 +976,7 @@ func (r *BasePolicyRepository) CheckBasePolicyTriggerConditionExists(id uuid.UUI
 // ============================================================================
 
 func (r *BasePolicyRepository) BeginTransaction() (*sqlx.Tx, error) {
-	slog.Debug("Beginning database transaction")
+	slog.Info("Beginning database transaction")
 	tx, err := r.db.Beginx()
 	if err != nil {
 		slog.Error("Failed to begin transaction", "error", err)
@@ -1215,7 +1215,7 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidation(validation *mo
 }
 
 func (r *BasePolicyRepository) GetBasePolicyDocumentValidationByID(id uuid.UUID) (*models.BasePolicyDocumentValidation, error) {
-	slog.Debug("Retrieving base policy document validation by ID", "validation_id", id)
+	slog.Info("Retrieving base policy document validation by ID", "validation_id", id)
 
 	var dbValidation struct {
 		models.BasePolicyDocumentValidation
@@ -1279,14 +1279,14 @@ func (r *BasePolicyRepository) GetBasePolicyDocumentValidationByID(id uuid.UUID)
 		validation.ExtractedParameters = extractedParamsMap
 	}
 
-	slog.Debug("Successfully retrieved base policy document validation",
+	slog.Info("Successfully retrieved base policy document validation",
 		"validation_id", id,
 		"base_policy_id", validation.BasePolicyID)
 	return &validation, nil
 }
 
 func (r *BasePolicyRepository) GetBasePolicyDocumentValidationsByPolicyID(basePolicyID uuid.UUID) ([]models.BasePolicyDocumentValidation, error) {
-	slog.Debug("Retrieving base policy document validations by policy ID", "base_policy_id", basePolicyID)
+	slog.Info("Retrieving base policy document validations by policy ID", "base_policy_id", basePolicyID)
 
 	var dbValidations []struct {
 		models.BasePolicyDocumentValidation
@@ -1316,7 +1316,7 @@ func (r *BasePolicyRepository) GetBasePolicyDocumentValidationsByPolicyID(basePo
 	validations := make([]models.BasePolicyDocumentValidation, len(dbValidations))
 	for i, dbValidation := range dbValidations {
 		validations[i] = dbValidation.BasePolicyDocumentValidation
-		
+
 		if len(dbValidation.MismatchesRaw) > 0 {
 			mismatchesMap, err := utils.DeserializeBytesToMap(dbValidation.MismatchesRaw)
 			if err != nil {
@@ -1350,14 +1350,14 @@ func (r *BasePolicyRepository) GetBasePolicyDocumentValidationsByPolicyID(basePo
 		}
 	}
 
-	slog.Debug("Successfully retrieved base policy document validations",
+	slog.Info("Successfully retrieved base policy document validations",
 		"base_policy_id", basePolicyID,
 		"count", len(validations))
 	return validations, nil
 }
 
 func (r *BasePolicyRepository) GetLatestBasePolicyDocumentValidation(basePolicyID uuid.UUID) (*models.BasePolicyDocumentValidation, error) {
-	slog.Debug("Retrieving latest base policy document validation", "base_policy_id", basePolicyID)
+	slog.Info("Retrieving latest base policy document validation", "base_policy_id", basePolicyID)
 
 	var dbValidation struct {
 		models.BasePolicyDocumentValidation
@@ -1380,7 +1380,7 @@ func (r *BasePolicyRepository) GetLatestBasePolicyDocumentValidation(basePolicyI
 	err := r.db.Get(&dbValidation, query, basePolicyID)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			slog.Debug("No document validation found for base policy", "base_policy_id", basePolicyID)
+			slog.Info("No document validation found for base policy", "base_policy_id", basePolicyID)
 			return nil, fmt.Errorf("no document validation found for base policy")
 		}
 		slog.Error("Failed to get latest base policy document validation",
@@ -1423,7 +1423,7 @@ func (r *BasePolicyRepository) GetLatestBasePolicyDocumentValidation(basePolicyI
 		validation.ExtractedParameters = extractedParamsMap
 	}
 
-	slog.Debug("Successfully retrieved latest base policy document validation",
+	slog.Info("Successfully retrieved latest base policy document validation",
 		"validation_id", validation.ID,
 		"base_policy_id", basePolicyID)
 	return &validation, nil
