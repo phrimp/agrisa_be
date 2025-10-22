@@ -1,6 +1,7 @@
 package repository
 
 import (
+	utils "agrisa_utils"
 	"context"
 	"database/sql"
 	"fmt"
@@ -91,6 +92,17 @@ func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error
 	policy.CreatedAt = time.Now()
 	policy.UpdatedAt = time.Now()
 
+	// Serialize JSONB field to []byte before database insertion
+	var importantInfoBytes []byte
+	var err error
+	
+	if policy.ImportantAdditionalInformation != nil {
+		importantInfoBytes, err = utils.SerializeMapToBytes(policy.ImportantAdditionalInformation)
+		if err != nil {
+			return fmt.Errorf("failed to serialize important_additional_information: %w", err)
+		}
+	}
+
 	query := `
 		INSERT INTO base_policy (
 			id, insurance_provider_id, product_name, product_code, product_description,
@@ -102,17 +114,18 @@ func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error
 			document_validation_status, document_validation_score, important_additional_information,
 			created_at, updated_at, created_by
 		) VALUES (
-			:id, :insurance_provider_id, :product_name, :product_code, :product_description,
-			:crop_type, :coverage_currency, :coverage_duration_days, :fix_premium_amount,
-			:is_per_hectare, :premium_base_rate, :max_premium_payment_prolong, :fix_payout_amount, :is_payout_per_hectare,
-			:over_threshold_multiplier, :payout_base_rate, :payout_cap, :enrollment_start_day,
-			:enrollment_end_day, :auto_renewal, :renewal_discount_rate, :base_policy_invalid_date,
-			:insurance_valid_from_day, :insurance_valid_to_day, :status, :template_document_url,
-			:document_validation_status, :document_validation_score, :important_additional_information,
-			:created_at, :updated_at, :created_by
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
 		)`
 
-	_, err := r.db.NamedExec(query, policy)
+	_, err = r.db.Exec(query,
+		policy.ID, policy.InsuranceProviderID, policy.ProductName, policy.ProductCode, policy.ProductDescription,
+		policy.CropType, policy.CoverageCurrency, policy.CoverageDurationDays, policy.FixPremiumAmount,
+		policy.IsPerHectare, policy.PremiumBaseRate, policy.MaxPremiumPaymentProlong, policy.FixPayoutAmount, policy.IsPayoutPerHectare,
+		policy.OverThresholdMultiplier, policy.PayoutBaseRate, policy.PayoutCap, policy.EnrollmentStartDay,
+		policy.EnrollmentEndDay, policy.AutoRenewal, policy.RenewalDiscountRate, policy.BasePolicyInvalidDate,
+		policy.InsuranceValidFromDay, policy.InsuranceValidToDay, policy.Status, policy.TemplateDocumentURL,
+		policy.DocumentValidationStatus, policy.DocumentValidationScore, importantInfoBytes,
+		policy.CreatedAt, policy.UpdatedAt, policy.CreatedBy)
 	if err != nil {
 		slog.Error("Failed to create base policy",
 			"policy_id", policy.ID,
@@ -276,40 +289,59 @@ func (r *BasePolicyRepository) UpdateBasePolicy(policy *models.BasePolicy) error
 
 	policy.UpdatedAt = time.Now()
 
+	// Serialize JSONB field to []byte before database update
+	var importantInfoBytes []byte
+	var err error
+	
+	if policy.ImportantAdditionalInformation != nil {
+		importantInfoBytes, err = utils.SerializeMapToBytes(policy.ImportantAdditionalInformation)
+		if err != nil {
+			return fmt.Errorf("failed to serialize important_additional_information: %w", err)
+		}
+	}
+
 	query := `
 		UPDATE base_policy SET
-			insurance_provider_id = :insurance_provider_id,
-			product_name = :product_name,
-			product_code = :product_code,
-			product_description = :product_description,
-			crop_type = :crop_type,
-			coverage_currency = :coverage_currency,
-			coverage_duration_days = :coverage_duration_days,
-			fix_premium_amount = :fix_premium_amount,
-			is_per_hectare = :is_per_hectare,
-			premium_base_rate = :premium_base_rate,
-			max_premium_payment_prolong = :max_premium_payment_prolong,
-			fix_payout_amount = :fix_payout_amount,
-			is_payout_per_hectare = :is_payout_per_hectare,
-			over_threshold_multiplier = :over_threshold_multiplier,
-			payout_base_rate = :payout_base_rate,
-			payout_cap = :payout_cap,
-			enrollment_start_day = :enrollment_start_day,
-			enrollment_end_day = :enrollment_end_day,
-			auto_renewal = :auto_renewal,
-			renewal_discount_rate = :renewal_discount_rate,
-			base_policy_invalid_date = :base_policy_invalid_date,
-			insurance_valid_from_day = :insurance_valid_from_day,
-			insurance_valid_to_day = :insurance_valid_to_day,
-			status = :status,
-			template_document_url = :template_document_url,
-			document_validation_status = :document_validation_status,
-			document_validation_score = :document_validation_score,
-			important_additional_information = :important_additional_information,
-			updated_at = :updated_at
-		WHERE id = :id`
+			insurance_provider_id = $1,
+			product_name = $2,
+			product_code = $3,
+			product_description = $4,
+			crop_type = $5,
+			coverage_currency = $6,
+			coverage_duration_days = $7,
+			fix_premium_amount = $8,
+			is_per_hectare = $9,
+			premium_base_rate = $10,
+			max_premium_payment_prolong = $11,
+			fix_payout_amount = $12,
+			is_payout_per_hectare = $13,
+			over_threshold_multiplier = $14,
+			payout_base_rate = $15,
+			payout_cap = $16,
+			enrollment_start_day = $17,
+			enrollment_end_day = $18,
+			auto_renewal = $19,
+			renewal_discount_rate = $20,
+			base_policy_invalid_date = $21,
+			insurance_valid_from_day = $22,
+			insurance_valid_to_day = $23,
+			status = $24,
+			template_document_url = $25,
+			document_validation_status = $26,
+			document_validation_score = $27,
+			important_additional_information = $28,
+			updated_at = $29
+		WHERE id = $30`
 
-	result, err := r.db.NamedExec(query, policy)
+	result, err := r.db.Exec(query,
+		policy.InsuranceProviderID, policy.ProductName, policy.ProductCode, policy.ProductDescription,
+		policy.CropType, policy.CoverageCurrency, policy.CoverageDurationDays, policy.FixPremiumAmount,
+		policy.IsPerHectare, policy.PremiumBaseRate, policy.MaxPremiumPaymentProlong, policy.FixPayoutAmount,
+		policy.IsPayoutPerHectare, policy.OverThresholdMultiplier, policy.PayoutBaseRate, policy.PayoutCap,
+		policy.EnrollmentStartDay, policy.EnrollmentEndDay, policy.AutoRenewal, policy.RenewalDiscountRate,
+		policy.BasePolicyInvalidDate, policy.InsuranceValidFromDay, policy.InsuranceValidToDay, policy.Status,
+		policy.TemplateDocumentURL, policy.DocumentValidationStatus, policy.DocumentValidationScore,
+		importantInfoBytes, policy.UpdatedAt, policy.ID)
 	if err != nil {
 		slog.Error("Failed to update base policy",
 			"policy_id", policy.ID,
@@ -405,18 +437,30 @@ func (r *BasePolicyRepository) CreateBasePolicyTrigger(trigger *models.BasePolic
 	trigger.CreatedAt = time.Now()
 	trigger.UpdatedAt = time.Now()
 
+	// Serialize JSONB field to []byte before database insertion
+	var blackoutPeriodsBytes []byte
+	var err error
+	
+	if trigger.BlackoutPeriods != nil {
+		blackoutPeriodsBytes, err = utils.SerializeMapToBytes(trigger.BlackoutPeriods)
+		if err != nil {
+			return fmt.Errorf("failed to serialize blackout_periods: %w", err)
+		}
+	}
+
 	query := `
 		INSERT INTO base_policy_trigger (
 			id, base_policy_id, logical_operator, growth_stage, 
 			monitor_frequency_value, monitor_frequency_unit, blackout_periods,
 			created_at, updated_at
 		) VALUES (
-			:id, :base_policy_id, :logical_operator, :growth_stage,
-			:monitor_frequency_value, :monitor_frequency_unit, :blackout_periods,
-			:created_at, :updated_at
+			$1, $2, $3, $4, $5, $6, $7, $8, $9
 		)`
 
-	_, err := r.db.NamedExec(query, trigger)
+	_, err = r.db.Exec(query,
+		trigger.ID, trigger.BasePolicyID, trigger.LogicalOperator, trigger.GrowthStage,
+		trigger.MonitorFrequencyValue, trigger.MonitorFrequencyUnit, blackoutPeriodsBytes,
+		trigger.CreatedAt, trigger.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create base policy trigger: %w", err)
 	}
@@ -467,17 +511,30 @@ func (r *BasePolicyRepository) GetBasePolicyTriggersByPolicyID(policyID uuid.UUI
 func (r *BasePolicyRepository) UpdateBasePolicyTrigger(trigger *models.BasePolicyTrigger) error {
 	trigger.UpdatedAt = time.Now()
 
+	// Serialize JSONB field to []byte before database update
+	var blackoutPeriodsBytes []byte
+	var err error
+	
+	if trigger.BlackoutPeriods != nil {
+		blackoutPeriodsBytes, err = utils.SerializeMapToBytes(trigger.BlackoutPeriods)
+		if err != nil {
+			return fmt.Errorf("failed to serialize blackout_periods: %w", err)
+		}
+	}
+
 	query := `
 		UPDATE base_policy_trigger SET
-			logical_operator = :logical_operator,
-			growth_stage = :growth_stage,
-			monitor_frequency_value = :monitor_frequency_value,
-			monitor_frequency_unit = :monitor_frequency_unit,
-			blackout_periods = :blackout_periods,
-			updated_at = :updated_at
-		WHERE id = :id`
+			logical_operator = $1,
+			growth_stage = $2,
+			monitor_frequency_value = $3,
+			monitor_frequency_unit = $4,
+			blackout_periods = $5,
+			updated_at = $6
+		WHERE id = $7`
 
-	result, err := r.db.NamedExec(query, trigger)
+	result, err := r.db.Exec(query,
+		trigger.LogicalOperator, trigger.GrowthStage, trigger.MonitorFrequencyValue,
+		trigger.MonitorFrequencyUnit, blackoutPeriodsBytes, trigger.UpdatedAt, trigger.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update base policy trigger: %w", err)
 	}
@@ -829,6 +886,17 @@ func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.Ba
 	policy.CreatedAt = time.Now()
 	policy.UpdatedAt = time.Now()
 
+	// Serialize JSONB field to []byte before database insertion
+	var importantInfoBytes []byte
+	var err error
+	
+	if policy.ImportantAdditionalInformation != nil {
+		importantInfoBytes, err = utils.SerializeMapToBytes(policy.ImportantAdditionalInformation)
+		if err != nil {
+			return fmt.Errorf("failed to serialize important_additional_information: %w", err)
+		}
+	}
+
 	query := `
 		INSERT INTO base_policy (
 			id, insurance_provider_id, product_name, product_code, product_description,
@@ -840,17 +908,18 @@ func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.Ba
 			document_validation_status, document_validation_score, important_additional_information,
 			created_at, updated_at, created_by
 		) VALUES (
-			:id, :insurance_provider_id, :product_name, :product_code, :product_description,
-			:crop_type, :coverage_currency, :coverage_duration_days, :fix_premium_amount,
-			:is_per_hectare, :premium_base_rate, :max_premium_payment_prolong, :fix_payout_amount, :is_payout_per_hectare,
-			:over_threshold_multiplier, :payout_base_rate, :payout_cap, :enrollment_start_day,
-			:enrollment_end_day, :auto_renewal, :renewal_discount_rate, :base_policy_invalid_date,
-			:insurance_valid_from_day, :insurance_valid_to_day, :status, :template_document_url,
-			:document_validation_status, :document_validation_score, :important_additional_information,
-			:created_at, :updated_at, :created_by
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
 		)`
 
-	_, err := tx.NamedExec(query, policy)
+	_, err = tx.Exec(query,
+		policy.ID, policy.InsuranceProviderID, policy.ProductName, policy.ProductCode, policy.ProductDescription,
+		policy.CropType, policy.CoverageCurrency, policy.CoverageDurationDays, policy.FixPremiumAmount,
+		policy.IsPerHectare, policy.PremiumBaseRate, policy.MaxPremiumPaymentProlong, policy.FixPayoutAmount, policy.IsPayoutPerHectare,
+		policy.OverThresholdMultiplier, policy.PayoutBaseRate, policy.PayoutCap, policy.EnrollmentStartDay,
+		policy.EnrollmentEndDay, policy.AutoRenewal, policy.RenewalDiscountRate, policy.BasePolicyInvalidDate,
+		policy.InsuranceValidFromDay, policy.InsuranceValidToDay, policy.Status, policy.TemplateDocumentURL,
+		policy.DocumentValidationStatus, policy.DocumentValidationScore, importantInfoBytes,
+		policy.CreatedAt, policy.UpdatedAt, policy.CreatedBy)
 	return err
 }
 
@@ -862,18 +931,30 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerTx(tx *sqlx.Tx, trigger *m
 	trigger.CreatedAt = time.Now()
 	trigger.UpdatedAt = time.Now()
 
+	// Serialize JSONB field to []byte before database insertion
+	var blackoutPeriodsBytes []byte
+	var err error
+	
+	if trigger.BlackoutPeriods != nil {
+		blackoutPeriodsBytes, err = utils.SerializeMapToBytes(trigger.BlackoutPeriods)
+		if err != nil {
+			return fmt.Errorf("failed to serialize blackout_periods: %w", err)
+		}
+	}
+
 	query := `
 		INSERT INTO base_policy_trigger (
 			id, base_policy_id, logical_operator, growth_stage, 
 			monitor_frequency_value, monitor_frequency_unit, blackout_periods,
 			created_at, updated_at
 		) VALUES (
-			:id, :base_policy_id, :logical_operator, :growth_stage,
-			:monitor_frequency_value, :monitor_frequency_unit, :blackout_periods,
-			:created_at, :updated_at
+			$1, $2, $3, $4, $5, $6, $7, $8, $9
 		)`
 
-	_, err := tx.NamedExec(query, trigger)
+	_, err = tx.Exec(query,
+		trigger.ID, trigger.BasePolicyID, trigger.LogicalOperator, trigger.GrowthStage,
+		trigger.MonitorFrequencyValue, trigger.MonitorFrequencyUnit, blackoutPeriodsBytes,
+		trigger.CreatedAt, trigger.UpdatedAt)
 	return err
 }
 
@@ -964,6 +1045,38 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidation(validation *mo
 
 	validation.CreatedAt = time.Now()
 
+	// Serialize JSONB fields to []byte before database insertion
+	var mismatchesBytes, warningsBytes, recommendationsBytes, extractedParamsBytes []byte
+	var err error
+	
+	if validation.Mismatches != nil {
+		mismatchesBytes, err = utils.SerializeMapToBytes(validation.Mismatches)
+		if err != nil {
+			return fmt.Errorf("failed to serialize mismatches: %w", err)
+		}
+	}
+	
+	if validation.Warnings != nil {
+		warningsBytes, err = utils.SerializeMapToBytes(validation.Warnings)
+		if err != nil {
+			return fmt.Errorf("failed to serialize warnings: %w", err)
+		}
+	}
+	
+	if validation.Recommendations != nil {
+		recommendationsBytes, err = utils.SerializeMapToBytes(validation.Recommendations)
+		if err != nil {
+			return fmt.Errorf("failed to serialize recommendations: %w", err)
+		}
+	}
+	
+	if validation.ExtractedParameters != nil {
+		extractedParamsBytes, err = utils.SerializeMapToBytes(validation.ExtractedParameters)
+		if err != nil {
+			return fmt.Errorf("failed to serialize extracted_parameters: %w", err)
+		}
+	}
+
 	query := `
 		INSERT INTO base_policy_document_validation (
 			id, base_policy_id, validation_timestamp, validation_status, overall_score,
@@ -971,13 +1084,15 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidation(validation *mo
 			warnings, recommendations, extracted_parameters, validated_by,
 			validation_notes, created_at
 		) VALUES (
-			:id, :base_policy_id, :validation_timestamp, :validation_status, :overall_score,
-			:total_checks, :passed_checks, :failed_checks, :warning_count, :mismatches,
-			:warnings, :recommendations, :extracted_parameters, :validated_by,
-			:validation_notes, :created_at
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 		)`
 
-	_, err := r.db.NamedExec(query, validation)
+	_, err = r.db.Exec(query,
+		validation.ID, validation.BasePolicyID, validation.ValidationTimestamp,
+		validation.ValidationStatus, validation.OverallScore, validation.TotalChecks,
+		validation.PassedChecks, validation.FailedChecks, validation.WarningCount,
+		mismatchesBytes, warningsBytes, recommendationsBytes, extractedParamsBytes,
+		validation.ValidatedBy, validation.ValidationNotes, validation.CreatedAt)
 	if err != nil {
 		slog.Error("Failed to create base policy document validation",
 			"validation_id", validation.ID,
@@ -1090,24 +1205,61 @@ func (r *BasePolicyRepository) UpdateBasePolicyDocumentValidation(validation *mo
 		"base_policy_id", validation.BasePolicyID,
 		"validation_status", validation.ValidationStatus)
 
+	// Serialize JSONB fields to []byte before database update
+	var mismatchesBytes, warningsBytes, recommendationsBytes, extractedParamsBytes []byte
+	var err error
+	
+	if validation.Mismatches != nil {
+		mismatchesBytes, err = utils.SerializeMapToBytes(validation.Mismatches)
+		if err != nil {
+			return fmt.Errorf("failed to serialize mismatches: %w", err)
+		}
+	}
+	
+	if validation.Warnings != nil {
+		warningsBytes, err = utils.SerializeMapToBytes(validation.Warnings)
+		if err != nil {
+			return fmt.Errorf("failed to serialize warnings: %w", err)
+		}
+	}
+	
+	if validation.Recommendations != nil {
+		recommendationsBytes, err = utils.SerializeMapToBytes(validation.Recommendations)
+		if err != nil {
+			return fmt.Errorf("failed to serialize recommendations: %w", err)
+		}
+	}
+	
+	if validation.ExtractedParameters != nil {
+		extractedParamsBytes, err = utils.SerializeMapToBytes(validation.ExtractedParameters)
+		if err != nil {
+			return fmt.Errorf("failed to serialize extracted_parameters: %w", err)
+		}
+	}
+
 	query := `
 		UPDATE base_policy_document_validation SET
-			validation_timestamp = :validation_timestamp,
-			validation_status = :validation_status,
-			overall_score = :overall_score,
-			total_checks = :total_checks,
-			passed_checks = :passed_checks,
-			failed_checks = :failed_checks,
-			warning_count = :warning_count,
-			mismatches = :mismatches,
-			warnings = :warnings,
-			recommendations = :recommendations,
-			extracted_parameters = :extracted_parameters,
-			validated_by = :validated_by,
-			validation_notes = :validation_notes
-		WHERE id = :id`
+			validation_timestamp = $1,
+			validation_status = $2,
+			overall_score = $3,
+			total_checks = $4,
+			passed_checks = $5,
+			failed_checks = $6,
+			warning_count = $7,
+			mismatches = $8,
+			warnings = $9,
+			recommendations = $10,
+			extracted_parameters = $11,
+			validated_by = $12,
+			validation_notes = $13
+		WHERE id = $14`
 
-	result, err := r.db.NamedExec(query, validation)
+	result, err := r.db.Exec(query,
+		validation.ValidationTimestamp, validation.ValidationStatus, validation.OverallScore,
+		validation.TotalChecks, validation.PassedChecks, validation.FailedChecks,
+		validation.WarningCount, mismatchesBytes, warningsBytes, recommendationsBytes,
+		extractedParamsBytes, validation.ValidatedBy, validation.ValidationNotes,
+		validation.ID)
 	if err != nil {
 		slog.Error("Failed to update base policy document validation",
 			"validation_id", validation.ID,
