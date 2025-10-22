@@ -196,7 +196,10 @@ func (r *BasePolicyRepository) GetAllBasePolicies() ([]models.BasePolicy, error)
 	slog.Info("Retrieving all base policies")
 	start := time.Now()
 
-	var policies []models.BasePolicy
+	var dbPolicies []struct {
+		models.BasePolicy
+		ImportantAdditionalInformationRaw []byte `db:"important_additional_information"`
+	}
 	query := `
 		SELECT 
 			id, insurance_provider_id, product_name, product_code, product_description,
@@ -210,10 +213,23 @@ func (r *BasePolicyRepository) GetAllBasePolicies() ([]models.BasePolicy, error)
 		FROM base_policy
 		ORDER BY created_at DESC`
 
-	err := r.db.Select(&policies, query)
+	err := r.db.Select(&dbPolicies, query)
 	if err != nil {
 		slog.Error("Failed to get all base policies", "error", err)
 		return nil, fmt.Errorf("failed to get base policies: %w", err)
+	}
+
+	policies := make([]models.BasePolicy, len(dbPolicies))
+	for i, dbPolicy := range dbPolicies {
+		policies[i] = dbPolicy.BasePolicy
+		
+		if len(dbPolicy.ImportantAdditionalInformationRaw) > 0 {
+			infoMap, err := utils.DeserializeBytesToMap(dbPolicy.ImportantAdditionalInformationRaw)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize important_additional_information for policy %s: %w", policies[i].ID, err)
+			}
+			policies[i].ImportantAdditionalInformation = infoMap
+		}
 	}
 
 	slog.Info("Successfully retrieved all base policies",
@@ -223,7 +239,10 @@ func (r *BasePolicyRepository) GetAllBasePolicies() ([]models.BasePolicy, error)
 }
 
 func (r *BasePolicyRepository) GetBasePoliciesByProvider(providerID string) ([]models.BasePolicy, error) {
-	var policies []models.BasePolicy
+	var dbPolicies []struct {
+		models.BasePolicy
+		ImportantAdditionalInformationRaw []byte `db:"important_additional_information"`
+	}
 	query := `
 		SELECT 
 			id, insurance_provider_id, product_name, product_code, product_description,
@@ -238,16 +257,32 @@ func (r *BasePolicyRepository) GetBasePoliciesByProvider(providerID string) ([]m
 		WHERE insurance_provider_id = $1
 		ORDER BY created_at DESC`
 
-	err := r.db.Select(&policies, query, providerID)
+	err := r.db.Select(&dbPolicies, query, providerID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get base policies by provider: %w", err)
+	}
+
+	policies := make([]models.BasePolicy, len(dbPolicies))
+	for i, dbPolicy := range dbPolicies {
+		policies[i] = dbPolicy.BasePolicy
+		
+		if len(dbPolicy.ImportantAdditionalInformationRaw) > 0 {
+			infoMap, err := utils.DeserializeBytesToMap(dbPolicy.ImportantAdditionalInformationRaw)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize important_additional_information for policy %s: %w", policies[i].ID, err)
+			}
+			policies[i].ImportantAdditionalInformation = infoMap
+		}
 	}
 
 	return policies, nil
 }
 
 func (r *BasePolicyRepository) GetBasePoliciesByStatus(status models.BasePolicyStatus) ([]models.BasePolicy, error) {
-	var policies []models.BasePolicy
+	var dbPolicies []struct {
+		models.BasePolicy
+		ImportantAdditionalInformationRaw []byte `db:"important_additional_information"`
+	}
 	query := `
 		SELECT 
 			id, insurance_provider_id, product_name, product_code, product_description,
@@ -262,16 +297,32 @@ func (r *BasePolicyRepository) GetBasePoliciesByStatus(status models.BasePolicyS
 		WHERE status = $1
 		ORDER BY created_at DESC`
 
-	err := r.db.Select(&policies, query, status)
+	err := r.db.Select(&dbPolicies, query, status)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get base policies by status: %w", err)
+	}
+
+	policies := make([]models.BasePolicy, len(dbPolicies))
+	for i, dbPolicy := range dbPolicies {
+		policies[i] = dbPolicy.BasePolicy
+		
+		if len(dbPolicy.ImportantAdditionalInformationRaw) > 0 {
+			infoMap, err := utils.DeserializeBytesToMap(dbPolicy.ImportantAdditionalInformationRaw)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize important_additional_information for policy %s: %w", policies[i].ID, err)
+			}
+			policies[i].ImportantAdditionalInformation = infoMap
+		}
 	}
 
 	return policies, nil
 }
 
 func (r *BasePolicyRepository) GetBasePoliciesByCropType(cropType string) ([]models.BasePolicy, error) {
-	var policies []models.BasePolicy
+	var dbPolicies []struct {
+		models.BasePolicy
+		ImportantAdditionalInformationRaw []byte `db:"important_additional_information"`
+	}
 	query := `
 		SELECT 
 			id, insurance_provider_id, product_name, product_code, product_description,
@@ -286,9 +337,22 @@ func (r *BasePolicyRepository) GetBasePoliciesByCropType(cropType string) ([]mod
 		WHERE crop_type = $1
 		ORDER BY created_at DESC`
 
-	err := r.db.Select(&policies, query, cropType)
+	err := r.db.Select(&dbPolicies, query, cropType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get base policies by crop type: %w", err)
+	}
+
+	policies := make([]models.BasePolicy, len(dbPolicies))
+	for i, dbPolicy := range dbPolicies {
+		policies[i] = dbPolicy.BasePolicy
+		
+		if len(dbPolicy.ImportantAdditionalInformationRaw) > 0 {
+			infoMap, err := utils.DeserializeBytesToMap(dbPolicy.ImportantAdditionalInformationRaw)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize important_additional_information for policy %s: %w", policies[i].ID, err)
+			}
+			policies[i].ImportantAdditionalInformation = infoMap
+		}
 	}
 
 	return policies, nil
@@ -483,7 +547,10 @@ func (r *BasePolicyRepository) CreateBasePolicyTrigger(trigger *models.BasePolic
 }
 
 func (r *BasePolicyRepository) GetBasePolicyTriggerByID(id uuid.UUID) (*models.BasePolicyTrigger, error) {
-	var trigger models.BasePolicyTrigger
+	var dbTrigger struct {
+		models.BasePolicyTrigger
+		BlackoutPeriodsRaw []byte `db:"blackout_periods"`
+	}
 	query := `
 		SELECT 
 			id, base_policy_id, logical_operator, growth_stage,
@@ -492,7 +559,7 @@ func (r *BasePolicyRepository) GetBasePolicyTriggerByID(id uuid.UUID) (*models.B
 		FROM base_policy_trigger
 		WHERE id = $1`
 
-	err := r.db.Get(&trigger, query, id)
+	err := r.db.Get(&dbTrigger, query, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("base policy trigger not found")
@@ -500,11 +567,24 @@ func (r *BasePolicyRepository) GetBasePolicyTriggerByID(id uuid.UUID) (*models.B
 		return nil, fmt.Errorf("failed to get base policy trigger: %w", err)
 	}
 
+	trigger := dbTrigger.BasePolicyTrigger
+
+	if len(dbTrigger.BlackoutPeriodsRaw) > 0 {
+		blackoutMap, err := utils.DeserializeBytesToMap(dbTrigger.BlackoutPeriodsRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize blackout_periods: %w", err)
+		}
+		trigger.BlackoutPeriods = blackoutMap
+	}
+
 	return &trigger, nil
 }
 
 func (r *BasePolicyRepository) GetBasePolicyTriggersByPolicyID(policyID uuid.UUID) ([]models.BasePolicyTrigger, error) {
-	var triggers []models.BasePolicyTrigger
+	var dbTriggers []struct {
+		models.BasePolicyTrigger
+		BlackoutPeriodsRaw []byte `db:"blackout_periods"`
+	}
 	query := `
 		SELECT 
 			id, base_policy_id, logical_operator, growth_stage,
@@ -514,9 +594,22 @@ func (r *BasePolicyRepository) GetBasePolicyTriggersByPolicyID(policyID uuid.UUI
 		WHERE base_policy_id = $1
 		ORDER BY created_at`
 
-	err := r.db.Select(&triggers, query, policyID)
+	err := r.db.Select(&dbTriggers, query, policyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get base policy triggers: %w", err)
+	}
+
+	triggers := make([]models.BasePolicyTrigger, len(dbTriggers))
+	for i, dbTrigger := range dbTriggers {
+		triggers[i] = dbTrigger.BasePolicyTrigger
+		
+		if len(dbTrigger.BlackoutPeriodsRaw) > 0 {
+			blackoutMap, err := utils.DeserializeBytesToMap(dbTrigger.BlackoutPeriodsRaw)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize blackout_periods for trigger %s: %w", triggers[i].ID, err)
+			}
+			triggers[i].BlackoutPeriods = blackoutMap
+		}
 	}
 
 	return triggers, nil
@@ -1124,7 +1217,13 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidation(validation *mo
 func (r *BasePolicyRepository) GetBasePolicyDocumentValidationByID(id uuid.UUID) (*models.BasePolicyDocumentValidation, error) {
 	slog.Debug("Retrieving base policy document validation by ID", "validation_id", id)
 
-	var validation models.BasePolicyDocumentValidation
+	var dbValidation struct {
+		models.BasePolicyDocumentValidation
+		MismatchesRaw          []byte `db:"mismatches"`
+		WarningsRaw            []byte `db:"warnings"`
+		RecommendationsRaw     []byte `db:"recommendations"`
+		ExtractedParametersRaw []byte `db:"extracted_parameters"`
+	}
 	query := `
 		SELECT 
 			id, base_policy_id, validation_timestamp, validation_status, overall_score,
@@ -1134,7 +1233,7 @@ func (r *BasePolicyRepository) GetBasePolicyDocumentValidationByID(id uuid.UUID)
 		FROM base_policy_document_validation
 		WHERE id = $1`
 
-	err := r.db.Get(&validation, query, id)
+	err := r.db.Get(&dbValidation, query, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			slog.Warn("Base policy document validation not found", "validation_id", id)
@@ -1146,6 +1245,40 @@ func (r *BasePolicyRepository) GetBasePolicyDocumentValidationByID(id uuid.UUID)
 		return nil, fmt.Errorf("failed to get base policy document validation: %w", err)
 	}
 
+	validation := dbValidation.BasePolicyDocumentValidation
+
+	if len(dbValidation.MismatchesRaw) > 0 {
+		mismatchesMap, err := utils.DeserializeBytesToMap(dbValidation.MismatchesRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize mismatches: %w", err)
+		}
+		validation.Mismatches = mismatchesMap
+	}
+
+	if len(dbValidation.WarningsRaw) > 0 {
+		warningsMap, err := utils.DeserializeBytesToMap(dbValidation.WarningsRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize warnings: %w", err)
+		}
+		validation.Warnings = warningsMap
+	}
+
+	if len(dbValidation.RecommendationsRaw) > 0 {
+		recommendationsMap, err := utils.DeserializeBytesToMap(dbValidation.RecommendationsRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize recommendations: %w", err)
+		}
+		validation.Recommendations = recommendationsMap
+	}
+
+	if len(dbValidation.ExtractedParametersRaw) > 0 {
+		extractedParamsMap, err := utils.DeserializeBytesToMap(dbValidation.ExtractedParametersRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize extracted_parameters: %w", err)
+		}
+		validation.ExtractedParameters = extractedParamsMap
+	}
+
 	slog.Debug("Successfully retrieved base policy document validation",
 		"validation_id", id,
 		"base_policy_id", validation.BasePolicyID)
@@ -1155,7 +1288,13 @@ func (r *BasePolicyRepository) GetBasePolicyDocumentValidationByID(id uuid.UUID)
 func (r *BasePolicyRepository) GetBasePolicyDocumentValidationsByPolicyID(basePolicyID uuid.UUID) ([]models.BasePolicyDocumentValidation, error) {
 	slog.Debug("Retrieving base policy document validations by policy ID", "base_policy_id", basePolicyID)
 
-	var validations []models.BasePolicyDocumentValidation
+	var dbValidations []struct {
+		models.BasePolicyDocumentValidation
+		MismatchesRaw          []byte `db:"mismatches"`
+		WarningsRaw            []byte `db:"warnings"`
+		RecommendationsRaw     []byte `db:"recommendations"`
+		ExtractedParametersRaw []byte `db:"extracted_parameters"`
+	}
 	query := `
 		SELECT 
 			id, base_policy_id, validation_timestamp, validation_status, overall_score,
@@ -1166,12 +1305,49 @@ func (r *BasePolicyRepository) GetBasePolicyDocumentValidationsByPolicyID(basePo
 		WHERE base_policy_id = $1
 		ORDER BY validation_timestamp DESC`
 
-	err := r.db.Select(&validations, query, basePolicyID)
+	err := r.db.Select(&dbValidations, query, basePolicyID)
 	if err != nil {
 		slog.Error("Failed to get base policy document validations",
 			"base_policy_id", basePolicyID,
 			"error", err)
 		return nil, fmt.Errorf("failed to get base policy document validations: %w", err)
+	}
+
+	validations := make([]models.BasePolicyDocumentValidation, len(dbValidations))
+	for i, dbValidation := range dbValidations {
+		validations[i] = dbValidation.BasePolicyDocumentValidation
+		
+		if len(dbValidation.MismatchesRaw) > 0 {
+			mismatchesMap, err := utils.DeserializeBytesToMap(dbValidation.MismatchesRaw)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize mismatches for validation %s: %w", validations[i].ID, err)
+			}
+			validations[i].Mismatches = mismatchesMap
+		}
+
+		if len(dbValidation.WarningsRaw) > 0 {
+			warningsMap, err := utils.DeserializeBytesToMap(dbValidation.WarningsRaw)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize warnings for validation %s: %w", validations[i].ID, err)
+			}
+			validations[i].Warnings = warningsMap
+		}
+
+		if len(dbValidation.RecommendationsRaw) > 0 {
+			recommendationsMap, err := utils.DeserializeBytesToMap(dbValidation.RecommendationsRaw)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize recommendations for validation %s: %w", validations[i].ID, err)
+			}
+			validations[i].Recommendations = recommendationsMap
+		}
+
+		if len(dbValidation.ExtractedParametersRaw) > 0 {
+			extractedParamsMap, err := utils.DeserializeBytesToMap(dbValidation.ExtractedParametersRaw)
+			if err != nil {
+				return nil, fmt.Errorf("failed to deserialize extracted_parameters for validation %s: %w", validations[i].ID, err)
+			}
+			validations[i].ExtractedParameters = extractedParamsMap
+		}
 	}
 
 	slog.Debug("Successfully retrieved base policy document validations",
@@ -1183,7 +1359,13 @@ func (r *BasePolicyRepository) GetBasePolicyDocumentValidationsByPolicyID(basePo
 func (r *BasePolicyRepository) GetLatestBasePolicyDocumentValidation(basePolicyID uuid.UUID) (*models.BasePolicyDocumentValidation, error) {
 	slog.Debug("Retrieving latest base policy document validation", "base_policy_id", basePolicyID)
 
-	var validation models.BasePolicyDocumentValidation
+	var dbValidation struct {
+		models.BasePolicyDocumentValidation
+		MismatchesRaw          []byte `db:"mismatches"`
+		WarningsRaw            []byte `db:"warnings"`
+		RecommendationsRaw     []byte `db:"recommendations"`
+		ExtractedParametersRaw []byte `db:"extracted_parameters"`
+	}
 	query := `
 		SELECT 
 			id, base_policy_id, validation_timestamp, validation_status, overall_score,
@@ -1195,7 +1377,7 @@ func (r *BasePolicyRepository) GetLatestBasePolicyDocumentValidation(basePolicyI
 		ORDER BY validation_timestamp DESC
 		LIMIT 1`
 
-	err := r.db.Get(&validation, query, basePolicyID)
+	err := r.db.Get(&dbValidation, query, basePolicyID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			slog.Debug("No document validation found for base policy", "base_policy_id", basePolicyID)
@@ -1205,6 +1387,40 @@ func (r *BasePolicyRepository) GetLatestBasePolicyDocumentValidation(basePolicyI
 			"base_policy_id", basePolicyID,
 			"error", err)
 		return nil, fmt.Errorf("failed to get latest base policy document validation: %w", err)
+	}
+
+	validation := dbValidation.BasePolicyDocumentValidation
+
+	if len(dbValidation.MismatchesRaw) > 0 {
+		mismatchesMap, err := utils.DeserializeBytesToMap(dbValidation.MismatchesRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize mismatches: %w", err)
+		}
+		validation.Mismatches = mismatchesMap
+	}
+
+	if len(dbValidation.WarningsRaw) > 0 {
+		warningsMap, err := utils.DeserializeBytesToMap(dbValidation.WarningsRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize warnings: %w", err)
+		}
+		validation.Warnings = warningsMap
+	}
+
+	if len(dbValidation.RecommendationsRaw) > 0 {
+		recommendationsMap, err := utils.DeserializeBytesToMap(dbValidation.RecommendationsRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize recommendations: %w", err)
+		}
+		validation.Recommendations = recommendationsMap
+	}
+
+	if len(dbValidation.ExtractedParametersRaw) > 0 {
+		extractedParamsMap, err := utils.DeserializeBytesToMap(dbValidation.ExtractedParametersRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize extracted_parameters: %w", err)
+		}
+		validation.ExtractedParameters = extractedParamsMap
 	}
 
 	slog.Debug("Successfully retrieved latest base policy document validation",
