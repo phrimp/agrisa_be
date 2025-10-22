@@ -74,7 +74,7 @@ func (s *PolicyExpirationService) Stop() {
 // isArchivePolicyKey checks if the expired key is a BasePolicy with archive:true
 func (s *PolicyExpirationService) isArchivePolicyKey(expiredKey string) bool {
 	// Pattern: {provider}--{policyID}--BasePolicy--archive:true
-	return strings.Contains(expiredKey, "--BasePolicy--archive:true")
+	return strings.Contains(expiredKey, "--BasePolicy--archive:true--COMMIT_EVENT")
 }
 
 // processExpiredPolicy handles a single expired archive policy
@@ -83,6 +83,7 @@ func (s *PolicyExpirationService) processExpiredPolicy(ctx context.Context, expi
 
 	s.updateStats(true, false) // Mark as processed
 
+	expiredKey = strings.Split(expiredKey, "--COMMIT_EVENT")[0]
 	// Extract policy information from expired key
 	policyInfo, err := s.extractPolicyInfo(expiredKey)
 	if err != nil {
@@ -224,4 +225,3 @@ func main() {
     expirationService.Stop()
 }
 */
-

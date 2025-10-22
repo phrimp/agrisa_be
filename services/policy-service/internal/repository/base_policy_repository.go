@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"policy-service/internal/models"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -45,6 +46,15 @@ func (r *BasePolicyRepository) DeleteTempBasePolicyModel(ctx context.Context, ke
 
 func (r *BasePolicyRepository) CreateTempBasePolicyModelsWTransaction(ctx context.Context, model []byte, key string, tx redis.Pipeliner, expiration time.Duration) error {
 	err := tx.Set(ctx, key, model, expiration).Err()
+	if err != nil {
+		return err
+	}
+	if strings.Contains(key, "--BasePolicy--archive:true") {
+		err := tx.Set(ctx, key+"--COMMIT_EVENT", 1, expiration-5*time.Minute).Err()
+		if err != nil {
+			slog.Error("commit event key failed", "error", err)
+		}
+	}
 	return err
 }
 
@@ -71,7 +81,7 @@ func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error
 	if policy.ID == uuid.Nil {
 		policy.ID = uuid.New()
 	}
-	
+
 	slog.Info("Creating base policy",
 		"policy_id", policy.ID,
 		"provider_id", policy.InsuranceProviderID,
@@ -391,7 +401,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTrigger(trigger *models.BasePolic
 	if trigger.ID == uuid.Nil {
 		trigger.ID = uuid.New()
 	}
-	
+
 	trigger.CreatedAt = time.Now()
 	trigger.UpdatedAt = time.Now()
 
@@ -535,7 +545,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerCondition(condition *model
 	if condition.ID == uuid.Nil {
 		condition.ID = uuid.New()
 	}
-	
+
 	condition.CreatedAt = time.Now()
 
 	query := `
@@ -567,7 +577,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerConditionsBatch(conditions
 			condition.ID = uuid.New()
 		}
 	}
-	
+
 	slog.Info("Creating base policy trigger conditions batch",
 		"condition_count", len(conditions))
 	start := time.Now()
@@ -815,7 +825,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.Ba
 	if policy.ID == uuid.Nil {
 		policy.ID = uuid.New()
 	}
-	
+
 	policy.CreatedAt = time.Now()
 	policy.UpdatedAt = time.Now()
 
@@ -848,7 +858,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerTx(tx *sqlx.Tx, trigger *m
 	if trigger.ID == uuid.Nil {
 		trigger.ID = uuid.New()
 	}
-	
+
 	trigger.CreatedAt = time.Now()
 	trigger.UpdatedAt = time.Now()
 
@@ -946,7 +956,7 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidation(validation *mo
 	if validation.ID == uuid.Nil {
 		validation.ID = uuid.New()
 	}
-	
+
 	slog.Info("Creating base policy document validation",
 		"validation_id", validation.ID,
 		"base_policy_id", validation.BasePolicyID,
