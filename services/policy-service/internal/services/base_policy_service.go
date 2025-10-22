@@ -637,7 +637,8 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 	}
 
 	// Build Redis key pattern for specific policy
-	policyPattern := fmt.Sprintf("%s--%s--BasePolicy--archive:%s", providerID, basePolicyID, archiveStatus)
+	policyPattern := fmt.Sprintf("%s--%s--BasePolicy--archive:%s", provider, policy, archive)
+	slog.Info("Pattern DEBUG", "pattern", policyPattern)
 	policyKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, policyPattern)
 	if err != nil {
 		slog.Error("Failed to find policy keys",
@@ -648,6 +649,7 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 			"error", err)
 		return nil, fmt.Errorf("error getting policy %s from provider %s with archive status %s: %w", basePolicyID, providerID, archiveStatus, err)
 	}
+	slog.Info("Key founds", "keys", policyKeys)
 
 	// Check if policy was found
 	if len(policyKeys) == 0 {
@@ -684,7 +686,7 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 		}
 
 		// Get trigger for this policy
-		triggerPattern := fmt.Sprintf("%s--*--BasePolicyTrigger--%s--archive:%s", providerID, basePolicy.ID, archiveStatus)
+		triggerPattern := fmt.Sprintf("%s--*--BasePolicyTrigger--%s--archive:%s", provider, basePolicy.ID, archive)
 		triggerKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, triggerPattern)
 		if err == nil && len(triggerKeys) > 0 {
 			triggerByte, err := s.basePolicyRepo.GetTempBasePolicyModels(ctx, triggerKeys[0])
@@ -697,7 +699,7 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 		}
 
 		// Get conditions for this policy
-		conditionPattern := fmt.Sprintf("%s--*--BasePolicyTriggerCondition--*--%s--archive:%s", providerID, basePolicy.ID, archiveStatus)
+		conditionPattern := fmt.Sprintf("%s--*--BasePolicyTriggerCondition--*--%s--archive:%s", provider, basePolicy.ID, archive)
 		conditionKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, conditionPattern)
 		if err == nil && len(conditionKeys) > 0 {
 			var conditions []*models.BasePolicyTriggerCondition
