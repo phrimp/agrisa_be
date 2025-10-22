@@ -3,6 +3,7 @@ package services
 import (
 	utils "agrisa_utils"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"policy-service/internal/models"
@@ -733,8 +734,7 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 func (s *BasePolicyService) UpdateBasePolicyValidationStatus(ctx context.Context, basePolicyID uuid.UUID, validationStatus models.ValidationStatus, validationScore *float64) error {
 	slog.Info("Updating base policy document validation status",
 		"base_policy_id", basePolicyID,
-		"validation_status", validationStatus,
-		"validation_score", validationScore)
+		"validation_status", validationStatus)
 	start := time.Now()
 
 	// Validate the validation status
@@ -743,14 +743,6 @@ func (s *BasePolicyService) UpdateBasePolicyValidationStatus(ctx context.Context
 			"base_policy_id", basePolicyID,
 			"validation_status", validationStatus)
 		return fmt.Errorf("invalid validation status: %s", validationStatus)
-	}
-
-	// Validate score if provided
-	if validationScore != nil && (*validationScore < 0 || *validationScore > 100) {
-		slog.Error("Invalid validation score provided",
-			"base_policy_id", basePolicyID,
-			"validation_score", *validationScore)
-		return fmt.Errorf("validation score must be between 0 and 100, got: %f", *validationScore)
 	}
 
 	// Get the existing base policy
@@ -764,11 +756,15 @@ func (s *BasePolicyService) UpdateBasePolicyValidationStatus(ctx context.Context
 
 	// Update the validation fields
 	oldStatus := basePolicy.DocumentValidationStatus
-	oldScore := basePolicy.DocumentValidationScore
 
 	basePolicy.DocumentValidationStatus = validationStatus
-	basePolicy.DocumentValidationScore = validationScore
 	basePolicy.UpdatedAt = time.Now()
+
+	if validationStatus == models.ValidationPassed {
+		basePolicy.Status = models.BasePolicyActive
+	} else {
+		basePolicy.Status = models.BasePolicyArchived
+	}
 
 	// Update in database
 	if err := s.basePolicyRepo.UpdateBasePolicy(basePolicy); err != nil {
@@ -783,8 +779,6 @@ func (s *BasePolicyService) UpdateBasePolicyValidationStatus(ctx context.Context
 		"base_policy_id", basePolicyID,
 		"old_status", oldStatus,
 		"new_status", validationStatus,
-		"old_score", oldScore,
-		"new_score", validationScore,
 		"duration", time.Since(start))
 
 	return nil
@@ -811,11 +805,13 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 	}
 
 	// Verify policy exists
-	var basePolicy *models.BasePolicy
+	basePolicy := &models.BasePolicy{}
 
 	policyPattern := fmt.Sprintf("*--%s--BasePolicy--*", request.BasePolicyID)
+	slog.Info("DEBUG pattern", "pattern", policyPattern)
 	policyKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, policyPattern)
-	if err != nil {
+	slog.Info("DEBUG key", "keys", policyKeys)
+	if err != nil || len(policyKeys) == 0 {
 		slog.Error("Failed to find policy keys", "policy id", request.BasePolicyID, "error", err)
 		basePolicy, err = s.basePolicyRepo.GetBasePolicyByID(request.BasePolicyID)
 		if err != nil {
@@ -829,12 +825,13 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 			return nil, fmt.Errorf("logic error: many matching policies exist in cache: %v", policyKeys)
 		}
 		basePolicyByte, err := s.basePolicyRepo.GetTempBasePolicyModels(ctx, policyKeys[0])
+		slog.Info("DEBUG data", "data", basePolicyByte)
 		if err != nil {
 			slog.Debug("Failed to get base policy data", "key", policyKeys[0], "error", err)
 			return nil, fmt.Errorf("failed to get base policy: %w", err)
 		}
 
-		if err := utils.DeserializeModel(basePolicyByte, basePolicy); err != nil {
+		if err := utils.DeserializeModel(basePolicyByte, &basePolicy); err != nil {
 			slog.Debug("Failed to deserialize base policy", "key", policyKeys[0], "error", err)
 			return nil, fmt.Errorf("failed to deserialize base policy: %w", err)
 		}
@@ -1200,4 +1197,32 @@ func (s *BasePolicyService) cleanupCommittedPoliciesFromRedis(ctx context.Contex
 	}
 
 	return nil
+}
+
+func (s *BasePolicyService) GetActivePolicies(ctx context.Context) ([]models.BasePolicy, error) {
+	return s.basePolicyRepo.GetBasePoliciesByStatus(models.BasePolicyActive)
+}
+
+func (s *BasePolicyService) GetAllPolicyCreationResponse(ctx context.Context) (any, error) {
+	keyParttern := "*--*--CompletePolicyResponse"
+	keys, err := s.basePolicyRepo.FindKeysByPattern(ctx, keyParttern)
+	if err != nil {
+		return nil, err
+	}
+	res := []map[string]any{}
+	for _, key := range keys {
+		completeResponseData, err := s.basePolicyRepo.GetTempBasePolicyModels(ctx, key)
+		if err != nil {
+			slog.Error("complete response data retrive failed", "error", err)
+			continue
+		}
+		jsonFormat := make(map[string]any)
+		err = json.Unmarshal(completeResponseData, &jsonFormat)
+		if err != nil {
+			slog.Error("complete response data retrive failed", "error", err)
+			continue
+		}
+		res = append(res, jsonFormat)
+	}
+	return res, nil
 }

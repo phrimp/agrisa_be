@@ -45,12 +45,12 @@ func (r *BasePolicyRepository) DeleteTempBasePolicyModel(ctx context.Context, ke
 }
 
 func (r *BasePolicyRepository) CreateTempBasePolicyModelsWTransaction(ctx context.Context, model []byte, key string, tx redis.Pipeliner, expiration time.Duration) error {
-	err := tx.Set(ctx, key, model, expiration).Err()
+	err := tx.Set(ctx, key, model, expiration+5*time.Minute).Err()
 	if err != nil {
 		return err
 	}
 	if strings.Contains(key, "--BasePolicy--archive:true") {
-		err := tx.Set(ctx, key+"--COMMIT_EVENT", 1, expiration-5*time.Minute).Err()
+		err := tx.Set(ctx, key+"--COMMIT_EVENT", 1, expiration).Err()
 		if err != nil {
 			slog.Error("commit event key failed", "error", err)
 		}

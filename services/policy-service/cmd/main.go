@@ -82,7 +82,7 @@ func main() {
 	})
 	redisClient, err := redis.NewRedisClient(cfg.RedisCfg.Host, cfg.RedisCfg.Port, cfg.RedisCfg.Password, cfg.RedisCfg.DB)
 	if err != nil {
-		log.Printf("error connect to redis: %w", err)
+		log.Printf("error connect to redis: %s", err)
 	}
 
 	// Initialize repositories

@@ -34,16 +34,36 @@ func (bph *BasePolicyHandler) Register(app *fiber.App) {
 	policyGroup.Get("/draft/filter", bph.GetDraftPoliciesWithFilter)               // GET  /base-policies/draft/filter - Get policies with flexible filters
 	policyGroup.Post("/validate", bph.ValidatePolicy)                              // POST /base-policies/validate - Validate policy & auto-commit
 	policyGroup.Post("/commit", bph.CommitPolicies)                                // POST /base-policies/commit - Manual commit policies to DB
+	policyGroup.Get("/active", bph.GetAllActivePolicy)
 
 	// Utility routes
 	policyGroup.Get("/count", bph.GetBasePolicyCount)                                 // GET  /base-policies/count - Total policy count
 	policyGroup.Get("/count/status/:status", bph.GetBasePolicyCountByStatus)          // GET  /base-policies/count/status/{status} - Count by status
 	policyGroup.Patch("/:id/validation-status", bph.UpdateBasePolicyValidationStatus) // PATCH /base-policies/{id}/validation-status - Update validation
+
+	policyManagementGroup := protectedGr.Group("/base-policies-management")
+	policyManagementGroup.Get("/base-policies/complete-response", bph.GetAllCompletePolicyCreations)
 }
 
 // ============================================================================
 // BUSINESS PROCESS OPERATIONS
 // ============================================================================
+
+func (bhp *BasePolicyHandler) GetAllCompletePolicyCreations(c fiber.Ctx) error {
+	response, err := bhp.basePolicyService.GetAllPolicyCreationResponse(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to retrive policy creation reponse"))
+	}
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(response))
+}
+
+func (bph *BasePolicyHandler) GetAllActivePolicy(c fiber.Ctx) error {
+	activePolicies, err := bph.basePolicyService.GetActivePolicies(c)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to retrive active policies"))
+	}
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(activePolicies))
+}
 
 // CreateCompletePolicy creates a complete policy (BasePolicy + Trigger + Conditions) in Redis
 func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {

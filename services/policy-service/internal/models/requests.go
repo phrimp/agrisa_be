@@ -186,10 +186,16 @@ func (r UpdateDataTierRequest) Validate() error {
 }
 
 type CompletePolicyCreationRequest struct {
-	BasePolicy *BasePolicy                   `json:"base_policy" validate:"required"`
-	Trigger    *BasePolicyTrigger            `json:"trigger" validate:"required"`
-	Conditions []*BasePolicyTriggerCondition `json:"conditions" validate:"required,min=1,max=50"`
-	IsArchive  bool                          `json:"is_archive"`
+	BasePolicy     *BasePolicy                   `json:"base_policy" validate:"required"`
+	Trigger        *BasePolicyTrigger            `json:"trigger" validate:"required"`
+	Conditions     []*BasePolicyTriggerCondition `json:"conditions" validate:"required,min=1,max=50"`
+	IsArchive      bool                          `json:"is_archive"`
+	PolicyDocument PolicyDocument                `json:"policy_document" validate:"required"`
+}
+
+type PolicyDocument struct {
+	Name string `json:"name" validate:"required"`
+	Data string `json:"data" validate:"required"`
 }
 
 func (r CompletePolicyCreationRequest) Validate() error {
@@ -238,10 +244,10 @@ type ValidatePolicyRequest struct {
 	WarningCount int `json:"warning_count" validate:"min=0"`
 
 	// Optional detailed validation data (JSONB)
-	Mismatches          interface{} `json:"mismatches,omitempty"`
-	Warnings            interface{} `json:"warnings,omitempty"`
-	Recommendations     interface{} `json:"recommendations,omitempty"`
-	ExtractedParameters interface{} `json:"extracted_parameters,omitempty"`
+	Mismatches          map[string]any `json:"mismatches,omitempty"`
+	Warnings            map[string]any `json:"warnings,omitempty"`
+	Recommendations     map[string]any `json:"recommendations,omitempty"`
+	ExtractedParameters map[string]any `json:"extracted_parameters,omitempty"`
 
 	// Optional metadata
 	ValidationNotes *string `json:"validation_notes,omitempty"`

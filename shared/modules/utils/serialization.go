@@ -74,3 +74,25 @@ func DeserializeModel[T any](data []byte, target *T) error {
 
 	return nil
 }
+
+func DeserializeBytesToMap(data []byte) (map[string]any, error) {
+	// Initialize the target map
+	var result map[string]any
+
+	// Use json.Unmarshal to parse the bytes into the map
+	if err := json.Unmarshal(data, &result); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal JSON: %w", err)
+	}
+
+	return result, nil
+}
+
+func SerializeMapToBytes(data map[string]any) ([]byte, error) {
+	// Use json.Marshal to convert the map to JSON bytes
+	bytes, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal map to JSON: %w", err)
+	}
+
+	return bytes, nil
+}
