@@ -24,7 +24,7 @@ func NewInsurancePartnerHandler(insurancePartnerService services.IInsurancePartn
 func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	insurancePartnerProfileGrPub := router.Group("/profile/public/api/v1")
 	insurancePartnerProfileGrPub.GET("/ping", h.Ping)
-	insurancePartnerProfileGrPub.GET("/insurance-partners/:partner_id", h.GetInsurancePartnersByID)
+	insurancePartnerProfileGrPub.GET("/insurance-partners/:partner_id/profile", h.GetInsurancePartnersByID)
 	insurancePartnerProfileGrPub.GET("/insurance-partners/:partner_id/reviews", h.GetPartnerReviews)
 
 	insurancePartnerProtectedGrPub := router.Group("/profile/protected/api/v1")
@@ -58,7 +58,7 @@ func (h *InsurancePartnerHandler) Ping(c *gin.Context) {
 
 func (h *InsurancePartnerHandler) GetInsurancePartnersByID(c *gin.Context) {
 	partnerID := c.Param("partner_id")
-	result, err := h.InsurancePartnerService.GetInsurancePartnerByID(partnerID)
+	result, err := h.InsurancePartnerService.GetPublicProfile(partnerID)
 	if err != nil {
 		log.Printf("Error getting insurance partner by ID %s: %s", partnerID, err.Error())
 		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())

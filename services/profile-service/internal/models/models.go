@@ -106,5 +106,4 @@ type UserProfile struct {
 	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
 	LastUpdatedBy     string     `json:"last_updated_by" db:"last_updated_by"`
 	LastUpdatedByName string     `json:"last_updated_by_name" db:"last_updated_by_name"`
-	LegalDocumentURLs []string   `json:"legal_document_urls" db:"legal_document_urls"`
 }
