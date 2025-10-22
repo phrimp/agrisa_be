@@ -17,13 +17,9 @@ type InsurancePartnerService struct {
 }
 
 type IInsurancePartnerService interface {
-	GetInsurancePartnerByID(partnerID string) (*models.InsurancePartner, error)
+	GetPublicProfile(partnerID string) (*models.PublicPartnerProfile, error)
 	GetPartnerReviews(partnerID string, sortBy string, sortDirection string, limit int, offset int) ([]models.PartnerReview, error)
 	CreateInsurancePartner(req *models.CreateInsurancePartnerRequest, userID string) CreateInsurancePartnerResult
-}
-
-func (s *InsurancePartnerService) GetInsurancePartnerByID(partnerID string) (*models.InsurancePartner, error) {
-	return s.repo.GetInsurancePartnerByID(partnerID)
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository) IInsurancePartnerService {
@@ -827,4 +823,8 @@ func ValidateLicenseExpiryDate(licenseExpiryDate time.Time, licenseIssueDate tim
 
 	// All validations passed
 	return nil
+}
+
+func (s *InsurancePartnerService) GetPublicProfile(partnerID string) (*models.PublicPartnerProfile, error) {
+	return s.repo.GetPublicProfile(partnerID)
 }
