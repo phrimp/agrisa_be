@@ -24,6 +24,10 @@ func NewDataSourceRepository(db *sqlx.DB) *DataSourceRepository {
 // ============================================================================
 
 func (r *DataSourceRepository) CreateDataSource(dataSource *models.DataSource) error {
+	if dataSource.ID == uuid.Nil {
+		dataSource.ID = uuid.New()
+	}
+	
 	slog.Info("Creating data source",
 		"data_source_id", dataSource.ID,
 		"parameter_name", dataSource.ParameterName,
@@ -68,6 +72,12 @@ func (r *DataSourceRepository) CreateDataSource(dataSource *models.DataSource) e
 func (r *DataSourceRepository) CreateDataSourcesBatch(dataSources []models.DataSource) error {
 	if len(dataSources) == 0 {
 		return nil
+	}
+
+	for i := range dataSources {
+		if dataSources[i].ID == uuid.Nil {
+			dataSources[i].ID = uuid.New()
+		}
 	}
 
 	// Start transaction for batch operation

@@ -68,6 +68,10 @@ func (r *BasePolicyRepository) FindKeysByPattern(ctx context.Context, pattern st
 }
 
 func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error {
+	if policy.ID == uuid.Nil {
+		policy.ID = uuid.New()
+	}
+	
 	slog.Info("Creating base policy",
 		"policy_id", policy.ID,
 		"provider_id", policy.InsuranceProviderID,
@@ -384,6 +388,10 @@ func (r *BasePolicyRepository) GetBasePolicyCountByStatus(status models.BasePoli
 // ============================================================================
 
 func (r *BasePolicyRepository) CreateBasePolicyTrigger(trigger *models.BasePolicyTrigger) error {
+	if trigger.ID == uuid.Nil {
+		trigger.ID = uuid.New()
+	}
+	
 	trigger.CreatedAt = time.Now()
 	trigger.UpdatedAt = time.Now()
 
@@ -524,6 +532,10 @@ func (r *BasePolicyRepository) CheckBasePolicyTriggerExists(id uuid.UUID) (bool,
 // ============================================================================
 
 func (r *BasePolicyRepository) CreateBasePolicyTriggerCondition(condition *models.BasePolicyTriggerCondition) error {
+	if condition.ID == uuid.Nil {
+		condition.ID = uuid.New()
+	}
+	
 	condition.CreatedAt = time.Now()
 
 	query := `
@@ -550,6 +562,12 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerCondition(condition *model
 }
 
 func (r *BasePolicyRepository) CreateBasePolicyTriggerConditionsBatch(conditions []*models.BasePolicyTriggerCondition) error {
+	for _, condition := range conditions {
+		if condition.ID == uuid.Nil {
+			condition.ID = uuid.New()
+		}
+	}
+	
 	slog.Info("Creating base policy trigger conditions batch",
 		"condition_count", len(conditions))
 	start := time.Now()
@@ -794,6 +812,10 @@ func (r *BasePolicyRepository) BeginTransaction() (*sqlx.Tx, error) {
 }
 
 func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.BasePolicy) error {
+	if policy.ID == uuid.Nil {
+		policy.ID = uuid.New()
+	}
+	
 	policy.CreatedAt = time.Now()
 	policy.UpdatedAt = time.Now()
 
@@ -823,6 +845,10 @@ func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.Ba
 }
 
 func (r *BasePolicyRepository) CreateBasePolicyTriggerTx(tx *sqlx.Tx, trigger *models.BasePolicyTrigger) error {
+	if trigger.ID == uuid.Nil {
+		trigger.ID = uuid.New()
+	}
+	
 	trigger.CreatedAt = time.Now()
 	trigger.UpdatedAt = time.Now()
 
@@ -844,6 +870,12 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerTx(tx *sqlx.Tx, trigger *m
 func (r *BasePolicyRepository) CreateBasePolicyTriggerConditionsBatchTx(tx *sqlx.Tx, conditions []*models.BasePolicyTriggerCondition) error {
 	if len(conditions) == 0 {
 		return nil
+	}
+
+	for _, condition := range conditions {
+		if condition.ID == uuid.Nil {
+			condition.ID = uuid.New()
+		}
 	}
 
 	now := time.Now()
@@ -911,6 +943,10 @@ func (r *BasePolicyRepository) CalculateTotalBasePolicyDataCost(policyID uuid.UU
 // ============================================================================
 
 func (r *BasePolicyRepository) CreateBasePolicyDocumentValidation(validation *models.BasePolicyDocumentValidation) error {
+	if validation.ID == uuid.Nil {
+		validation.ID = uuid.New()
+	}
+	
 	slog.Info("Creating base policy document validation",
 		"validation_id", validation.ID,
 		"base_policy_id", validation.BasePolicyID,
