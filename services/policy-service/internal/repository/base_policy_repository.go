@@ -63,12 +63,14 @@ func (r *BasePolicyRepository) BeginRedisTransaction() redis.Pipeliner {
 	return r.redisClient.TxPipeline()
 }
 
-func (r *BasePolicyRepository) FindKeysByPattern(ctx context.Context, pattern string) ([]string, error) {
+func (r *BasePolicyRepository) FindKeysByPattern(ctx context.Context, pattern, exclude string) ([]string, error) {
 	var keys []string
 
 	iter := r.redisClient.Scan(ctx, 0, pattern, 100).Iterator()
 	for iter.Next(ctx) {
-		keys = append(keys, iter.Val())
+		if exclude == "" || !strings.Contains(iter.Val(), exclude) {
+			keys = append(keys, iter.Val())
+		}
 	}
 
 	if err := iter.Err(); err != nil {
@@ -95,7 +97,7 @@ func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error
 	// Serialize JSONB field to []byte before database insertion
 	var importantInfoBytes []byte
 	var err error
-	
+
 	if policy.ImportantAdditionalInformation != nil {
 		importantInfoBytes, err = utils.SerializeMapToBytes(policy.ImportantAdditionalInformation)
 		if err != nil {
@@ -144,7 +146,11 @@ func (r *BasePolicyRepository) GetBasePolicyByID(id uuid.UUID) (*models.BasePoli
 	slog.Info("Retrieving base policy by ID", "policy_id", id)
 	start := time.Now()
 
-	var policy models.BasePolicy
+	var dbPolicy struct {
+		models.BasePolicy
+		ImportantAdditionalInformationRaw []byte `db:"important_additional_information"`
+	}
+
 	query := `
 		SELECT 
 			id, insurance_provider_id, product_name, product_code, product_description,
@@ -158,7 +164,7 @@ func (r *BasePolicyRepository) GetBasePolicyByID(id uuid.UUID) (*models.BasePoli
 		FROM base_policy
 		WHERE id = $1`
 
-	err := r.db.Get(&policy, query, id)
+	err := r.db.Get(&dbPolicy, query, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			slog.Warn("Base policy not found", "policy_id", id)
@@ -169,7 +175,15 @@ func (r *BasePolicyRepository) GetBasePolicyByID(id uuid.UUID) (*models.BasePoli
 			"error", err)
 		return nil, fmt.Errorf("failed to get base policy: %w", err)
 	}
+	policy := dbPolicy.BasePolicy
 
+	if len(dbPolicy.ImportantAdditionalInformationRaw) > 0 {
+		infoMap, err := utils.DeserializeBytesToMap(dbPolicy.ImportantAdditionalInformationRaw)
+		if err != nil {
+			return nil, fmt.Errorf("failed to deserialize important_additional_information: %w", err)
+		}
+		policy.ImportantAdditionalInformation = infoMap
+	}
 	slog.Info("Successfully retrieved base policy",
 		"policy_id", id,
 		"provider_id", policy.InsuranceProviderID,
@@ -292,7 +306,7 @@ func (r *BasePolicyRepository) UpdateBasePolicy(policy *models.BasePolicy) error
 	// Serialize JSONB field to []byte before database update
 	var importantInfoBytes []byte
 	var err error
-	
+
 	if policy.ImportantAdditionalInformation != nil {
 		importantInfoBytes, err = utils.SerializeMapToBytes(policy.ImportantAdditionalInformation)
 		if err != nil {
@@ -440,7 +454,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTrigger(trigger *models.BasePolic
 	// Serialize JSONB field to []byte before database insertion
 	var blackoutPeriodsBytes []byte
 	var err error
-	
+
 	if trigger.BlackoutPeriods != nil {
 		blackoutPeriodsBytes, err = utils.SerializeMapToBytes(trigger.BlackoutPeriods)
 		if err != nil {
@@ -514,7 +528,7 @@ func (r *BasePolicyRepository) UpdateBasePolicyTrigger(trigger *models.BasePolic
 	// Serialize JSONB field to []byte before database update
 	var blackoutPeriodsBytes []byte
 	var err error
-	
+
 	if trigger.BlackoutPeriods != nil {
 		blackoutPeriodsBytes, err = utils.SerializeMapToBytes(trigger.BlackoutPeriods)
 		if err != nil {
@@ -889,7 +903,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.Ba
 	// Serialize JSONB field to []byte before database insertion
 	var importantInfoBytes []byte
 	var err error
-	
+
 	if policy.ImportantAdditionalInformation != nil {
 		importantInfoBytes, err = utils.SerializeMapToBytes(policy.ImportantAdditionalInformation)
 		if err != nil {
@@ -908,7 +922,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.Ba
 			document_validation_status, document_validation_score, important_additional_information,
 			created_at, updated_at, created_by
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
 		)`
 
 	_, err = tx.Exec(query,
@@ -934,7 +948,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerTx(tx *sqlx.Tx, trigger *m
 	// Serialize JSONB field to []byte before database insertion
 	var blackoutPeriodsBytes []byte
 	var err error
-	
+
 	if trigger.BlackoutPeriods != nil {
 		blackoutPeriodsBytes, err = utils.SerializeMapToBytes(trigger.BlackoutPeriods)
 		if err != nil {
@@ -1048,28 +1062,28 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidation(validation *mo
 	// Serialize JSONB fields to []byte before database insertion
 	var mismatchesBytes, warningsBytes, recommendationsBytes, extractedParamsBytes []byte
 	var err error
-	
+
 	if validation.Mismatches != nil {
 		mismatchesBytes, err = utils.SerializeMapToBytes(validation.Mismatches)
 		if err != nil {
 			return fmt.Errorf("failed to serialize mismatches: %w", err)
 		}
 	}
-	
+
 	if validation.Warnings != nil {
 		warningsBytes, err = utils.SerializeMapToBytes(validation.Warnings)
 		if err != nil {
 			return fmt.Errorf("failed to serialize warnings: %w", err)
 		}
 	}
-	
+
 	if validation.Recommendations != nil {
 		recommendationsBytes, err = utils.SerializeMapToBytes(validation.Recommendations)
 		if err != nil {
 			return fmt.Errorf("failed to serialize recommendations: %w", err)
 		}
 	}
-	
+
 	if validation.ExtractedParameters != nil {
 		extractedParamsBytes, err = utils.SerializeMapToBytes(validation.ExtractedParameters)
 		if err != nil {
@@ -1208,28 +1222,28 @@ func (r *BasePolicyRepository) UpdateBasePolicyDocumentValidation(validation *mo
 	// Serialize JSONB fields to []byte before database update
 	var mismatchesBytes, warningsBytes, recommendationsBytes, extractedParamsBytes []byte
 	var err error
-	
+
 	if validation.Mismatches != nil {
 		mismatchesBytes, err = utils.SerializeMapToBytes(validation.Mismatches)
 		if err != nil {
 			return fmt.Errorf("failed to serialize mismatches: %w", err)
 		}
 	}
-	
+
 	if validation.Warnings != nil {
 		warningsBytes, err = utils.SerializeMapToBytes(validation.Warnings)
 		if err != nil {
 			return fmt.Errorf("failed to serialize warnings: %w", err)
 		}
 	}
-	
+
 	if validation.Recommendations != nil {
 		recommendationsBytes, err = utils.SerializeMapToBytes(validation.Recommendations)
 		if err != nil {
 			return fmt.Errorf("failed to serialize recommendations: %w", err)
 		}
 	}
-	
+
 	if validation.ExtractedParameters != nil {
 		extractedParamsBytes, err = utils.SerializeMapToBytes(validation.ExtractedParameters)
 		if err != nil {

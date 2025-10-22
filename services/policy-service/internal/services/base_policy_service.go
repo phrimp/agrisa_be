@@ -73,7 +73,7 @@ func (s *BasePolicyService) DataSelection(selectedTriggerConditions []*models.Ba
 	start := time.Now()
 
 	for i, selectedTriggerCondition := range selectedTriggerConditions {
-		slog.Debug("Validating trigger condition",
+		slog.Info("Validating trigger condition",
 			"index", i+1,
 			"condition_id", selectedTriggerCondition.ID,
 			"data_source_id", selectedTriggerCondition.DataSourceID)
@@ -321,7 +321,7 @@ func (s *BasePolicyService) validateBasePolicyTriggerCondition(condition *models
 }
 
 func (s *BasePolicyService) validateDataSource(condition *models.BasePolicyTriggerCondition) error {
-	slog.Debug("Validating data source",
+	slog.Info("Validating data source",
 		"condition_id", condition.ID,
 		"data_source_id", condition.DataSourceID)
 	start := time.Now()
@@ -366,7 +366,7 @@ func (s *BasePolicyService) validateDataSource(condition *models.BasePolicyTrigg
 		return fmt.Errorf("total cost mismatch")
 	}
 
-	slog.Debug("Data source validation successful",
+	slog.Info("Data source validation successful",
 		"condition_id", condition.ID,
 		"data_source_id", condition.DataSourceID,
 		"total_cost", totalCost,
@@ -434,7 +434,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 	request.BasePolicy.DocumentValidationStatus = models.ValidationPending
 
 	// Begin Redis transaction
-	slog.Debug("Starting Redis transaction for complete policy creation",
+	slog.Info("Starting Redis transaction for complete policy creation",
 		"base_policy_id", basePolicyID,
 		"trigger_id", triggerID,
 		"provider_id", request.BasePolicy.InsuranceProviderID)
@@ -444,7 +444,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 
 	defer func() {
 		if shouldCommit {
-			slog.Debug("Executing Redis transaction commit",
+			slog.Info("Executing Redis transaction commit",
 				"base_policy_id", basePolicyID,
 				"provider_id", request.BasePolicy.InsuranceProviderID)
 			_, err := tx.Exec(ctx)
@@ -459,7 +459,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 					"provider_id", request.BasePolicy.InsuranceProviderID)
 			}
 		} else {
-			slog.Debug("Discarding Redis transaction due to error",
+			slog.Info("Discarding Redis transaction due to error",
 				"base_policy_id", basePolicyID,
 				"provider_id", request.BasePolicy.InsuranceProviderID)
 			tx.Discard()
@@ -467,7 +467,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 	}()
 
 	// Serialize and store BasePolicy
-	slog.Debug("Serializing base policy",
+	slog.Info("Serializing base policy",
 		"base_policy_id", basePolicyID,
 		"product_name", request.BasePolicy.ProductName,
 		"crop_type", request.BasePolicy.CropType)
@@ -482,7 +482,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 	}
 
 	basePolicyKey := fmt.Sprintf("%s--%s--BasePolicy--archive:%v", request.BasePolicy.InsuranceProviderID, basePolicyID, request.IsArchive)
-	slog.Debug("Storing base policy in Redis transaction",
+	slog.Info("Storing base policy in Redis transaction",
 		"base_policy_id", basePolicyID,
 		"key", basePolicyKey,
 		"data_size_bytes", len(basePolicyByte),
@@ -497,7 +497,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 	}
 
 	// Serialize and store BasePolicyTrigger
-	slog.Debug("Serializing base policy trigger",
+	slog.Info("Serializing base policy trigger",
 		"trigger_id", triggerID,
 		"base_policy_id", basePolicyID,
 		"logical_operator", request.Trigger.LogicalOperator,
@@ -513,7 +513,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 	}
 
 	triggerKey := fmt.Sprintf("%s--%s--BasePolicyTrigger--%s--archive:%v", request.BasePolicy.InsuranceProviderID, triggerID, basePolicyID, request.IsArchive)
-	slog.Debug("Storing base policy trigger in Redis transaction",
+	slog.Info("Storing base policy trigger in Redis transaction",
 		"trigger_id", triggerID,
 		"key", triggerKey,
 		"data_size_bytes", len(basePolicyTriggerByte),
@@ -528,7 +528,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 	}
 
 	// Serialize and store each condition in transaction
-	slog.Debug("Creating conditions in transaction", "condition_count", len(request.Conditions))
+	slog.Info("Creating conditions in transaction", "condition_count", len(request.Conditions))
 	for i, condition := range request.Conditions {
 		conditionByte, err := utils.SerializeModel(condition)
 		if err != nil {
@@ -548,14 +548,14 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 			return nil, fmt.Errorf("condition %d storage failed: %w", i+1, err)
 		}
 
-		slog.Debug("Condition stored in transaction",
+		slog.Info("Condition stored in transaction",
 			"condition_id", condition.ID,
 			"condition_index", i+1,
 			"key", conditionKey)
 	}
 
 	// Calculate total cost
-	slog.Debug("Calculating total cost", "base_policy_id", basePolicyID)
+	slog.Info("Calculating total cost", "base_policy_id", basePolicyID)
 	totalCost := s.CalculateBasePolicyTotalCost(request.Conditions)
 
 	// Create and store response metadata in transaction
@@ -584,7 +584,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 		return nil, fmt.Errorf("response metadata storage failed: %w", err)
 	}
 
-	slog.Debug("Response metadata stored in transaction",
+	slog.Info("Response metadata stored in transaction",
 		"base_policy_id", basePolicyID,
 		"key", responseKey)
 
@@ -640,7 +640,7 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 	// Build Redis key pattern for specific policy
 	policyPattern := fmt.Sprintf("%s--%s--BasePolicy--archive:%s", provider, policy, archive)
 	slog.Info("Pattern DEBUG", "pattern", policyPattern)
-	policyKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, policyPattern)
+	policyKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, policyPattern, "")
 	if err != nil {
 		slog.Error("Failed to find policy keys",
 			"provider_id", providerID,
@@ -654,7 +654,7 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 
 	// Check if policy was found
 	if len(policyKeys) == 0 {
-		slog.Debug("No policy found with given parameters",
+		slog.Info("No policy found with given parameters",
 			"provider_id", providerID,
 			"base_policy_id", basePolicyID,
 			"archive_status", archiveStatus)
@@ -667,13 +667,13 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 		// Get base policy
 		basePolicyByte, err := s.basePolicyRepo.GetTempBasePolicyModels(ctx, key)
 		if err != nil {
-			slog.Debug("Failed to get base policy data", "key", key, "error", err)
+			slog.Info("Failed to get base policy data", "key", key, "error", err)
 			continue
 		}
 
 		var basePolicy models.BasePolicy
 		if err := utils.DeserializeModel(basePolicyByte, &basePolicy); err != nil {
-			slog.Debug("Failed to deserialize base policy", "key", key, "error", err)
+			slog.Info("Failed to deserialize base policy", "key", key, "error", err)
 			continue
 		}
 
@@ -688,7 +688,7 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 
 		// Get trigger for this policy
 		triggerPattern := fmt.Sprintf("%s--*--BasePolicyTrigger--%s--archive:%s", provider, basePolicy.ID, archive)
-		triggerKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, triggerPattern)
+		triggerKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, triggerPattern, "")
 		if err == nil && len(triggerKeys) > 0 {
 			triggerByte, err := s.basePolicyRepo.GetTempBasePolicyModels(ctx, triggerKeys[0])
 			if err == nil {
@@ -701,7 +701,7 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 
 		// Get conditions for this policy
 		conditionPattern := fmt.Sprintf("%s--*--BasePolicyTriggerCondition--*--%s--archive:%s", provider, basePolicy.ID, archive)
-		conditionKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, conditionPattern)
+		conditionKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, conditionPattern, "")
 		if err == nil && len(conditionKeys) > 0 {
 			var conditions []*models.BasePolicyTriggerCondition
 			for _, condKey := range conditionKeys {
@@ -809,7 +809,7 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 
 	policyPattern := fmt.Sprintf("*--%s--BasePolicy--*", request.BasePolicyID)
 	slog.Info("DEBUG pattern", "pattern", policyPattern)
-	policyKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, policyPattern)
+	policyKeys, err := s.basePolicyRepo.FindKeysByPattern(ctx, policyPattern, "--COMMIT_EVENT")
 	slog.Info("DEBUG key", "keys", policyKeys)
 	if err != nil || len(policyKeys) == 0 {
 		slog.Error("Failed to find policy keys", "policy id", request.BasePolicyID, "error", err)
@@ -827,17 +827,17 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 		basePolicyByte, err := s.basePolicyRepo.GetTempBasePolicyModels(ctx, policyKeys[0])
 		slog.Info("DEBUG data", "data", basePolicyByte)
 		if err != nil {
-			slog.Debug("Failed to get base policy data", "key", policyKeys[0], "error", err)
+			slog.Info("Failed to get base policy data", "key", policyKeys[0], "error", err)
 			return nil, fmt.Errorf("failed to get base policy: %w", err)
 		}
 
 		if err := utils.DeserializeModel(basePolicyByte, &basePolicy); err != nil {
-			slog.Debug("Failed to deserialize base policy", "key", policyKeys[0], "error", err)
+			slog.Info("Failed to deserialize base policy", "key", policyKeys[0], "error", err)
 			return nil, fmt.Errorf("failed to deserialize base policy: %w", err)
 		}
 	}
 
-	slog.Debug("Retrieved base policy for validation",
+	slog.Info("Retrieved base policy for validation",
 		"base_policy_id", request.BasePolicyID,
 		"product_name", basePolicy.ProductName,
 		"current_status", basePolicy.DocumentValidationStatus)
@@ -872,14 +872,14 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 		CreatedAt:           time.Now(),
 	}
 
-	slog.Debug("Created validation record",
+	slog.Info("Created validation record",
 		"validation_id", validation.ID,
 		"base_policy_id", request.BasePolicyID,
 		"validation_status", request.ValidationStatus)
 
 	// Commit temporary draft policy data if present
 	if len(policyKeys) > 0 {
-		slog.Debug("policies data are in temp cache, begin to commit before further operations")
+		slog.Info("policies data are in temp cache, begin to commit before further operations")
 		result, err := s.CommitPolicies(ctx, &models.CommitPoliciesRequest{
 			BasePolicyID:    basePolicy.ID.String(),
 			DeleteFromRedis: true,
@@ -961,7 +961,7 @@ func (s *BasePolicyService) CommitPolicies(ctx context.Context, request *models.
 	}
 
 	// Phase 1: Discovery - Find policies from Redis
-	slog.Debug("Phase 1: Discovering policies from Redis")
+	slog.Info("Phase 1: Discovering policies from Redis")
 	completePolicies, err := s.GetAllDraftPolicyWFilter(ctx, request.ProviderID, request.BasePolicyID, request.ArchiveStatus)
 	if err != nil {
 		slog.Error("Failed to discover policies from Redis", "error", err)
@@ -978,7 +978,7 @@ func (s *BasePolicyService) CommitPolicies(ctx context.Context, request *models.
 	}
 
 	// Phase 2: Validation (if validate_only mode or before commit)
-	slog.Debug("Phase 2: Validating policies", "policy_count", len(completePolicies))
+	slog.Info("Phase 2: Validating policies", "policy_count", len(completePolicies))
 	validPolicies := make([]*models.CompletePolicyData, 0)
 
 	for _, policy := range completePolicies {
@@ -1009,14 +1009,14 @@ func (s *BasePolicyService) CommitPolicies(ctx context.Context, request *models.
 	}
 
 	// Phase 3: Database Transaction Processing
-	slog.Debug("Phase 3: Starting database transaction processing")
+	slog.Info("Phase 3: Starting database transaction processing")
 
 	// Process policies in batches
 	for i := 0; i < len(validPolicies); i += batchSize {
 		end := min(i+batchSize, len(validPolicies))
 
 		batch := validPolicies[i:end]
-		slog.Debug("Processing batch",
+		slog.Info("Processing batch",
 			"batch_number", (i/batchSize)+1,
 			"batch_size", len(batch),
 			"start_index", i,
@@ -1104,7 +1104,7 @@ func (s *BasePolicyService) CommitPolicies(ctx context.Context, request *models.
 
 	// Phase 4: Cleanup (Optional Redis cleanup)
 	if request.DeleteFromRedis && response.TotalCommitted > 0 {
-		slog.Debug("Phase 4: Cleaning up Redis data")
+		slog.Info("Phase 4: Cleaning up Redis data")
 		if err := s.cleanupCommittedPoliciesFromRedis(ctx, response.CommittedPolicies); err != nil {
 			slog.Warn("Failed to cleanup Redis data", "error", err)
 			// Not a critical failure, just log and continue
@@ -1127,7 +1127,7 @@ func (s *BasePolicyService) CommitPolicies(ctx context.Context, request *models.
 
 // commitSinglePolicyInTransaction commits a single policy within an existing transaction
 func (s *BasePolicyService) commitSinglePolicyInTransaction(ctx context.Context, tx *sqlx.Tx, policy *models.CompletePolicyData) error {
-	slog.Debug("Committing single policy",
+	slog.Info("Committing single policy",
 		"base_policy_id", policy.BasePolicy.ID,
 		"product_name", policy.BasePolicy.ProductName)
 
@@ -1150,7 +1150,7 @@ func (s *BasePolicyService) commitSinglePolicyInTransaction(ctx context.Context,
 		}
 	}
 
-	slog.Debug("Policy committed successfully",
+	slog.Info("Policy committed successfully",
 		"base_policy_id", policy.BasePolicy.ID,
 		"trigger_present", policy.Trigger != nil,
 		"condition_count", len(policy.Conditions))
@@ -1160,7 +1160,7 @@ func (s *BasePolicyService) commitSinglePolicyInTransaction(ctx context.Context,
 
 // cleanupCommittedPoliciesFromRedis removes successfully committed policies from Redis
 func (s *BasePolicyService) cleanupCommittedPoliciesFromRedis(ctx context.Context, committedPolicies []models.CommittedPolicyInfo) error {
-	slog.Debug("Starting Redis cleanup", "policy_count", len(committedPolicies))
+	slog.Info("Starting Redis cleanup", "policy_count", len(committedPolicies))
 
 	for _, policy := range committedPolicies {
 		// Find and delete all Redis keys for this policy
@@ -1172,7 +1172,7 @@ func (s *BasePolicyService) cleanupCommittedPoliciesFromRedis(ctx context.Contex
 		}
 
 		for _, pattern := range patterns {
-			keys, err := s.basePolicyRepo.FindKeysByPattern(ctx, pattern)
+			keys, err := s.basePolicyRepo.FindKeysByPattern(ctx, pattern, "")
 			if err != nil {
 				slog.Warn("Failed to find keys for cleanup",
 					"pattern", pattern,
@@ -1191,7 +1191,7 @@ func (s *BasePolicyService) cleanupCommittedPoliciesFromRedis(ctx context.Contex
 			}
 		}
 
-		slog.Debug("Policy cleanup completed",
+		slog.Info("Policy cleanup completed",
 			"base_policy_id", policy.BasePolicyID,
 			"patterns_processed", len(patterns))
 	}
@@ -1205,7 +1205,7 @@ func (s *BasePolicyService) GetActivePolicies(ctx context.Context) ([]models.Bas
 
 func (s *BasePolicyService) GetAllPolicyCreationResponse(ctx context.Context) (any, error) {
 	keyParttern := "*--*--CompletePolicyResponse"
-	keys, err := s.basePolicyRepo.FindKeysByPattern(ctx, keyParttern)
+	keys, err := s.basePolicyRepo.FindKeysByPattern(ctx, keyParttern, "")
 	if err != nil {
 		return nil, err
 	}
