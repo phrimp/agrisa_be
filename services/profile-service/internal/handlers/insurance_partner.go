@@ -24,11 +24,12 @@ func NewInsurancePartnerHandler(insurancePartnerService services.IInsurancePartn
 func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	insurancePartnerProfileGrPub := router.Group("/profile/public/api/v1")
 	insurancePartnerProfileGrPub.GET("/ping", h.Ping)
-	insurancePartnerProfileGrPub.GET("/insurance-partners/:partner_id/profile", h.GetInsurancePartnersByID)
+	insurancePartnerProfileGrPub.GET("/insurance-partners/:partner_id/profile", h.GetInsurancePartnerPublicByID)
 	insurancePartnerProfileGrPub.GET("/insurance-partners/:partner_id/reviews", h.GetPartnerReviews)
 
 	insurancePartnerProtectedGrPub := router.Group("/profile/protected/api/v1")
 	insurancePartnerProtectedGrPub.POST("/insurance-partners", h.CreateInsurancePartner) // featurea: insu
+	insurancePartnerProtectedGrPub.GET("/insurance-partners/me/profile", h.GetInsurancePartnerPrivateByID)
 }
 
 func MapErrorToHTTPStatusExtended(errorString string) (errorCode string, httpStatus int) {
@@ -56,7 +57,7 @@ func (h *InsurancePartnerHandler) Ping(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "pong"})
 }
 
-func (h *InsurancePartnerHandler) GetInsurancePartnersByID(c *gin.Context) {
+func (h *InsurancePartnerHandler) GetInsurancePartnerPublicByID(c *gin.Context) {
 	partnerID := c.Param("partner_id")
 	result, err := h.InsurancePartnerService.GetPublicProfile(partnerID)
 	if err != nil {
@@ -119,4 +120,18 @@ func (h *InsurancePartnerHandler) CreateInsurancePartner(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, result)
+}
+
+func (h *InsurancePartnerHandler) GetInsurancePartnerPrivateByID(c *gin.Context) {
+	staffID := c.GetHeader("X-User-ID")
+	result, err := h.InsurancePartnerService.GetPrivateProfile(staffID)
+	if err != nil {
+		log.Printf("Error getting insurance partner private by staffID %s: %s", staffID, err.Error())
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	response := utils.CreateSuccessResponse(result)
+	c.JSON(http.StatusOK, response)
 }

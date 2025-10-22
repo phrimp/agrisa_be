@@ -13,7 +13,9 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_login TIMESTAMP,
+    login_attempts INTEGER DEFAULT 0,
     locked_until BIGINT,
+    face_liveness VARCHAR(255),
     
     -- Constraints
     CONSTRAINT users_contact_required CHECK (phone_number IS NOT NULL OR email IS NOT NULL)

@@ -84,7 +84,7 @@ func main() {
 	userRepository := repository.NewUserRepository(db)
 
 	//services
-	insurancePartnerService := services.NewInsurancePartnerService(insurancePartnerRepository)
+	insurancePartnerService := services.NewInsurancePartnerService(insurancePartnerRepository, userRepository)
 	userService := services.NewUserService(userRepository)
 	// handlers
 	insurancePartnerHandler := handlers.NewInsurancePartnerHandler(insurancePartnerService)

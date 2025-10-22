@@ -236,7 +236,8 @@ func (r *InsurancePartnerRepository) GetPublicProfile(partnerID string) (*models
 			COALESCE(ip.hotline, '') AS hotline,
 			COALESCE(ip.support_hours, '') AS support_hours,
 			COALESCE(ip.partner_website, '') AS partner_website,
-			
+			COALESCE(ip.fax_number, '') AS fax_number,
+
 			-- C. Location Information
 			COALESCE(ip.head_office_address, '') AS head_office_address,
 			COALESCE(ip.province_name, '') AS province_name,
@@ -273,7 +274,7 @@ func (r *InsurancePartnerRepository) GetPublicProfile(partnerID string) (*models
 // GetPrivateProfile - Lấy TOÀN BỘ thông tin của Insurance Partner (PUBLIC + PRIVATE)
 func (r *InsurancePartnerRepository) GetPrivateProfile(partnerID string) (*models.PrivatePartnerProfile, error) {
 	var profile models.PrivatePartnerProfile
-
+	log.Printf("GetPrivateProfile called with partnerID: %s", partnerID)
 	// Build query
 	query := `
 		SELECT 
@@ -330,7 +331,6 @@ func (r *InsurancePartnerRepository) GetPrivateProfile(partnerID string) (*model
 			
 			-- B. Administrative and Technical Information
 			COALESCE(ip.province_code, '') AS province_code,
-			COALESCE(ip.district_code, '') AS district_code,
 			COALESCE(ip.ward_code, '') AS ward_code,
 			COALESCE(ip.postal_code, '') AS postal_code,
 			COALESCE(ip.fax_number, '') AS fax_number,
@@ -339,7 +339,7 @@ func (r *InsurancePartnerRepository) GetPrivateProfile(partnerID string) (*model
 			ip.status,
 			ip.created_at,
 			ip.updated_at,
-			COALESCE(ip.last_updated_by_id, '') AS last_updated_by_id,
+			last_updated_by_id,
 			COALESCE(ip.last_updated_by_name, '') AS last_updated_by_name
 		FROM insurance_partners ip
 		WHERE ip.partner_id = $1

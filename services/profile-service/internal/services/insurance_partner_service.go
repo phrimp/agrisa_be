@@ -13,18 +13,21 @@ import (
 )
 
 type InsurancePartnerService struct {
-	repo repository.IInsurancePartnerRepository
+	repo                  repository.IInsurancePartnerRepository
+	userProfileRepository repository.IUserRepository
 }
 
 type IInsurancePartnerService interface {
 	GetPublicProfile(partnerID string) (*models.PublicPartnerProfile, error)
 	GetPartnerReviews(partnerID string, sortBy string, sortDirection string, limit int, offset int) ([]models.PartnerReview, error)
 	CreateInsurancePartner(req *models.CreateInsurancePartnerRequest, userID string) CreateInsurancePartnerResult
+	GetPrivateProfile(userID string) (*models.PrivatePartnerProfile, error)
 }
 
-func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository) IInsurancePartnerService {
+func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
 	return &InsurancePartnerService{
-		repo: repo,
+		repo:                  repo,
+		userProfileRepository: userProfileRepository,
 	}
 }
 
@@ -827,4 +830,13 @@ func ValidateLicenseExpiryDate(licenseExpiryDate time.Time, licenseIssueDate tim
 
 func (s *InsurancePartnerService) GetPublicProfile(partnerID string) (*models.PublicPartnerProfile, error) {
 	return s.repo.GetPublicProfile(partnerID)
+}
+
+func (s *InsurancePartnerService) GetPrivateProfile(userID string) (*models.PrivatePartnerProfile, error) {
+	staff, err := s.userProfileRepository.GetUserProfileByUserID(userID)
+	if err != nil {
+		return nil, err
+	}
+	partnerID := staff.PartnerID
+	return s.repo.GetPrivateProfile(partnerID.String())
 }

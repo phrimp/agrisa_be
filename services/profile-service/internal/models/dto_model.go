@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // request
@@ -62,6 +63,7 @@ type PublicPartnerProfile struct {
 	Hotline                string `db:"hotline" json:"hotline"`
 	SupportHours           string `db:"support_hours" json:"support_hours"`
 	PartnerWebsite         string `db:"partner_website" json:"partner_website"`
+	FaxNumber              string `db:"fax_number" json:"fax_number"`
 
 	// C. Location Information
 	HeadOfficeAddress string `db:"head_office_address" json:"head_office_address"`
@@ -123,18 +125,18 @@ type PrivatePartnerProfile struct {
 
 	// ========== PRIVATE INFORMATION (visible only to the partner) ==========
 	// A. Legal and Document Information
-	LegalCompanyName           string     `db:"legal_company_name" json:"legal_company_name"`
-	PartnerTradingName         string     `db:"partner_trading_name" json:"partner_trading_name"`
-	CompanyType                string     `db:"company_type" json:"company_type"`
-	IncorporationDate          time.Time  `db:"incorporation_date" json:"incorporation_date"`
-	TaxIdentificationNumber    string     `db:"tax_identification_number" json:"tax_identification_number"`
-	BusinessRegistrationNumber string     `db:"business_registration_number" json:"business_registration_number"`
-	InsuranceLicenseNumber     string     `db:"insurance_license_number" json:"insurance_license_number"`
-	LicenseIssueDate           *time.Time `db:"license_issue_date" json:"license_issue_date"`
-	LicenseExpiryDate          *time.Time `db:"license_expiry_date" json:"license_expiry_date"`
-	AuthorizedInsuranceLines   []string   `db:"authorized_insurance_lines" json:"authorized_insurance_lines"`
-	OperatingProvinces         []string   `db:"operating_provinces" json:"operating_provinces"`
-	LegalDocumentURLs          []string   `db:"legal_document_urls" json:"legal_document_urls"`
+	LegalCompanyName           string         `db:"legal_company_name" json:"legal_company_name"`
+	PartnerTradingName         string         `db:"partner_trading_name" json:"partner_trading_name"`
+	CompanyType                string         `db:"company_type" json:"company_type"`
+	IncorporationDate          time.Time      `db:"incorporation_date" json:"incorporation_date"`
+	TaxIdentificationNumber    string         `db:"tax_identification_number" json:"tax_identification_number"`
+	BusinessRegistrationNumber string         `db:"business_registration_number" json:"business_registration_number"`
+	InsuranceLicenseNumber     string         `db:"insurance_license_number" json:"insurance_license_number"`
+	LicenseIssueDate           *time.Time     `db:"license_issue_date" json:"license_issue_date"`
+	LicenseExpiryDate          *time.Time     `db:"license_expiry_date" json:"license_expiry_date"`
+	AuthorizedInsuranceLines   pq.StringArray `db:"authorized_insurance_lines" json:"authorized_insurance_lines"`
+	OperatingProvinces         pq.StringArray `db:"operating_provinces" json:"operating_provinces"`
+	LegalDocumentURLs          pq.StringArray `db:"legal_document_urls" json:"legal_document_urls"`
 
 	// B. Administrative and Technical Information
 	ProvinceCode string `db:"province_code" json:"province_code"`
