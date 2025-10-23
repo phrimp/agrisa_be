@@ -41,7 +41,7 @@ CREATE TABLE user_roles (
     user_id VARCHAR(50) REFERENCES users(id) ON DELETE CASCADE,
     role_id INTEGER REFERENCES roles(id) ON DELETE CASCADE,
     assigned_by VARCHAR(50) REFERENCES users(id),
-    assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    assigned_at INT,
     expires_at BIGINT,
     is_active BOOLEAN DEFAULT TRUE,
     

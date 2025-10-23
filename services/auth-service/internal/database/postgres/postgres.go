@@ -82,7 +82,6 @@ func findSchemaFile(startDir string) string {
 }
 
 func ConnectAndCreateDB(cfg config.PostgresConfig) (*sqlx.DB, error) {
-	cfg.Host = "ssh.phrimp.io.vn"
 	defaultConnStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=postgres sslmode=disable",
 		cfg.Host, cfg.Port, cfg.Username, cfg.Password)
 

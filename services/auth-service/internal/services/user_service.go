@@ -32,6 +32,7 @@ type IUserService interface {
 	BanUser(userID string, until int64) error
 	UnbanUser(userID string) error
 
+	GetUserByEmail(email string) (*models.User, error)
 	GetUserEkycProgressByUserID(userID string) (*models.UserEkycProgress, error)
 	UploadToMinIO(c *gin.Context, file io.Reader, header *multipart.FileHeader, serviceName string) error
 	ProcessAndUploadFiles(files map[string][]*multipart.FileHeader, serviceName string, allowedExts []string, maxMB int64) ([]utils.FileInfo, error)
@@ -905,6 +906,10 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 	return &newUser, nil
 }
 
+func (s *UserService) GetUserByEmail(email string) (*models.User, error) {
+	return s.userRepo.GetUserByEmail(email)
+}
+
 func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress *string) (*models.User, *models.UserSession, error) {
 	if email != "" && phone != "" {
 		log.Println("SUSPICIOUS ACTIVITY DETECTED : email & phone present reached service layer and blocked")
@@ -980,15 +985,15 @@ func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress
 	}
 
 	// get roles
-	//roles, err := s.roleService.GetUserRoles(login_attempt_user.ID, true)
-	//if err != nil {
-	//	log.Println("error get user roles: ", err)
-	//	return nil, nil, fmt.Errorf("error get user roles: %s", err)
-	//}
+	roles, err := s.roleService.GetUserRoles(login_attempt_user.ID, true)
+	if err != nil {
+		log.Println("error get user roles: ", err)
+		return nil, nil, fmt.Errorf("error get user roles: %s", err)
+	}
 	roleNames := []string{}
-	//for _, role := range roles {
-	//	roleNames = append(roleNames, role.Name)
-	//}
+	for _, role := range roles {
+		roleNames = append(roleNames, role.Name)
+	}
 
 	// gen token
 	token, err := s.jwtService.GenerateNewToken(roleNames, login_attempt_user.PhoneNumber, login_attempt_user.Email, login_attempt_user.ID)

@@ -12,13 +12,13 @@ type Role struct {
 }
 
 type UserRole struct {
-	ID         int       `json:"id" db:"id"`
-	UserID     string    `json:"user_id" db:"user_id"`
-	RoleID     int       `json:"role_id" db:"role_id"`
-	AssignedBy *string   `json:"assigned_by" db:"assigned_by"`
-	AssignedAt time.Time `json:"assigned_at" db:"assigned_at"`
-	ExpiresAt  int64     `json:"expires_at" db:"expires_at"`
-	IsActive   bool      `json:"is_active" db:"is_active"`
+	ID         int     `json:"id" db:"id"`
+	UserID     string  `json:"user_id" db:"user_id"`
+	RoleID     int     `json:"role_id" db:"role_id"`
+	AssignedBy *string `json:"assigned_by" db:"assigned_by"`
+	AssignedAt int64   `json:"assigned_at" db:"assigned_at"`
+	ExpiresAt  int64   `json:"expires_at" db:"expires_at"`
+	IsActive   bool    `json:"is_active" db:"is_active"`
 }
 
 type Permission struct {
