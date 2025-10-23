@@ -980,15 +980,15 @@ func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress
 	}
 
 	// get roles
-	roles, err := s.roleService.GetUserRoles(login_attempt_user.ID, true)
-	if err != nil {
-		log.Println("error get user roles: ", err)
-		return nil, nil, fmt.Errorf("error get user roles: %s", err)
-	}
+	//roles, err := s.roleService.GetUserRoles(login_attempt_user.ID, true)
+	//if err != nil {
+	//	log.Println("error get user roles: ", err)
+	//	return nil, nil, fmt.Errorf("error get user roles: %s", err)
+	//}
 	roleNames := []string{}
-	for _, role := range roles {
-		roleNames = append(roleNames, role.Name)
-	}
+	//for _, role := range roles {
+	//	roleNames = append(roleNames, role.Name)
+	//}
 
 	// gen token
 	token, err := s.jwtService.GenerateNewToken(roleNames, login_attempt_user.PhoneNumber, login_attempt_user.Email, login_attempt_user.ID)

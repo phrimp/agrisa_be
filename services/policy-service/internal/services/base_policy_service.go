@@ -878,7 +878,7 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 		"validation_status", request.ValidationStatus)
 
 	// Commit temporary draft policy data if present
-	if len(policyKeys) > 0 {
+	if len(policyKeys) > 0 && validation.ValidationStatus == models.ValidationPassed {
 		slog.Info("policies data are in temp cache, begin to commit before further operations")
 		result, err := s.CommitPolicies(ctx, &models.CommitPoliciesRequest{
 			BasePolicyID:    basePolicy.ID.String(),
