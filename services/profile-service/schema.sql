@@ -49,19 +49,19 @@ CREATE TABLE insurance_partners (
     legal_document_urls TEXT[] DEFAULT ARRAY[]::TEXT[]
 );
 
--- Bảng 2: products
--- Lưu trữ thông tin các gói bảo hiểm của từng đối tác
-CREATE TABLE products (
-    product_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    partner_id UUID NOT NULL,
-    product_name VARCHAR(255) NOT NULL,
-    product_icon VARCHAR(100),
-    product_description TEXT,
-    product_supported_crop VARCHAR(50) CHECK (product_supported_crop IN ('lúa nước', 'cà phê')),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (partner_id) REFERENCES insurance_partners(partner_id) ON DELETE CASCADE
-);
+-- -- Bảng 2: products
+-- -- Lưu trữ thông tin các gói bảo hiểm của từng đối tác
+-- CREATE TABLE products (
+--     product_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+--     partner_id UUID NOT NULL,
+--     product_name VARCHAR(255) NOT NULL,
+--     product_icon VARCHAR(100),
+--     product_description TEXT,
+--     product_supported_crop VARCHAR(50) CHECK (product_supported_crop IN ('lúa nước', 'cà phê')),
+--     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--     FOREIGN KEY (partner_id) REFERENCES insurance_partners(partner_id) ON DELETE CASCADE
+-- );
 
 -- Bảng 3: partner_reviews
 -- Lưu trữ các đánh giá của nông dân về đối tác bảo hiểm
@@ -79,8 +79,6 @@ CREATE TABLE partner_reviews (
 );
 
 -- Tạo indexes để tối ưu performance
-CREATE INDEX idx_products_partner_id ON products(partner_id);
-CREATE INDEX idx_products_supported_crop ON products(product_supported_crop);
 CREATE INDEX idx_reviews_partner_id ON partner_reviews(partner_id);
 CREATE INDEX idx_reviews_rating_stars ON partner_reviews(rating_stars);
 CREATE INDEX idx_partners_rating_score ON insurance_partners(partner_rating_score);

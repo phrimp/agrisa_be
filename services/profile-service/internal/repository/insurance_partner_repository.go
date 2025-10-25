@@ -17,6 +17,7 @@ type IInsurancePartnerRepository interface {
 	CreateInsurancePartner(req models.CreateInsurancePartnerRequest, createdByID, createdByName string) error
 	GetPublicProfile(partnerID string) (*models.PublicPartnerProfile, error)
 	GetPrivateProfile(partnerID string) (*models.PrivatePartnerProfile, error)
+	UpdateInsurancePartner(query string, args ...interface{}) error
 }
 type InsurancePartnerRepository struct {
 	db *sqlx.DB
@@ -35,6 +36,7 @@ func (r *InsurancePartnerRepository) GetInsurancePartnerByID(partnerID string) (
 	WHERE partner_id=$1`
 	err := r.db.Get(&partner, query, partnerID)
 	if err != nil {
+		log.Printf("Error getting insurance partner by ID %s: %s", partnerID, err.Error())
 		return nil, err
 	}
 	return &partner, nil
@@ -353,4 +355,11 @@ func (r *InsurancePartnerRepository) GetPrivateProfile(partnerID string) (*model
 	}
 
 	return &profile, nil
+}
+
+func (r *InsurancePartnerRepository) UpdateInsurancePartner(query string, args ...interface{}) error {
+	if err := utils.ExecWithCheck(r.db, query, utils.ExecUpdate, args...); err != nil {
+		return fmt.Errorf("failed to update insurance partner: %w", err)
+	}
+	return nil
 }

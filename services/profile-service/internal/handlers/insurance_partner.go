@@ -30,6 +30,7 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	insurancePartnerProtectedGrPub := router.Group("/profile/protected/api/v1")
 	insurancePartnerProtectedGrPub.POST("/insurance-partners", h.CreateInsurancePartner) // featurea: insu
 	insurancePartnerProtectedGrPub.GET("/insurance-partners/me/profile", h.GetInsurancePartnerPrivateByID)
+	insurancePartnerProtectedGrPub.PUT("/insurance-partners/me/profile", h.UpdateInsurancePartnerProfile)
 }
 
 func MapErrorToHTTPStatusExtended(errorString string) (errorCode string, httpStatus int) {
@@ -134,4 +135,38 @@ func (h *InsurancePartnerHandler) GetInsurancePartnerPrivateByID(c *gin.Context)
 	}
 	response := utils.CreateSuccessResponse(result)
 	c.JSON(http.StatusOK, response)
+}
+
+func (h *InsurancePartnerHandler) UpdateInsurancePartnerProfile(c *gin.Context) {
+	updateBy := c.GetHeader("X-User-ID")
+	var requestBody map[string]interface{}
+	log.Printf("request go hereeeeee")
+	if err := c.ShouldBindJSON(&requestBody); err != nil {
+		log.Printf("Error binding JSON for UpdateInsurancePartnerProfile: %s", err.Error())
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
+		c.JSON(http.StatusBadRequest, errorResponse)
+		return
+	}
+
+	log.Printf("request through parse json to requestBody")
+
+	if requestBody["partner_id"] == nil {
+		log.Printf("partner_id is missing in the request body")
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "partner_id is required")
+		c.JSON(http.StatusBadRequest, errorResponse)
+		return
+	}
+
+	log.Printf("request through partner_id check")
+
+	dataResponse, err := h.InsurancePartnerService.UpdateInsurancePartner(requestBody, updateBy, "Admin")
+	if err != nil {
+		log.Printf("Error updating insurance partner profile: %s", err.Error())
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	successResponse := utils.CreateSuccessResponse(dataResponse)
+	c.JSON(http.StatusOK, successResponse)
 }

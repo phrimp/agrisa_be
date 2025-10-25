@@ -10,6 +10,8 @@ import (
 	"time"
 	"unicode/utf8"
 	"utils"
+
+	"github.com/lib/pq"
 )
 
 type InsurancePartnerService struct {
@@ -22,6 +24,7 @@ type IInsurancePartnerService interface {
 	GetPartnerReviews(partnerID string, sortBy string, sortDirection string, limit int, offset int) ([]models.PartnerReview, error)
 	CreateInsurancePartner(req *models.CreateInsurancePartnerRequest, userID string) CreateInsurancePartnerResult
 	GetPrivateProfile(userID string) (*models.PrivatePartnerProfile, error)
+	UpdateInsurancePartner(updateProfileRequestBody map[string]interface{}, updateByID, updateByName string) (*models.PrivatePartnerProfile, error)
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
@@ -152,6 +155,168 @@ func ValidateInsurancePartner(req *models.CreateInsurancePartnerRequest) []*util
 		validationErrors = append(validationErrors, err)
 	}
 	return validationErrors
+}
+
+var allowedUpdateInsuranceProfileFields = map[string]bool{
+	"legal_company_name":           true,
+	"partner_trading_name":         true,
+	"partner_display_name":         true,
+	"partner_logo_url":             true,
+	"cover_photo_url":              true,
+	"company_type":                 true,
+	"incorporation_date":           true,
+	"tax_identification_number":    true,
+	"business_registration_number": true,
+	"partner_tagline":              true,
+	"partner_description":          true,
+	"partner_phone":                true,
+	"partner_official_email":       true,
+	"head_office_address":          true,
+	"province_code":                true,
+	"province_name":                true,
+	"ward_code":                    true,
+	"ward_name":                    true,
+	"postal_code":                  true,
+	"fax_number":                   true,
+	"customer_service_hotline":     true,
+	"insurance_license_number":     true,
+	"license_issue_date":           true,
+	"license_expiry_date":          true,
+	"authorized_insurance_lines":   true,
+	"operating_provinces":          true,
+	"year_established":             true,
+	"partner_website":              true,
+	"partner_rating_score":         true,
+	"partner_rating_count":         true,
+	"trust_metric_experience":      true,
+	"trust_metric_clients":         true,
+	"trust_metric_claim_rate":      true,
+	"total_payouts":                true,
+	"average_payout_time":          true,
+	"confirmation_timeline":        true,
+	"hotline":                      true,
+	"support_hours":                true,
+	"coverage_areas":               true,
+	"status":                       true,
+	"updated_at":                   true,
+	"last_updated_by_id":           true,
+	"last_updated_by_name":         true,
+	"legal_document_urls":          true,
+}
+
+var arrayInsuranceProfileFields = map[string]bool{
+	"authorized_insurance_lines": true,
+	"operating_provinces":        true,
+	"legal_document_urls":        true,
+}
+
+func (s *InsurancePartnerService) UpdateInsurancePartner(updateProfileRequestBody map[string]interface{}, updateByID, updateByName string) (*models.PrivatePartnerProfile, error) {
+	// check if insurance partner profile exists
+	var privateProfile *models.PrivatePartnerProfile
+	partnerID := updateProfileRequestBody["partner_id"].(string)
+	_, err := s.repo.GetInsurancePartnerByID(partnerID)
+	if err != nil {
+		if strings.Contains(err.Error(), "no rows in result set") {
+			log.Printf("Insurance partner with ID %s does not exist", partnerID)
+			return nil, fmt.Errorf("not found: insurance partner with ID %s does not exist", partnerID)
+		}
+		log.Printf("Error getting insurance partner by ID %s: %s", partnerID, err.Error())
+		return nil, fmt.Errorf("internal server error: failed to get insurance partner: %v", err)
+	}
+
+	//Verify if the current user is authorized to update this profile
+	updateUser, err := s.userProfileRepository.GetUserProfileByUserID(updateByID)
+	if err != nil {
+		log.Printf("Error getting user profile by ID %s: %s", updateByID, err.Error())
+		return nil, fmt.Errorf("internal server error: failed to get user profile: %v", err)
+	}
+
+	if updateUser.PartnerID == nil {
+		log.Printf("User ID %s is not associated with any partner", updateByID)
+		return nil, fmt.Errorf("forbidden: user ID %s is not associated with any partner", updateByID)
+	}
+
+	if updateUser.PartnerID.String() != partnerID {
+		log.Printf("User ID %s is not authorized to update partner ID %s", updateByID, partnerID)
+		return nil, fmt.Errorf("forbidden: Bạn không có quyền cập nhật hồ sơ của đối tác bảo hiểm này")
+	}
+
+	delete(updateProfileRequestBody, "partner_id")
+	updateProfileRequestBody["last_updated_by_id"] = updateByID
+	updateProfileRequestBody["last_updated_by_name"] = updateByName
+
+	// Build dynamic UPDATE query
+	setClauses := []string{}
+	args := []interface{}{}
+	argPosition := 1
+
+	for field, value := range updateProfileRequestBody {
+		// Kiểm tra field có được phép update không
+		if !allowedUpdateInsuranceProfileFields[field] {
+			log.Printf("Field %s is not allowed to be updated", field)
+			return nil, fmt.Errorf("bad request: field %s is not allowed to be updated", field)
+		}
+
+		// Xử lý các field có kiểu array
+		if arrayInsuranceProfileFields[field] {
+			// Chuyển đổi slice interface{} thành []string
+			if arr, ok := value.([]interface{}); ok {
+				strArr := make([]string, len(arr))
+				for i, v := range arr {
+					strArr[i] = fmt.Sprintf("%v", v)
+				}
+				setClauses = append(setClauses, fmt.Sprintf("%s = $%d", field, argPosition))
+				args = append(args, pq.Array(strArr))
+				argPosition++
+			}
+		} else {
+			// Xử lý các field thông thường
+			setClauses = append(setClauses, fmt.Sprintf("%s = $%d", field, argPosition))
+			args = append(args, value)
+			argPosition++
+		}
+	}
+
+	// Nếu không có field nào để update
+	if len(setClauses) == 0 {
+		log.Printf("No fields to update for insurance partner ID %s", partnerID)
+		return nil, fmt.Errorf("bad request: no fields to update for insurance partner ID %s", partnerID)
+	}
+
+	hasUpdatedAt := false
+	for field := range updateProfileRequestBody {
+		if field == "updated_at" {
+			hasUpdatedAt = true
+			break
+		}
+	}
+	if !hasUpdatedAt {
+		setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argPosition))
+		args = append(args, time.Now())
+		argPosition++
+	}
+
+	args = append(args, partnerID)
+
+	query := fmt.Sprintf(
+		"UPDATE insurance_partners SET %s WHERE partner_id = $%d",
+		strings.Join(setClauses, ", "),
+		argPosition,
+	)
+
+	err = s.repo.UpdateInsurancePartner(query, args...)
+	if err != nil {
+		log.Printf("Error updating insurance partner ID %s: %s", partnerID, err.Error())
+		return nil, fmt.Errorf("failed to update insurance partner: %v", err)
+	}
+
+	privateProfile, err = s.repo.GetPrivateProfile(partnerID)
+	if err != nil {
+		log.Printf("Error getting private profile for insurance partner ID %s after update: %s", partnerID, err.Error())
+		return nil, fmt.Errorf("%v", err)
+	}
+
+	return privateProfile, nil
 }
 
 func ValidateLegalCompanyName(legalCompanyNameInput string) *utils.ValidationError {
