@@ -127,6 +127,10 @@ func main() {
 	middlewareHandler.RegisterRoutes(r)
 	roleHandler.RegisterRoutes(r)
 	roleHandler.InitDefaultRole()
+	err = authHandler.InitDefaultUser(*cfg)
+	if err != nil {
+		log.Printf("error initialize default users: %v", err)
+	}
 
 	// Start HTTP server
 	serverPort := os.Getenv("SERVER_PORT")

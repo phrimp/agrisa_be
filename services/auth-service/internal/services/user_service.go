@@ -32,6 +32,7 @@ type IUserService interface {
 	BanUser(userID string, until int64) error
 	UnbanUser(userID string) error
 
+	GetUserByEmail(email string) (*models.User, error)
 	GetUserEkycProgressByUserID(userID string) (*models.UserEkycProgress, error)
 	UploadToMinIO(c *gin.Context, file io.Reader, header *multipart.FileHeader, serviceName string) error
 	ProcessAndUploadFiles(files map[string][]*multipart.FileHeader, serviceName string, allowedExts []string, maxMB int64) ([]utils.FileInfo, error)
@@ -903,6 +904,10 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 		return nil, err
 	}
 	return &newUser, nil
+}
+
+func (s *UserService) GetUserByEmail(email string) (*models.User, error) {
+	return s.userRepo.GetUserByEmail(email)
 }
 
 func (s *UserService) Login(email, phone, password string, deviceInfo, ipAddress *string) (*models.User, *models.UserSession, error) {

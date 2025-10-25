@@ -1,6 +1,7 @@
 package models
 
 import (
+	utils "agrisa_utils"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,7 +40,7 @@ type BasePolicy struct {
 	TemplateDocumentURL            *string          `json:"template_document_url,omitempty" db:"template_document_url"`
 	DocumentValidationStatus       ValidationStatus `json:"document_validation_status" db:"document_validation_status"`
 	DocumentValidationScore        *float64         `json:"document_validation_score,omitempty" db:"document_validation_score"`
-	ImportantAdditionalInformation map[string]any   `json:"important_additional_information,omitempty" db:"important_additional_information"`
+	ImportantAdditionalInformation utils.JSONMap    `json:"important_additional_information,omitempty" db:"important_additional_information"`
 	CreatedAt                      time.Time        `json:"created_at" db:"created_at"`
 	UpdatedAt                      time.Time        `json:"updated_at" db:"updated_at"`
 	CreatedBy                      *string          `json:"created_by,omitempty" db:"created_by"`
@@ -52,7 +53,7 @@ type BasePolicyTrigger struct {
 	GrowthStage           *string          `json:"growth_stage,omitempty" db:"growth_stage"`
 	MonitorFrequencyValue int              `json:"monitor_frequency_value" db:"monitor_frequency_value"`
 	MonitorFrequencyUnit  MonitorFrequency `json:"monitor_frequency_unit" db:"monitor_frequency_unit"`
-	BlackoutPeriods       map[string]any   `json:"blackout_periods,omitempty" db:"blackout_periods"` // JSONB
+	BlackoutPeriods       utils.JSONMap    `json:"blackout_periods,omitempty" db:"blackout_periods"` // JSONB
 	CreatedAt             time.Time        `json:"created_at" db:"created_at"`
 	UpdatedAt             time.Time        `json:"updated_at" db:"updated_at"`
 }
@@ -93,10 +94,10 @@ type BasePolicyDocumentValidation struct {
 	PassedChecks        int              `json:"passed_checks" db:"passed_checks"`
 	FailedChecks        int              `json:"failed_checks" db:"failed_checks"`
 	WarningCount        int              `json:"warning_count" db:"warning_count"`
-	Mismatches          map[string]any   `json:"mismatches,omitempty" db:"mismatches"`                     // JSONB
-	Warnings            map[string]any   `json:"warnings,omitempty" db:"warnings"`                         // JSONB
-	Recommendations     map[string]any   `json:"recommendations,omitempty" db:"recommendations"`           // JSONB
-	ExtractedParameters map[string]any   `json:"extracted_parameters,omitempty" db:"extracted_parameters"` // JSONB
+	Mismatches          utils.JSONMap    `json:"mismatches,omitempty" db:"mismatches"`                     // JSONB
+	Warnings            utils.JSONMap    `json:"warnings,omitempty" db:"warnings"`                         // JSONB
+	Recommendations     utils.JSONMap    `json:"recommendations,omitempty" db:"recommendations"`           // JSONB
+	ExtractedParameters utils.JSONMap    `json:"extracted_parameters,omitempty" db:"extracted_parameters"` // JSONB
 	ValidatedBy         *string          `json:"validated_by,omitempty" db:"validated_by"`
 	ValidationNotes     *string          `json:"validation_notes,omitempty" db:"validation_notes"`
 	CreatedAt           time.Time        `json:"created_at" db:"created_at"`

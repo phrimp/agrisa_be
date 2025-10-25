@@ -442,19 +442,19 @@ func (r *roleRepository) AssignRoleToUser(userID string, roleID int, assignedBy 
 	} else {
 		expiresAtValue = nil
 	}
+	assignedAt := time.Now().Unix()
+
 	query := `
-          INSERT INTO user_roles (user_id, role_id, assigned_by, expires_at)
-          VALUES ($1, $2, $3, $4)
-          ON CONFLICT (user_id, role_id) DO UPDATE SET
-              assigned_by = EXCLUDED.assigned_by,
-              assigned_at = CURRENT_TIMESTAMP,
-              expires_at = EXCLUDED.expires_at,
-              is_active = true`
+        INSERT INTO user_roles (user_id, role_id, assigned_by, assigned_at, expires_at, is_active)
+        VALUES ($1, $2, $3, $4, $5, TRUE) 
+        ON CONFLICT (user_id, role_id) DO UPDATE SET
+            assigned_by = EXCLUDED.assigned_by,
+            assigned_at = EXCLUDED.assigned_at,
+            expires_at = EXCLUDED.expires_at,
+            is_active = true`
 
-	_, err := r.db.Exec(query, userID, roleID, assignedBy, expiresAtValue)
+	_, err := r.db.Exec(query, userID, roleID, assignedBy, assignedAt, expiresAtValue)
 	return err
-
-	return nil
 }
 
 // RemoveRoleFromUser removes a role from a user
@@ -489,7 +489,7 @@ func (r *roleRepository) GetUserRoles(userID string, activeOnly bool) ([]*models
 			FROM roles r
 			INNER JOIN user_roles ur ON r.id = ur.role_id
 			WHERE ur.user_id = $1 AND ur.is_active = true AND r.is_active = true
-			AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)
+			AND (ur.expires_at IS NULL OR ur.expires_at > EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))
 			ORDER BY r.name`
 	} else {
 		query = `
@@ -518,7 +518,7 @@ func (r *roleRepository) GetRoleUsers(roleID int, activeOnly bool) ([]string, er
 			SELECT ur.user_id
 			FROM user_roles ur
 			WHERE ur.role_id = $1 AND ur.is_active = true
-			AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)
+			AND (ur.expires_at IS NULL OR ur.expires_at > EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))
 			ORDER BY ur.assigned_at`
 	} else {
 		query = `
@@ -548,7 +548,7 @@ func (r *roleRepository) GetUserPermissions(userID string) ([]*models.Permission
 		WHERE ur.user_id = $1 
 		AND ur.is_active = true 
 		AND r.is_active = true
-		AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)
+		AND (ur.expires_at IS NULL OR ur.expires_at > EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))
 		ORDER BY p.resource, p.action`
 
 	err := r.db.Select(&permissions, query, userID)
@@ -573,7 +573,7 @@ func (r *roleRepository) UserHasPermission(userID string, resource, action strin
 		AND p.action = $3
 		AND ur.is_active = true 
 		AND r.is_active = true
-		AND (ur.expires_at IS NULL OR ur.expires_at > CURRENT_TIMESTAMP)`
+		AND (ur.expires_at IS NULL OR ur.expires_at > EXTRACT(EPOCH FROM CURRENT_TIMESTAMP))`
 
 	err := r.db.Get(&count, query, userID, resource, action)
 	if err != nil {

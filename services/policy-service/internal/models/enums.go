@@ -32,6 +32,7 @@ const (
 	PolicyActive        PolicyStatus = "active"
 	PolicyExpired       PolicyStatus = "expired"
 	PolicyCancelled     PolicyStatus = "cancelled"
+	PolicyRejected      PolicyStatus = "rejected"
 )
 
 type UnderwritingStatus string

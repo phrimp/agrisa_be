@@ -14,6 +14,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+var systemUSER *models.User
+
 type AuthHandler struct {
 	userService services.IUserService
 	roleService *services.RoleService
@@ -44,8 +46,17 @@ func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
 }
 
 func (a *AuthHandler) InitDefaultUser(cfg config.AuthServiceConfig) error {
-	_, err := a.userService.RegisterNewUser("NOPHONE", "NOEMAIL", cfg.AuthCfg.AdminPWD, "NOID", true, true)
-	return err
+	if systemUSER == nil {
+		system, err := a.userService.GetUserByEmail("NOEMAIL")
+		if err != nil {
+			admin, err := a.userService.RegisterNewUser("NOPHONE", "NOEMAIL", cfg.AuthCfg.AdminPWD, "NOID", true, true)
+			systemUSER = admin
+			return err
+		}
+		systemUSER = system
+		return err
+	}
+	return fmt.Errorf("admin user already exist")
 }
 
 // Login handles user authentication
@@ -318,8 +329,19 @@ func (a *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 	// Assign default user role
-	systemID := models.SystemID
-	a.roleService.AssignRoleToUser(user.ID, 1, &systemID, nil)
+	err = a.roleService.AssignRoleToUser(user.ID, 1, &systemUSER.ID, nil)
+	if err != nil {
+		log.Println("error assigning default role when registering:", err)
+		statusCode, errorCode := a.mapRegisterError(err)
+		c.JSON(statusCode, utils.ErrorResponse{
+			Success: false,
+			Error: utils.APIError{
+				Code:    errorCode,
+				Message: "Registration failed",
+			},
+		})
+		return
+	}
 
 	// Prepare successful registration response
 	responseData := map[string]interface{}{
