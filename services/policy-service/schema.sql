@@ -26,6 +26,8 @@ CREATE TYPE data_quality AS ENUM ('good', 'acceptable', 'poor');
 CREATE TYPE farm_status AS ENUM ('active', 'inactive', 'archived');
 CREATE TYPE photo_type AS ENUM ('crop', 'boundary', 'land_certificate', 'other');
 CREATE TYPE monitor_frequency AS ENUM ('hour', 'day', 'week', 'month', 'year');
+CREATE TYPE cancel_request_type as ENUM ('contract_violation', 'other');
+CREATE TYPE cancel_request_status as ENUM ('approved', 'litigation', 'denied');
 
 -- ============================================================================
 -- CORE DATA SOURCE & PRICING TABLES
@@ -214,7 +216,7 @@ CREATE TABLE base_policy (
     fix_premium_amount INT NOT NULL,
     is_per_hectare BOOLEAN NOT NULL DEFAULT false,
     premium_base_rate DECIMAL(10,4) NOT NULL,
-    max_premium_payment_prolong INT,
+    max_premium_payment_prolong BIGINT,
 
     -- Payout formula parameters
     fix_payout_amount INT NOT NULL, 
@@ -222,6 +224,9 @@ CREATE TABLE base_policy (
     over_threshold_multiplier DECIMAL(10,4) NOT NULL,
     payout_base_rate DECIMAL(10,4) NOT NULL,
     payout_cap INT,
+
+    -- Cancel config
+    cancel_premium_rate DECIMAL(4,2) NOT NULL DEFAULT 1.0,
     
     -- Enrollment date
     enrollment_start_day INT,
@@ -267,7 +272,7 @@ CREATE TABLE base_policy_trigger (
     
     -- Time constraints
     growth_stage VARCHAR(50),
-    monitor_frequency_value INT DEFAULT 1,
+    monitor_interval INT DEFAULT 1,
     monitor_frequency_unit monitor_frequency NOT NULL DEFAULT 'day',
     blackout_periods JSONB,
     
@@ -324,6 +329,7 @@ CREATE TABLE base_policy_trigger_condition (
     CONSTRAINT positive_costs CHECK (calculated_cost >= 0 AND base_cost >= 0)
 );
 
+
 CREATE INDEX idx_base_trigger_condition_trigger ON base_policy_trigger_condition(base_policy_trigger_id);
 CREATE INDEX idx_base_trigger_condition_data_source ON base_policy_trigger_condition(data_source_id);
 CREATE INDEX idx_base_trigger_condition_order ON base_policy_trigger_condition(base_policy_trigger_id, condition_order);
@@ -375,9 +381,10 @@ CREATE TABLE registered_policy (
     
     -- Coverage
     coverage_amount DECIMAL(12,2) NOT NULL,
+    -- signed policy Lifecycle
     coverage_start_date INT NOT NULL,
     coverage_end_date INT NOT NULL,
-    planting_date INT NOT NULL,
+    planting_date INT,
     
     -- Farmer premium
     area_multiplier DECIMAL(8,2) NOT NULL,
@@ -421,6 +428,48 @@ COMMENT ON TABLE registered_policy IS 'Policy instances - data_complexity_score 
 COMMENT ON COLUMN registered_policy.data_complexity_score IS 'Snapshot from base_policy at registration time';
 COMMENT ON COLUMN registered_policy.monthly_data_cost IS 'Snapshot from base_policy at registration time';
 COMMENT ON COLUMN registered_policy.total_data_cost IS 'monthly_data_cost × coverage_months';
+
+
+CREATE TABLE cancel_request (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    registered_policy_id UUID NOT NULL REFERENCES registered_policy(id) ON DELETE CASCADE,
+    
+    -- Request details
+    cancel_request_type cancel_request_type NOT NULL,
+    reason TEXT NOT NULL,
+    evidence JSONB,
+    
+    -- Request status and processing
+    status cancel_request_status NOT NULL DEFAULT 'denied',
+    requested_by VARCHAR(100) NOT NULL, -- farmer_id or insurance_provider_id
+    requested_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    -- Processing details
+    reviewed_by VARCHAR(100), -- admin/underwriter who processed
+    reviewed_at TIMESTAMP,
+    review_notes TEXT,
+    -- 
+    compensate_amount INT NOT NULL DEFAULT 0,
+    
+    -- Audit trail
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    
+    CONSTRAINT review_consistency CHECK (
+        (status = 'denied' AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
+        (status = 'approved' AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
+        (status = 'litigation')
+    )
+);
+
+-- Cancel request indexes for performance
+CREATE INDEX idx_cancel_request_policy ON cancel_request(registered_policy_id);
+CREATE INDEX idx_cancel_request_status ON cancel_request(status);
+CREATE INDEX idx_cancel_request_type ON cancel_request(cancel_request_type);
+CREATE INDEX idx_cancel_request_requested_by ON cancel_request(requested_by);
+CREATE INDEX idx_cancel_request_requested_at ON cancel_request(requested_at DESC);
+CREATE INDEX idx_cancel_request_reviewed_by ON cancel_request(reviewed_by) WHERE reviewed_by IS NOT NULL;
+CREATE INDEX idx_cancel_request_pending ON cancel_request(requested_at) WHERE status = 'denied' AND reviewed_by IS NULL;
 
 -- ============================================================================
 -- CLAIMS & PAYOUTS

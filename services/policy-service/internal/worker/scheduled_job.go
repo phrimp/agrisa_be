@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"log"
+	"sync"
 	"time"
 )
 
@@ -11,6 +12,7 @@ type JobScheduler struct {
 	Ticker *time.Ticker
 	Jobs   []Job        // A slice of all jobs to run
 	Pool   *WorkingPool // The pool to send work to
+	mu     *sync.RWMutex
 }
 
 // NewJobScheduler creates a new scheduler.
@@ -25,6 +27,8 @@ func NewJobScheduler(name string, interval time.Duration, pool *WorkingPool) *Jo
 
 // example: AddJob(func () { Monitor(a,b) })
 func (s *JobScheduler) AddJob(job Job) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.Jobs = append(s.Jobs, job)
 }
 
@@ -48,6 +52,12 @@ func (s *JobScheduler) Run(ctx context.Context) {
 
 func (s *JobScheduler) submitJobs(ctx context.Context) {
 	jobChan := s.Pool.JobChan()
+	s.mu.RLock()
+
+	jobsToRun := make([]Job, len(s.Jobs))
+	copy(jobsToRun, s.Jobs)
+
+	s.mu.RUnlock()
 	for _, job := range s.Jobs {
 		select {
 		case jobChan <- job:

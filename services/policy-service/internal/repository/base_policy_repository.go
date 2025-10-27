@@ -442,7 +442,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTrigger(trigger *models.BasePolic
 	query := `
 		INSERT INTO base_policy_trigger (
 			id, base_policy_id, logical_operator, growth_stage, 
-			monitor_frequency_value, monitor_frequency_unit, blackout_periods,
+			monitor_interval, monitor_frequency_unit, blackout_periods,
 			created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9
@@ -450,7 +450,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTrigger(trigger *models.BasePolic
 
 	_, err = r.db.Exec(query,
 		trigger.ID, trigger.BasePolicyID, trigger.LogicalOperator, trigger.GrowthStage,
-		trigger.MonitorFrequencyValue, trigger.MonitorFrequencyUnit, blackoutPeriodsBytes,
+		trigger.MonitorInterval, trigger.MonitorFrequencyUnit, blackoutPeriodsBytes,
 		trigger.CreatedAt, trigger.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create base policy trigger: %w", err)
@@ -464,7 +464,7 @@ func (r *BasePolicyRepository) GetBasePolicyTriggerByID(id uuid.UUID) (*models.B
 	query := `
 		SELECT 
 			id, base_policy_id, logical_operator, growth_stage,
-			monitor_frequency_value, monitor_frequency_unit, blackout_periods,
+			monitor_interval, monitor_frequency_unit, blackout_periods,
 			created_at, updated_at
 		FROM base_policy_trigger
 		WHERE id = $1`
@@ -485,7 +485,7 @@ func (r *BasePolicyRepository) GetBasePolicyTriggersByPolicyID(policyID uuid.UUI
 	query := `
 		SELECT 
 			id, base_policy_id, logical_operator, growth_stage,
-			monitor_frequency_value, monitor_frequency_unit, blackout_periods,
+			monitor_interval, monitor_frequency_unit, blackout_periods,
 			created_at, updated_at
 		FROM base_policy_trigger
 		WHERE base_policy_id = $1
@@ -517,14 +517,14 @@ func (r *BasePolicyRepository) UpdateBasePolicyTrigger(trigger *models.BasePolic
 		UPDATE base_policy_trigger SET
 			logical_operator = $1,
 			growth_stage = $2,
-			monitor_frequency_value = $3,
+			monitor_interval = $3,
 			monitor_frequency_unit = $4,
 			blackout_periods = $5,
 			updated_at = $6
 		WHERE id = $7`
 
 	result, err := r.db.Exec(query,
-		trigger.LogicalOperator, trigger.GrowthStage, trigger.MonitorFrequencyValue,
+		trigger.LogicalOperator, trigger.GrowthStage, trigger.MonitorInterval,
 		trigger.MonitorFrequencyUnit, blackoutPeriodsBytes, trigger.UpdatedAt, trigger.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update base policy trigger: %w", err)
@@ -936,7 +936,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerTx(tx *sqlx.Tx, trigger *m
 	query := `
 		INSERT INTO base_policy_trigger (
 			id, base_policy_id, logical_operator, growth_stage, 
-			monitor_frequency_value, monitor_frequency_unit, blackout_periods,
+			monitor_interval, monitor_frequency_unit, blackout_periods,
 			created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9
@@ -944,7 +944,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerTx(tx *sqlx.Tx, trigger *m
 
 	_, err = tx.Exec(query,
 		trigger.ID, trigger.BasePolicyID, trigger.LogicalOperator, trigger.GrowthStage,
-		trigger.MonitorFrequencyValue, trigger.MonitorFrequencyUnit, blackoutPeriodsBytes,
+		trigger.MonitorInterval, trigger.MonitorFrequencyUnit, blackoutPeriodsBytes,
 		trigger.CreatedAt, trigger.UpdatedAt)
 	return err
 }
@@ -1151,7 +1151,6 @@ func (r *BasePolicyRepository) GetBasePolicyDocumentValidationsByPolicyID(basePo
 		return nil, fmt.Errorf("failed to get base policy document validations: %w", err)
 	}
 
-
 	slog.Info("Successfully retrieved base policy document validations",
 		"base_policy_id", basePolicyID,
 		"count", len(validations))
@@ -1184,7 +1183,6 @@ func (r *BasePolicyRepository) GetLatestBasePolicyDocumentValidation(basePolicyI
 			"error", err)
 		return nil, fmt.Errorf("failed to get latest base policy document validation: %w", err)
 	}
-
 
 	slog.Info("Successfully retrieved latest base policy document validation",
 		"validation_id", validation.ID,

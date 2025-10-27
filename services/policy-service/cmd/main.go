@@ -13,6 +13,7 @@ import (
 	"policy-service/internal/handlers"
 	"policy-service/internal/repository"
 	"policy-service/internal/services"
+	"policy-service/internal/worker"
 	"syscall"
 	"time"
 
@@ -105,6 +106,9 @@ func main() {
 			log.Printf("Expiration service error: %v", err)
 		}
 	}()
+
+	workerManager := worker.NewWorkerManager()
+	go workerManager.Run()
 
 	// Initialize handlers
 	dataTierHandler := handlers.NewDataTierHandler(dataTierService)

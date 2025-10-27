@@ -177,7 +177,7 @@ func (s *BasePolicyService) validateBasePolicyTrigger(triggerGr *models.BasePoli
 	if !s.isValidTriggerGroupLogicalOperator(triggerGr.LogicalOperator) {
 		return fmt.Errorf("invalid operator: %s", triggerGr.LogicalOperator)
 	}
-	if triggerGr.MonitorFrequencyValue <= 0 {
+	if triggerGr.MonitorInterval <= 0 {
 		return fmt.Errorf("monitor frequency must be greater than 0")
 	}
 	if !s.isValidMonitorFrequencyUnit(triggerGr.MonitorFrequencyUnit) {
@@ -501,7 +501,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 		"trigger_id", triggerID,
 		"base_policy_id", basePolicyID,
 		"logical_operator", request.Trigger.LogicalOperator,
-		"monitor_frequency", request.Trigger.MonitorFrequencyValue)
+		"monitor_frequency", request.Trigger.MonitorInterval)
 
 	basePolicyTriggerByte, err := utils.SerializeModel(request.Trigger)
 	if err != nil {

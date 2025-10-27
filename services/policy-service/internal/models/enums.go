@@ -145,3 +145,18 @@ const (
 	MonitorFrequencyMonth MonitorFrequency = "month"
 	MonitorFrequencyYear  MonitorFrequency = "year"
 )
+
+type CancelRequestType string
+
+const (
+	CancelRequestTypeContractViolation CancelRequestType = "contract_violation"
+	CancelRequestTypeOther             CancelRequestType = "other"
+)
+
+type CancelRequestStatus string
+
+const (
+	CancelRequestStatusApproved   CancelRequestStatus = "approved"
+	CancelRequestStatusLitigation CancelRequestStatus = "litigation"
+	CancelRequestStatusDenied     CancelRequestStatus = "denied"
+)

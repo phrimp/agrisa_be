@@ -1,6 +1,7 @@
 package models
 
 import (
+	utils "agrisa_utils"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,4 +37,80 @@ type RegisteredPolicy struct {
 	CreatedAt               time.Time          `json:"created_at" db:"created_at"`
 	UpdatedAt               time.Time          `json:"updated_at" db:"updated_at"`
 	RegisteredBy            *string            `json:"registered_by,omitempty" db:"registered_by"`
+}
+type CancelRequest struct {
+	ID                 uuid.UUID `json:"id" db:"id"`
+	RegisteredPolicyID uuid.UUID `json:"registered_policy_id" db:"registered_policy_id"`
+
+	// Request details
+	CancelRequestType CancelRequestType `json:"cancel_request_type" db:"cancel_request_type"`
+	Reason            string            `json:"reason" db:"reason"`
+	Evidence          utils.JSONMap     `json:"evidence,omitempty" db:"evidence"`
+
+	// Request status and processing
+	Status      CancelRequestStatus `json:"status" db:"status"`
+	RequestedBy string              `json:"requested_by" db:"requested_by"`
+	RequestedAt time.Time           `json:"requested_at" db:"requested_at"`
+
+	CompensateAmount int64 `json:"compensate_amount" db:"compensate_amount"`
+
+	// Processing details
+	ReviewedBy  *string    `json:"reviewed_by,omitempty" db:"reviewed_by"`
+	ReviewedAt  *time.Time `json:"reviewed_at,omitempty" db:"reviewed_at"`
+	ReviewNotes *string    `json:"review_notes,omitempty" db:"review_notes"`
+
+	// Audit trail
+	CreatedAt time.Time `json:"created_at" db:"created_at"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}
+
+// CancelRequestWithPolicy includes the registered policy details
+type CancelRequestWithPolicy struct {
+	CancelRequest
+	RegisteredPolicy RegisteredPolicy `json:"registered_policy"`
+}
+
+// IsApproved checks if the cancel request has been approved
+func (cr *CancelRequest) IsApproved() bool {
+	return cr.Status == CancelRequestStatusApproved
+}
+
+// IsPending checks if the cancel request is pending review
+func (cr *CancelRequest) IsPending() bool {
+	return cr.ReviewedBy == nil && cr.ReviewedAt == nil
+}
+
+// CanBeReviewed checks if the request can still be reviewed (not yet reviewed)
+func (cr *CancelRequest) CanBeReviewed() bool {
+	return cr.IsPending()
+}
+
+// SetApproved marks the request as approved with reviewer details
+func (cr *CancelRequest) SetApproved(reviewedBy string, reviewNotes *string) {
+	now := time.Now()
+	cr.Status = CancelRequestStatusApproved
+	cr.ReviewedBy = &reviewedBy
+	cr.ReviewedAt = &now
+	cr.ReviewNotes = reviewNotes
+	cr.UpdatedAt = now
+}
+
+// SetDenied marks the request as denied with reviewer details
+func (cr *CancelRequest) SetDenied(reviewedBy string, reviewNotes *string) {
+	now := time.Now()
+	cr.Status = CancelRequestStatusDenied
+	cr.ReviewedBy = &reviewedBy
+	cr.ReviewedAt = &now
+	cr.ReviewNotes = reviewNotes
+	cr.UpdatedAt = now
+}
+
+// SetLitigation marks the request as in litigation
+func (cr *CancelRequest) SetLitigation(reviewedBy string, reviewNotes *string) {
+	now := time.Now()
+	cr.Status = CancelRequestStatusLitigation
+	cr.ReviewedBy = &reviewedBy
+	cr.ReviewedAt = &now
+	cr.ReviewNotes = reviewNotes
+	cr.UpdatedAt = now
 }

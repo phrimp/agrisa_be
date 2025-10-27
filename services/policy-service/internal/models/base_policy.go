@@ -29,6 +29,7 @@ type BasePolicy struct {
 	OverThresholdMultiplier        float64          `json:"over_threshold_multiplier" db:"over_threshold_multiplier"`
 	PayoutBaseRate                 float64          `json:"payout_base_rate" db:"payout_base_rate"`
 	PayoutCap                      *int             `json:"payout_cap,omitempty" db:"payout_cap"`
+	CancelPremiumRate              float64          `json:"cancel_premium_rate" db:"cancel_premium_rate"`
 	EnrollmentStartDay             *int             `json:"enrollment_start_day,omitempty" db:"enrollment_start_day"`
 	EnrollmentEndDay               *int             `json:"enrollment_end_day,omitempty" db:"enrollment_end_day"`
 	AutoRenewal                    bool             `json:"auto_renewal" db:"auto_renewal"`
@@ -47,15 +48,15 @@ type BasePolicy struct {
 }
 
 type BasePolicyTrigger struct {
-	ID                    uuid.UUID        `json:"id" db:"id"`
-	BasePolicyID          uuid.UUID        `json:"base_policy_id" db:"base_policy_id"`
-	LogicalOperator       LogicalOperator  `json:"logical_operator" db:"logical_operator"`
-	GrowthStage           *string          `json:"growth_stage,omitempty" db:"growth_stage"`
-	MonitorFrequencyValue int              `json:"monitor_frequency_value" db:"monitor_frequency_value"`
-	MonitorFrequencyUnit  MonitorFrequency `json:"monitor_frequency_unit" db:"monitor_frequency_unit"`
-	BlackoutPeriods       utils.JSONMap    `json:"blackout_periods,omitempty" db:"blackout_periods"` // JSONB
-	CreatedAt             time.Time        `json:"created_at" db:"created_at"`
-	UpdatedAt             time.Time        `json:"updated_at" db:"updated_at"`
+	ID                   uuid.UUID        `json:"id" db:"id"`
+	BasePolicyID         uuid.UUID        `json:"base_policy_id" db:"base_policy_id"`
+	LogicalOperator      LogicalOperator  `json:"logical_operator" db:"logical_operator"`
+	GrowthStage          *string          `json:"growth_stage,omitempty" db:"growth_stage"`
+	MonitorInterval      int              `json:"monitor_interval" db:"monitor_interval"`
+	MonitorFrequencyUnit MonitorFrequency `json:"monitor_frequency_unit" db:"monitor_frequency_unit"`
+	BlackoutPeriods      utils.JSONMap    `json:"blackout_periods,omitempty" db:"blackout_periods"` // JSONB
+	CreatedAt            time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt            time.Time        `json:"updated_at" db:"updated_at"`
 }
 
 type BasePolicyTriggerCondition struct {

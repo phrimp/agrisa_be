@@ -139,3 +139,7 @@ func (m *WorkerManager) Shutdown() {
 	close(m.cmdChan)
 	log.Println("[Manager] Shutdown complete.")
 }
+
+func (m *WorkerManager) ManagerContext() context.Context {
+	return m.managerContext
+}
