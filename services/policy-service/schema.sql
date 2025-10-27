@@ -641,6 +641,7 @@ BEGIN
         (satellite_cat_id, 3, 'Satellite Tier 3', 1.6),
         (derived_cat_id, 1, 'Derived Tier 1', 1.0),
         (derived_cat_id, 2, 'Derived Tier 2', 1.4);
-END $$;
+END
+$$ LANGUAGE plpgsql;
 
 
