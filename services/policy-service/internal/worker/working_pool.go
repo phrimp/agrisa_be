@@ -59,9 +59,7 @@ func (p *WorkingPool) worker(ctx context.Context, wg *sync.WaitGroup, id int) {
 			}
 
 			// Got a job, execute it
-			log.Printf("[WorkingPool-Worker %d] Picked up a job.\n", id)
-			job() // Execute the job
-			log.Printf("[WorkingPool-Worker %d] Finished job.\n", id)
+			p.safeExecution(job, id, ctx)
 
 		case <-ctx.Done():
 			// Exit IMMEDIATELY, even if the job channel is not closed.
@@ -69,4 +67,24 @@ func (p *WorkingPool) worker(ctx context.Context, wg *sync.WaitGroup, id int) {
 			return
 		}
 	}
+}
+
+func (p *WorkingPool) JobChan() chan<- Job {
+	return p.jobChan
+}
+
+func (p *WorkingPool) safeExecution(job Job, workerID int, ctx context.Context) error {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("[WorkingPool-Worker %d] FATAL: Panic recovered in job: %v\n", workerID, r)
+		}
+	}()
+
+	log.Printf("[WorkingPool-Worker %d] Picked up a job.\n", workerID)
+	err := job(ctx) // Execute the job
+	if err != nil {
+		log.Printf("[WorkingPool-Worker %d] Error executing job: %s.\n", workerID, err)
+	}
+	log.Printf("[WorkingPool-Worker %d] Finished job.\n", workerID)
+	return err
 }

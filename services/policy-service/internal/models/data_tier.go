@@ -28,3 +28,13 @@ type DataTier struct {
 	CreatedAt          time.Time `json:"created_at" db:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at" db:"updated_at"`
 }
+
+type DataTierWCategory struct {
+	ID                 uuid.UUID        `json:"id" db:"id"`
+	DataTierCategory   DataTierCategory `json:"data_tier_category" `
+	TierLevel          int              `json:"tier_level" db:"tier_level"`
+	TierName           string           `json:"tier_name" db:"tier_name"`
+	DataTierMultiplier float64          `json:"data_tier_multiplier" db:"data_tier_multiplier"`
+	CreatedAt          time.Time        `json:"created_at" db:"created_at"`
+	UpdatedAt          time.Time        `json:"updated_at" db:"updated_at"`
+}

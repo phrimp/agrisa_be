@@ -505,7 +505,7 @@ CREATE INDEX idx_payout_status ON payout(status);
 CREATE TABLE farm_monitoring_data (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     farm_id UUID NOT NULL REFERENCES farm(id),
-    data_source_id UUID NOT NULL REFERENCES data_source(id),
+    base_policy_trigger_condition_id UUID NOT NULL REFERENCES base_policy_trigger_condition(id),
     
     parameter_name VARCHAR(100) NOT NULL,
     measured_value DECIMAL(10,4) NOT NULL,
@@ -523,7 +523,7 @@ CREATE TABLE farm_monitoring_data (
 );
 
 CREATE INDEX idx_farm_monitoring_farm_time ON farm_monitoring_data(farm_id, measurement_timestamp);
-CREATE INDEX idx_farm_monitoring_data_source ON farm_monitoring_data(data_source_id);
+CREATE INDEX idx_farm_monitoring_base_policy_trigger_condition ON farm_monitoring_data(base_policy_trigger_condition_id);
 CREATE INDEX idx_farm_monitoring_parameter ON farm_monitoring_data(parameter_name);
 
 -- ============================================================================

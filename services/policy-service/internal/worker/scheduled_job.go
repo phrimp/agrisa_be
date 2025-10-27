@@ -36,14 +36,23 @@ func (s *JobScheduler) Run(ctx context.Context) {
 		select {
 		case <-s.Ticker.C:
 			log.Printf("[Scheduler %s] Ticker fired. Submitting %d jobs.\n", s.Name, len(s.Jobs))
-
-			for _, job := range s.Jobs {
-				s.Pool.SubmitJob(job)
-			}
+			go s.submitJobs(ctx)
 
 		case <-ctx.Done():
 			// The manager signaled a global shutdown
 			log.Printf("[Scheduler %s] Shutting down.\n", s.Name)
+			return
+		}
+	}
+}
+
+func (s *JobScheduler) submitJobs(ctx context.Context) {
+	jobChan := s.Pool.JobChan()
+	for _, job := range s.Jobs {
+		select {
+		case jobChan <- job:
+		case <-ctx.Done():
+			log.Printf("[Scheduler %s] Shutdown signaled. Doing something before close the goroutine.\n", s.Name)
 			return
 		}
 	}
