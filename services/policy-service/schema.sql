@@ -75,6 +75,7 @@ CREATE TABLE data_source (
     parameter_name VARCHAR(100) NOT NULL,
     parameter_type parameter_type NOT NULL DEFAULT 'numeric',
     unit VARCHAR(20),
+    support_component BOOLEAN NOT NULL DEFAULT false,
     
     -- Display names
     display_name_vi VARCHAR(100),
@@ -306,6 +307,8 @@ CREATE TABLE base_policy_trigger_condition (
     aggregation_window_days INT NOT NULL,
     consecutive_required BOOLEAN DEFAULT false,
     
+    -- Data component
+    include_component BOOLEAN NOT NULL DEFAULT false,
     -- Baseline
     baseline_window_days INT,
     baseline_function aggregation_function DEFAULT 'avg',
@@ -560,6 +563,7 @@ CREATE TABLE farm_monitoring_data (
     measured_value DECIMAL(10,4) NOT NULL,
     unit VARCHAR(20),
     measurement_timestamp INT NOT NULL,
+    component_data JSONB,
     
     data_quality data_quality DEFAULT 'good',
     confidence_score DECIMAL(3,2),

@@ -71,6 +71,7 @@ type BasePolicyTriggerCondition struct {
 	AggregationFunction   AggregationFunction  `json:"aggregation_function" db:"aggregation_function"`
 	AggregationWindowDays int                  `json:"aggregation_window_days" db:"aggregation_window_days"`
 	ConsecutiveRequired   bool                 `json:"consecutive_required" db:"consecutive_required"`
+	IncludeComponent      bool                 `json:"include_component" db:"include_component"`
 	BaselineWindowDays    *int                 `json:"baseline_window_days,omitempty" db:"baseline_window_days"`
 	BaselineFunction      *AggregationFunction `json:"baseline_function,omitempty" db:"baseline_function"`
 	ValidationWindowDays  int                  `json:"validation_window_days" db:"validation_window_days"`

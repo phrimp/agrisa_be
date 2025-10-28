@@ -16,6 +16,7 @@ type DataSource struct {
 	ParameterName     string         `json:"parameter_name" db:"parameter_name"`
 	ParameterType     ParameterType  `json:"parameter_type" db:"parameter_type"`
 	Unit              *string        `json:"unit,omitempty" db:"unit"`
+	SupportComponent  bool           `json:"support_component" db:"support_component"`
 	DisplayNameVi     *string        `json:"display_name_vi,omitempty" db:"display_name_vi"`
 	DescriptionVi     *string        `json:"description_vi,omitempty" db:"description_vi"`
 	MinValue          *float64       `json:"min_value,omitempty" db:"min_value"`

@@ -748,22 +748,37 @@ class GoogleEarthEngineService:
                 'farm_info': {
                     'coordinates': coordinates,
                     'crs': coordinate_crs,
-                    'area_hectares': round(area_hectares, 4) if area_hectares else None
+                    'area': {
+                        'value': round(area_hectares, 4) if area_hectares else None,
+                        'unit': 'hectares'
+                    }
                 },
                 'image_info': {
                     'satellite': satellite,
                     'collection_id': collection_id,
                     'image_id': image_id,
                     'acquisition_date': acquisition_date,
-                    'cloud_cover': round(cloud_cover, 2),
-                    'sun_elevation': round(sun_elevation, 2) if sun_elevation else None
+                    'cloud_cover': {
+                        'value': round(cloud_cover, 2),
+                        'unit': 'percentage'
+                    },
+                    'sun_elevation': {
+                        'value': round(sun_elevation, 2) if sun_elevation else None,
+                        'unit': 'degrees'
+                    }
                 },
                 'vegetation_index_strategy': {
-                    'cloud_threshold': 30.0,
-                    'actual_cloud_cover': round(cloud_cover, 2),
+                    'cloud_threshold': {
+                        'value': 30.0,
+                        'unit': 'percentage'
+                    },
+                    'actual_cloud_cover': {
+                        'value': round(cloud_cover, 2),
+                        'unit': 'percentage'
+                    },
                     'selected_index': 'RVI (SAR)' if use_sar_backup else 'NDVI (Optical)',
                     'reason': (
-                        f'Cloud cover {cloud_cover:.1f}% >= 30% - using radar backup' 
+                        f'Cloud cover {cloud_cover:.1f}% >= 30% - using radar backup'
                         if use_sar_backup and not force_sar_backup
                         else 'Forced SAR mode' if force_sar_backup
                         else f'Cloud cover {cloud_cover:.1f}% < 30% - using optical primary'
@@ -776,14 +791,21 @@ class GoogleEarthEngineService:
                     'web_display': 'Use thumbnail URLs directly in <img> tags',
                     'mobile_display': 'Load URLs in Image components (React Native, Flutter)',
                     'caching': 'URLs expire after 24h - cache images for offline use',
-                    'dimensions': 'All thumbnails are 512px (largest dimension)',
+                    'dimensions': {
+                        'value': 512,
+                        'unit': 'pixels',
+                        'description': 'Largest dimension'
+                    },
                     'format': 'PNG with transparency support'
                 },
                 'processing_info': {
                     'date_range': f"{start_date} to {end_date}",
                     'optical_images_found': image_count,
                     'sar_images_available': sar_count if use_sar_backup else None,
-                    'max_cloud_cover_filter': max_cloud_cover,
+                    'max_cloud_cover_filter': {
+                        'value': max_cloud_cover,
+                        'unit': 'percentage'
+                    },
                     'speckle_filter': '5x5 focal median (SAR only)' if use_sar_backup else None
                 }
             }
@@ -793,6 +815,692 @@ class GoogleEarthEngineService:
             
         except Exception as e:
             logger.error(f"Error generating thumbnails: {str(e)}", exc_info=True)
+            raise
+
+    def get_ndvi_data(
+        self,
+        coordinates: List[List[float]],
+        coordinate_crs: str = "EPSG:4326",
+        start_date: str = "2024-01-01",
+        end_date: str = "2024-12-31",
+        max_cloud_cover: float = 30.0,
+        max_images: int = 10,
+        include_components: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Get NDVI (Normalized Difference Vegetation Index) data for an area.
+        Returns list of all available images with individual NDVI statistics.
+
+        Args:
+            coordinates: List of [lon, lat] coordinates forming a closed polygon
+            coordinate_crs: Coordinate Reference System (default: EPSG:4326)
+            start_date: Start date in 'YYYY-MM-DD' format
+            end_date: End date in 'YYYY-MM-DD' format
+            max_cloud_cover: Maximum cloud coverage percentage (0-100)
+            max_images: Maximum number of images to return (default: 10)
+            include_components: Include raw component band data (B8-NIR, B4-Red) (default: False)
+
+        Returns:
+            Dictionary containing list of all available images with NDVI statistics
+        """
+        try:
+            logger.info(f"Getting NDVI data from {start_date} to {end_date}")
+
+            # Step 1: Create farm geometry
+            farm_geometry = ee.Geometry.Polygon(
+                coords=[coordinates],
+                proj=coordinate_crs,
+                geodesic=False
+            )
+
+            # Step 2: Load Sentinel-2 SR Harmonized collection
+            collection_id = "COPERNICUS/S2_SR_HARMONIZED"
+            image_collection = (
+                ee.ImageCollection(collection_id)
+                .filterBounds(farm_geometry)
+                .filterDate(start_date, end_date)
+                .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', max_cloud_cover))
+                .sort('CLOUDY_PIXEL_PERCENTAGE')
+                .limit(max_images)
+            )
+
+            image_count = image_collection.size().getInfo()
+            logger.info(f"Found {image_count} images with cloud cover < {max_cloud_cover}%")
+
+            if image_count == 0:
+                raise ValueError(
+                    f"No images found. Try increasing max_cloud_cover or extending date range."
+                )
+
+            # Step 3: Process ALL available images
+            collection_info = image_collection.getInfo()
+            all_images_data = []
+
+            for idx, image_info in enumerate(collection_info.get('features', [])):
+                try:
+                    # Get image properties
+                    image_properties = image_info.get('properties', {})
+                    image_id = image_info.get('id', '')
+
+                    # Extract metadata
+                    product_id = image_properties.get('PRODUCT_ID', '')
+                    cloud_cover = image_properties.get('CLOUDY_PIXEL_PERCENTAGE', 0)
+
+                    # Parse acquisition date
+                    acquisition_date = None
+                    if product_id:
+                        try:
+                            date_part = product_id.split('_')[2]
+                            acquisition_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
+                        except:
+                            acquisition_date = product_id[:10] if len(product_id) >= 10 else None
+
+                    # Get the actual image from collection
+                    current_image = ee.Image(image_id)
+
+                    # Calculate NDVI
+                    ndvi = current_image.normalizedDifference(['B8', 'B4']).rename('NDVI')
+
+                    # Get NDVI statistics
+                    ndvi_stats = ndvi.reduceRegion(
+                        reducer=ee.Reducer.mean()
+                        .combine(ee.Reducer.stdDev(), sharedInputs=True)
+                        .combine(ee.Reducer.minMax(), sharedInputs=True)
+                        .combine(ee.Reducer.median(), sharedInputs=True),
+                        geometry=farm_geometry,
+                        scale=10,
+                        maxPixels=1e9
+                    ).getInfo()
+
+                    # Get component band statistics if requested
+                    component_stats = None
+                    if include_components:
+                        b8_b4_image = current_image.select(['B8', 'B4'])
+                        component_stats = b8_b4_image.reduceRegion(
+                            reducer=ee.Reducer.mean()
+                            .combine(ee.Reducer.stdDev(), sharedInputs=True)
+                            .combine(ee.Reducer.minMax(), sharedInputs=True)
+                            .combine(ee.Reducer.median(), sharedInputs=True),
+                            geometry=farm_geometry,
+                            scale=10,
+                            maxPixels=1e9
+                        ).getInfo()
+
+                    # Generate NDVI thumbnail
+                    ndvi_stretched = ndvi.unitScale(-0.2, 0.9).clamp(0, 1)
+                    ndvi_palette = [
+                        '0000FF',  # Blue: Water
+                        '8B4513',  # Brown: Bare soil
+                        'FFFF00',  # Yellow: Sparse vegetation
+                        'ADFF2F',  # Yellow-green: Moderate vegetation
+                        '00FF00',  # Green: Healthy vegetation
+                        '006400'   # Dark green: Very healthy vegetation
+                    ]
+
+                    ndvi_thumbnail_url = ndvi_stretched.getThumbURL({
+                        'min': 0,
+                        'max': 1,
+                        'palette': ndvi_palette,
+                        'dimensions': 512,
+                        'region': farm_geometry,
+                        'format': 'png'
+                    })
+
+                    # Generate download URL
+                    ndvi_clipped = ndvi.clip(farm_geometry)
+                    download_url = ndvi_clipped.getDownloadURL({
+                        'scale': 10,
+                        'crs': coordinate_crs,
+                        'region': farm_geometry,
+                        'format': 'GEO_TIFF'
+                    })
+
+                    # Interpret vegetation health
+                    mean_ndvi = ndvi_stats.get('NDVI_mean', 0)
+                    if mean_ndvi > 0.6:
+                        vegetation_health = 'Very healthy vegetation'
+                    elif mean_ndvi > 0.4:
+                        vegetation_health = 'Healthy vegetation'
+                    elif mean_ndvi > 0.2:
+                        vegetation_health = 'Moderate vegetation'
+                    elif mean_ndvi > 0:
+                        vegetation_health = 'Sparse vegetation'
+                    else:
+                        vegetation_health = 'No vegetation / Water / Bare soil'
+
+                    # Compile image data
+                    image_data = {
+                        'image_index': idx,
+                        'image_id': image_id,
+                        'product_id': product_id,
+                        'acquisition_date': acquisition_date,
+                        'cloud_cover': {
+                            'value': round(cloud_cover, 2),
+                            'unit': 'percentage'
+                        },
+                        'ndvi_statistics': {
+                            'mean': {
+                                'value': round(mean_ndvi, 4),
+                                'unit': 'index',
+                                'range': '-1 to 1'
+                            },
+                            'median': {
+                                'value': round(ndvi_stats.get('NDVI_median', 0), 4),
+                                'unit': 'index',
+                                'range': '-1 to 1'
+                            },
+                            'std_dev': {
+                                'value': round(ndvi_stats.get('NDVI_stdDev', 0), 4),
+                                'unit': 'index',
+                                'range': '0 to 2'
+                            },
+                            'min': {
+                                'value': round(ndvi_stats.get('NDVI_min', 0), 4),
+                                'unit': 'index',
+                                'range': '-1 to 1'
+                            },
+                            'max': {
+                                'value': round(ndvi_stats.get('NDVI_max', 0), 4),
+                                'unit': 'index',
+                                'range': '-1 to 1'
+                            }
+                        },
+                        'interpretation': {
+                            'mean_ndvi': {
+                                'value': round(mean_ndvi, 4),
+                                'unit': 'index'
+                            },
+                            'vegetation_health': vegetation_health
+                        },
+                        'outputs': {
+                            'ndvi_thumbnail': ndvi_thumbnail_url,
+                            'ndvi_geotiff_download': download_url
+                        }
+                    }
+
+                    # Add component band data if requested
+                    if include_components and component_stats:
+                        image_data['component_bands'] = {
+                            'B8_NIR': {
+                                'description': 'Near Infrared band (10m resolution)',
+                                'wavelength': {
+                                    'value': '842nm',
+                                    'range': '784-900nm'
+                                },
+                                'statistics': {
+                                    'mean': {
+                                        'value': round(component_stats.get('B8_mean', 0), 4),
+                                        'unit': 'reflectance',
+                                        'range': '0 to 10000'
+                                    },
+                                    'median': {
+                                        'value': round(component_stats.get('B8_median', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'std_dev': {
+                                        'value': round(component_stats.get('B8_stdDev', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'min': {
+                                        'value': round(component_stats.get('B8_min', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'max': {
+                                        'value': round(component_stats.get('B8_max', 0), 4),
+                                        'unit': 'reflectance'
+                                    }
+                                }
+                            },
+                            'B4_Red': {
+                                'description': 'Red band (10m resolution)',
+                                'wavelength': {
+                                    'value': '665nm',
+                                    'range': '650-680nm'
+                                },
+                                'statistics': {
+                                    'mean': {
+                                        'value': round(component_stats.get('B4_mean', 0), 4),
+                                        'unit': 'reflectance',
+                                        'range': '0 to 10000'
+                                    },
+                                    'median': {
+                                        'value': round(component_stats.get('B4_median', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'std_dev': {
+                                        'value': round(component_stats.get('B4_stdDev', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'min': {
+                                        'value': round(component_stats.get('B4_min', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'max': {
+                                        'value': round(component_stats.get('B4_max', 0), 4),
+                                        'unit': 'reflectance'
+                                    }
+                                }
+                            },
+                            'calculation': {
+                                'formula': 'NDVI = (B8 - B4) / (B8 + B4)',
+                                'description': 'Normalized Difference Vegetation Index using NIR and Red bands'
+                            }
+                        }
+
+                    all_images_data.append(image_data)
+                    logger.info(f"Processed image {idx + 1}/{image_count}: {acquisition_date}, Cloud: {cloud_cover:.1f}%, NDVI: {mean_ndvi:.3f}")
+
+                except Exception as img_error:
+                    logger.warning(f"Failed to process image {idx}: {img_error}")
+                    continue
+
+            # Step 4: Calculate area
+            try:
+                area_hectares = farm_geometry.area(maxError=1).divide(10000).getInfo()
+            except Exception:
+                area_hectares = None
+
+            # Step 5: Compile response with ALL images
+            result = {
+                'summary': {
+                    'total_images': image_count,
+                    'images_processed': len(all_images_data),
+                    'date_range': f"{start_date} to {end_date}",
+                    'max_cloud_cover_filter': {
+                        'value': max_cloud_cover,
+                        'unit': 'percentage'
+                    }
+                },
+                'area_info': {
+                    'coordinates': coordinates,
+                    'crs': coordinate_crs,
+                    'area': {
+                        'value': round(area_hectares, 4) if area_hectares else None,
+                        'unit': 'hectares'
+                    }
+                },
+                'images': all_images_data,
+                'processing_info': {
+                    'satellite': 'Sentinel-2',
+                    'collection': collection_id,
+                    'bands_used': ['B8 (NIR)', 'B4 (Red)'],
+                    'formula': '(NIR - Red) / (NIR + Red)',
+                    'resolution': {
+                        'value': 10,
+                        'unit': 'meters'
+                    }
+                },
+                'interpretation_scale': {
+                    '> 0.6': 'Very healthy vegetation',
+                    '0.4 - 0.6': 'Healthy vegetation',
+                    '0.2 - 0.4': 'Moderate vegetation',
+                    '0 - 0.2': 'Sparse vegetation',
+                    '< 0': 'Water / Bare soil'
+                }
+            }
+
+            logger.info(f"NDVI calculated for {len(all_images_data)} images successfully")
+            return result
+
+        except ee.EEException as e:
+            logger.error(f"Google Earth Engine API error: {e}")
+            raise Exception(f"Earth Engine API error: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error calculating NDVI: {e}")
+            raise
+
+    def get_ndmi_data(
+        self,
+        coordinates: List[List[float]],
+        coordinate_crs: str = "EPSG:4326",
+        start_date: str = "2024-01-01",
+        end_date: str = "2024-12-31",
+        max_cloud_cover: float = 30.0,
+        max_images: int = 10,
+        include_components: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Get NDMI (Normalized Difference Moisture Index) data for an area.
+        Returns list of all available images with individual NDMI statistics at 10m resolution.
+
+        NDMI is used to determine vegetation water content and monitor droughts.
+        It uses NIR (B8) and SWIR (B11) bands to measure plant moisture stress.
+
+        Args:
+            coordinates: List of [lon, lat] coordinates forming a closed polygon
+            coordinate_crs: Coordinate Reference System (default: EPSG:4326)
+            start_date: Start date in 'YYYY-MM-DD' format
+            end_date: End date in 'YYYY-MM-DD' format
+            max_cloud_cover: Maximum cloud coverage percentage (0-100)
+            max_images: Maximum number of images to return (default: 10)
+            include_components: Include raw component band data (B8-NIR, B11-SWIR) (default: False)
+
+        Returns:
+            Dictionary containing list of all available images with NDMI statistics
+        """
+        try:
+            logger.info(f"Getting NDMI data from {start_date} to {end_date}")
+
+            # Step 1: Create farm geometry
+            farm_geometry = ee.Geometry.Polygon(
+                coords=[coordinates],
+                proj=coordinate_crs,
+                geodesic=False
+            )
+
+            # Step 2: Load Sentinel-2 SR Harmonized collection
+            collection_id = "COPERNICUS/S2_SR_HARMONIZED"
+            image_collection = (
+                ee.ImageCollection(collection_id)
+                .filterBounds(farm_geometry)
+                .filterDate(start_date, end_date)
+                .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', max_cloud_cover))
+                .sort('CLOUDY_PIXEL_PERCENTAGE')
+                .limit(max_images)
+            )
+
+            image_count = image_collection.size().getInfo()
+            logger.info(f"Found {image_count} images with cloud cover < {max_cloud_cover}%")
+
+            if image_count == 0:
+                raise ValueError(
+                    f"No images found. Try increasing max_cloud_cover or extending date range."
+                )
+
+            # Step 3: Process ALL available images
+            collection_info = image_collection.getInfo()
+            all_images_data = []
+
+            for idx, image_info in enumerate(collection_info.get('features', [])):
+                try:
+                    # Get image properties
+                    image_properties = image_info.get('properties', {})
+                    image_id = image_info.get('id', '')
+
+                    # Extract metadata
+                    product_id = image_properties.get('PRODUCT_ID', '')
+                    cloud_cover = image_properties.get('CLOUDY_PIXEL_PERCENTAGE', 0)
+
+                    # Parse acquisition date
+                    acquisition_date = None
+                    if product_id:
+                        try:
+                            date_part = product_id.split('_')[2]
+                            acquisition_date = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}"
+                        except:
+                            acquisition_date = product_id[:10] if len(product_id) >= 10 else None
+
+                    # Get the actual image from collection
+                    current_image = ee.Image(image_id)
+
+                    # Resample B11 (SWIR, 20m) to 10m resolution
+                    b8_projection = current_image.select('B8').projection()
+                    b8_crs = b8_projection.crs()  # Extract CRS string from projection
+                    b11_10m = current_image.select('B11').resample('bilinear').reproject(
+                        crs=b8_crs,
+                        scale=10
+                    )
+                    b8_10m = current_image.select('B8')
+
+                    # Calculate NDMI at 10m resolution
+                    image_10m = ee.Image.cat([b8_10m, b11_10m])
+                    ndmi = image_10m.normalizedDifference(['B8', 'B11']).rename('NDMI')
+
+                    # Get NDMI statistics
+                    ndmi_stats = ndmi.reduceRegion(
+                        reducer=ee.Reducer.mean()
+                        .combine(ee.Reducer.stdDev(), sharedInputs=True)
+                        .combine(ee.Reducer.minMax(), sharedInputs=True)
+                        .combine(ee.Reducer.median(), sharedInputs=True),
+                        geometry=farm_geometry,
+                        scale=10,
+                        maxPixels=1e9
+                    ).getInfo()
+
+                    # Get component band statistics if requested
+                    component_stats = None
+                    if include_components:
+                        component_stats = image_10m.reduceRegion(
+                            reducer=ee.Reducer.mean()
+                            .combine(ee.Reducer.stdDev(), sharedInputs=True)
+                            .combine(ee.Reducer.minMax(), sharedInputs=True)
+                            .combine(ee.Reducer.median(), sharedInputs=True),
+                            geometry=farm_geometry,
+                            scale=10,
+                            maxPixels=1e9
+                        ).getInfo()
+
+                    # Generate NDMI thumbnail
+                    ndmi_stretched = ndmi.unitScale(-0.8, 0.8).clamp(0, 1)
+                    ndmi_palette = [
+                        '8B4513',  # Brown: Barren soil
+                        'CD853F',  # Tan: Very dry
+                        'FFFF00',  # Yellow: Water stress
+                        'ADFF2F',  # Yellow-green: Moderate moisture
+                        '00FF00',  # Green: Good moisture
+                        '00BFFF',  # Light blue: High moisture
+                        '0000FF'   # Blue: Very high moisture
+                    ]
+
+                    ndmi_thumbnail_url = ndmi_stretched.getThumbURL({
+                        'min': 0,
+                        'max': 1,
+                        'palette': ndmi_palette,
+                        'dimensions': 512,
+                        'region': farm_geometry,
+                        'format': 'png'
+                    })
+
+                    # Generate download URL
+                    ndmi_clipped = ndmi.clip(farm_geometry)
+                    download_url = ndmi_clipped.getDownloadURL({
+                        'scale': 10,
+                        'crs': coordinate_crs,
+                        'region': farm_geometry,
+                        'format': 'GEO_TIFF'
+                    })
+
+                    # Interpret moisture status
+                    mean_ndmi = ndmi_stats.get('NDMI_mean', 0)
+                    if mean_ndmi > 0.4:
+                        moisture_status = "High canopy moisture - No water stress"
+                        irrigation_recommendation = "Adequate moisture - No irrigation needed"
+                    elif mean_ndmi > 0.2:
+                        moisture_status = "Moderate moisture - Slight water stress"
+                        irrigation_recommendation = "Monitor closely - May need irrigation soon"
+                    elif mean_ndmi > 0:
+                        moisture_status = "Low moisture - Significant water stress"
+                        irrigation_recommendation = "Irrigation recommended"
+                    elif mean_ndmi > -0.2:
+                        moisture_status = "Very low moisture - Severe water stress"
+                        irrigation_recommendation = "Immediate irrigation required"
+                    else:
+                        moisture_status = "Barren soil or extremely dry"
+                        irrigation_recommendation = "Critical - Immediate intervention needed"
+
+                    # Compile image data
+                    image_data = {
+                        'image_index': idx,
+                        'image_id': image_id,
+                        'product_id': product_id,
+                        'acquisition_date': acquisition_date,
+                        'cloud_cover': {
+                            'value': round(cloud_cover, 2),
+                            'unit': 'percentage'
+                        },
+                        'ndmi_statistics': {
+                            'mean': {
+                                'value': round(mean_ndmi, 4),
+                                'unit': 'index',
+                                'range': '-1 to 1'
+                            },
+                            'median': {
+                                'value': round(ndmi_stats.get('NDMI_median', 0), 4),
+                                'unit': 'index',
+                                'range': '-1 to 1'
+                            },
+                            'std_dev': {
+                                'value': round(ndmi_stats.get('NDMI_stdDev', 0), 4),
+                                'unit': 'index',
+                                'range': '0 to 2'
+                            },
+                            'min': {
+                                'value': round(ndmi_stats.get('NDMI_min', 0), 4),
+                                'unit': 'index',
+                                'range': '-1 to 1'
+                            },
+                            'max': {
+                                'value': round(ndmi_stats.get('NDMI_max', 0), 4),
+                                'unit': 'index',
+                                'range': '-1 to 1'
+                            }
+                        },
+                        'interpretation': {
+                            'mean_ndmi': {
+                                'value': round(mean_ndmi, 4),
+                                'unit': 'index'
+                            },
+                            'moisture_status': moisture_status,
+                            'irrigation_recommendation': irrigation_recommendation
+                        },
+                        'outputs': {
+                            'ndmi_thumbnail': ndmi_thumbnail_url,
+                            'ndmi_geotiff_download': download_url
+                        }
+                    }
+
+                    # Add component band data if requested
+                    if include_components and component_stats:
+                        image_data['component_bands'] = {
+                            'B8_NIR': {
+                                'description': 'Near Infrared band (10m resolution)',
+                                'wavelength': {
+                                    'value': '842nm',
+                                    'range': '784-900nm'
+                                },
+                                'statistics': {
+                                    'mean': {
+                                        'value': round(component_stats.get('B8_mean', 0), 4),
+                                        'unit': 'reflectance',
+                                        'range': '0 to 10000'
+                                    },
+                                    'median': {
+                                        'value': round(component_stats.get('B8_median', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'std_dev': {
+                                        'value': round(component_stats.get('B8_stdDev', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'min': {
+                                        'value': round(component_stats.get('B8_min', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'max': {
+                                        'value': round(component_stats.get('B8_max', 0), 4),
+                                        'unit': 'reflectance'
+                                    }
+                                }
+                            },
+                            'B11_SWIR': {
+                                'description': 'Short Wave Infrared band (20m native, resampled to 10m)',
+                                'wavelength': {
+                                    'value': '1610nm',
+                                    'range': '1565-1655nm'
+                                },
+                                'statistics': {
+                                    'mean': {
+                                        'value': round(component_stats.get('B11_mean', 0), 4),
+                                        'unit': 'reflectance',
+                                        'range': '0 to 10000'
+                                    },
+                                    'median': {
+                                        'value': round(component_stats.get('B11_median', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'std_dev': {
+                                        'value': round(component_stats.get('B11_stdDev', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'min': {
+                                        'value': round(component_stats.get('B11_min', 0), 4),
+                                        'unit': 'reflectance'
+                                    },
+                                    'max': {
+                                        'value': round(component_stats.get('B11_max', 0), 4),
+                                        'unit': 'reflectance'
+                                    }
+                                }
+                            },
+                            'calculation': {
+                                'formula': 'NDMI = (B8 - B11) / (B8 + B11)',
+                                'description': 'Normalized Difference Moisture Index using NIR and SWIR bands',
+                                'note': 'B11 resampled from 20m to 10m using bilinear interpolation'
+                            }
+                        }
+
+                    all_images_data.append(image_data)
+                    logger.info(f"Processed image {idx + 1}/{image_count}: {acquisition_date}, Cloud: {cloud_cover:.1f}%, NDMI: {mean_ndmi:.3f}")
+
+                except Exception as img_error:
+                    logger.warning(f"Failed to process image {idx}: {img_error}")
+                    continue
+
+            # Step 4: Calculate area
+            try:
+                area_hectares = farm_geometry.area(maxError=1).divide(10000).getInfo()
+            except Exception:
+                area_hectares = None
+
+            # Step 5: Compile response with ALL images
+            result = {
+                'summary': {
+                    'total_images': image_count,
+                    'images_processed': len(all_images_data),
+                    'date_range': f"{start_date} to {end_date}",
+                    'max_cloud_cover_filter': {
+                        'value': max_cloud_cover,
+                        'unit': 'percentage'
+                    }
+                },
+                'area_info': {
+                    'coordinates': coordinates,
+                    'crs': coordinate_crs,
+                    'area': {
+                        'value': round(area_hectares, 4) if area_hectares else None,
+                        'unit': 'hectares'
+                    }
+                },
+                'images': all_images_data,
+                'processing_info': {
+                    'satellite': 'Sentinel-2',
+                    'collection': collection_id,
+                    'bands_used': ['B8 (NIR, 10m)', 'B11 (SWIR, 20m→10m resampled)'],
+                    'formula': '(NIR - SWIR) / (NIR + SWIR)',
+                    'resolution': {
+                        'value': 10,
+                        'unit': 'meters'
+                    },
+                    'resampling_method': 'Bilinear interpolation for B11',
+                    'use_case': 'Vegetation water content and drought monitoring'
+                },
+                'interpretation_scale': {
+                    '> 0.4': 'High canopy moisture (no water stress)',
+                    '0.2 - 0.4': 'Moderate moisture (slight stress)',
+                    '0 - 0.2': 'Low moisture (significant stress)',
+                    '-0.2 - 0': 'Very low moisture (severe stress)',
+                    '< -0.2': 'Barren soil / Extremely dry'
+                }
+            }
+
+            logger.info(f"NDMI calculated for {len(all_images_data)} images successfully")
+            return result
+
+        except ee.EEException as e:
+            logger.error(f"Google Earth Engine API error: {e}")
+            raise Exception(f"Earth Engine API error: {str(e)}")
+        except Exception as e:
+            logger.error(f"Error calculating NDMI: {e}")
             raise
 
     def get_dynamic_world_raw_data(

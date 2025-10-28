@@ -1,48 +1,66 @@
 FROM python:3.11 as builder
 
-# Set timezone
-ENV TZ=Asia/Ho_Chi_Minh
+ENV TZ=Asia/Ho_Chi_Minh \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# Set working directory
 WORKDIR /app
 
-# Copy and install Python dependencies
+# Install build dependencies needed for geospatial packages
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    libgeos-dev \
+    libproj-dev \
+    gdal-bin \
+    libgdal-dev
+
+# Copy only requirements
 COPY services/satellite-data-service/requirements.txt .
-RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Install with cache mount
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --user -r requirements.txt
+
+# ============================================
 
 FROM python:3.11-slim as runtime
 
-# Set timezone to Asia/Ho_Chi_Minh
-ENV TZ=Asia/Ho_Chi_Minh
+ENV TZ=Asia/Ho_Chi_Minh \
+    PYTHONUNBUFFERED=1 \
+    PATH=/home/app/.local/bin:$PATH
 
-# Install only runtime dependencies using generic names (more future-proof)
-RUN apt-get update && apt-get install -y \
+# Install ONLY runtime libraries (no -dev packages)
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    # Find the correct libgdal package name
+    GDAL_PACKAGE=$(apt-cache search '^libgdal[0-9]+$' | grep -oP 'libgdal\d+' | head -1) && \
+    echo "Installing GDAL package: $GDAL_PACKAGE" && \
+    apt-get install -y --no-install-recommends \
     tzdata \
     libpq5 \
     libgeos-c1v5 \
-    libproj-dev \
+    libproj25 \
     gdal-bin \
+    $GDAL_PACKAGE \
     && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
-    && echo $TZ > /etc/timezone \
-    && rm -rf /var/lib/apt/lists/*
+    && echo $TZ > /etc/timezone
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash app
 
-# Set working directory
 WORKDIR /app
 
-# Copy Python packages from builder stage
-COPY --from=builder /root/.local /home/app/.local
+# Copy Python packages
+COPY --from=builder --chown=app:app /root/.local /home/app/.local
 
-# Copy application code - Fixed path
+# Copy application code LAST
 COPY --chown=app:app services/satellite-data-service/app/ ./app/
 
-# Switch to non-root user
 USER app
 
-# Update PATH to include user packages
-ENV PATH=/home/app/.local/bin:$PATH
-
-# Run the application
 CMD ["python", "-m", "app.main"]
