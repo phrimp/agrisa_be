@@ -71,6 +71,8 @@ func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 	if err := c.Bind().Body(&req); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
+	createdBy := c.Get("X-User-ID")
+	req.BasePolicy.CreatedBy = &createdBy
 
 	// Set default expiration if not provided (24 hours)
 	expiration := 24 * time.Hour
