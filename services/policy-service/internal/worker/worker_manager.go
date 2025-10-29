@@ -2,7 +2,7 @@ package worker
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"sync"
 )
 
@@ -13,22 +13,26 @@ const (
 	StopPool
 )
 
+// PoolType constants
 const (
-	PoolTypeWorking   = "working"
-	PoolTypeScheduler = "scheduler"
+	PoolTypeWorking = "working"
 )
 
+// WorkerManagerCMD is the command struct sent to the manager's loop.
 type WorkerManagerCMD struct {
 	Type     workerManagerCMDType
 	PoolName string
-	PoolType string // Use PoolType constants
-	Pool     Pool   // The pool to start (nil for StopPool)
+	PoolType string
+	Pool     Pool
 }
 
+// WorkerManager controls the entire lifecycle of all pools.
 type WorkerManager struct {
-	workingPools   map[string]Pool
-	poolCancels    map[string]context.CancelFunc // Used to stop individual pools
-	wg             *sync.WaitGroup               // Can be understood as master pool, all pool created must wg.Add(1)
+	pools       map[string]Pool
+	poolCancels map[string]context.CancelFunc
+	wg          *sync.WaitGroup
+	mu          sync.RWMutex
+
 	managerContext context.Context
 	managerCancel  context.CancelFunc
 	cmdChan        chan WorkerManagerCMD
@@ -40,15 +44,19 @@ func NewWorkerManager() *WorkerManager {
 		wg:             new(sync.WaitGroup),
 		managerContext: ctx,
 		managerCancel:  cancel,
-		workingPools:   make(map[string]Pool),
+		pools:          make(map[string]Pool),
 		poolCancels:    make(map[string]context.CancelFunc),
-		cmdChan:        make(chan WorkerManagerCMD, 10), // Buffered command channel
+		cmdChan:        make(chan WorkerManagerCMD, 10),
 	}
 }
 
+func (m *WorkerManager) ManagerContext() context.Context {
+	return m.managerContext
+}
+
 func (m *WorkerManager) Run() {
-	log.Println("[Manager] Running...")
-	defer log.Println("[Manager] Halted.")
+	fmt.Println("[Manager] Running...")
+	defer fmt.Println("[Manager] Halted.")
 
 	for {
 		select {
@@ -59,11 +67,10 @@ func (m *WorkerManager) Run() {
 			case StopPool:
 				m.stopPool(cmd.PoolName)
 			}
-
 		case <-m.managerContext.Done():
-			log.Println("[Manager] Shutdown signal received. Stopping all pools...")
+			fmt.Println("[Manager] Shutdown signal received. Stopping all pools...")
 			for name, cancel := range m.poolCancels {
-				log.Printf("[Manager] Signaling pool '%s' to stop\n", name)
+				fmt.Printf("[Manager] Signaling pool '%s' to stop\n", name)
 				cancel()
 			}
 			return
@@ -71,45 +78,33 @@ func (m *WorkerManager) Run() {
 	}
 }
 
-// this is add a new pool
 func (m *WorkerManager) startPool(cmd WorkerManagerCMD) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if _, exists := m.poolCancels[cmd.PoolName]; exists {
-		log.Printf("[Manager] Warning: Pool '%s' already exists.\n", cmd.PoolName)
+		fmt.Printf("[Manager] Warning: Pool '%s' already exists.\n", cmd.PoolName)
 		return
 	}
-
-	log.Printf("[Manager] Starting pool '%s' (Type: %s)\n", cmd.PoolName, cmd.PoolType)
-
+	fmt.Printf("[Manager] Starting pool '%s'\n", cmd.PoolName)
 	poolCtx, poolCancel := context.WithCancel(m.managerContext)
-
 	m.poolCancels[cmd.PoolName] = poolCancel
-
-	if cmd.PoolType == PoolTypeWorking {
-		m.workingPools[cmd.PoolName] = cmd.Pool
-	} else {
-		m.workingPools[cmd.PoolName] = cmd.Pool
-	}
-
+	m.pools[cmd.PoolName] = cmd.Pool
 	m.wg.Add(1)
-
 	go cmd.Pool.Start(poolCtx, m.wg)
 }
 
 func (m *WorkerManager) stopPool(name string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	cancel, exists := m.poolCancels[name]
 	if !exists {
-		log.Printf("[Manager] Warning: Pool '%s' not found, cannot stop.\n", name)
+		fmt.Printf("[Manager] Warning: Pool '%s' not found.\n", name)
 		return
 	}
-
-	log.Printf("[Manager] Stopping pool '%s'\n", name)
-
+	fmt.Printf("[Manager] Stopping pool '%s'\n", name)
 	cancel()
-
 	delete(m.poolCancels, name)
-	delete(m.workingPools, name)
-
-	// Note: The pool's Start() method is responsible for calling m.wg.Done() when it's fully stopped, so we dont need to do it here
+	delete(m.pools, name)
 }
 
 func (m *WorkerManager) StartPool(name string, pool Pool, poolType string) {
@@ -130,16 +125,18 @@ func (m *WorkerManager) StopPool(name string) {
 	m.cmdChan <- cmd
 }
 
-func (m *WorkerManager) Shutdown() {
-	log.Println("[Manager] Initiating shutdown...")
-	m.managerCancel() // Signal Run() to stop
+func (m *WorkerManager) GetPool(name string) (Pool, bool) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	m.wg.Wait() // wait for all pool to stop
-
-	close(m.cmdChan)
-	log.Println("[Manager] Shutdown complete.")
+	pool, exists := m.pools[name]
+	return pool, exists
 }
 
-func (m *WorkerManager) ManagerContext() context.Context {
-	return m.managerContext
+func (m *WorkerManager) Shutdown() {
+	fmt.Println("[Manager] Initiating shutdown...")
+	m.managerCancel()
+	m.wg.Wait()
+	close(m.cmdChan)
+	fmt.Println("[Manager] Shutdown complete.")
 }

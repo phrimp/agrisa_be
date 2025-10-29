@@ -12,7 +12,21 @@ type (
 	}
 )
 
+type JobPayload struct {
+	JobID      string         `json:"job_id"`
+	Type       string         `json:"type"`
+	Params     map[string]any `json:"params"`
+	MaxRetries int            `json:"max_retries"`
+	RetryCount int            `json:"retry_count"`
+}
+
 type Pool interface {
 	Start(ctx context.Context, managerWg *sync.WaitGroup)
-	JobChan() chan<- Job
+
+	SubmitJob(ctx context.Context, job JobPayload) error
+
+	RegisterJob(
+		jobType string,
+		jobFunc func(params map[string]any) error,
+	)
 }

@@ -480,7 +480,7 @@ CREATE TABLE cancel_request (
     CONSTRAINT review_consistency CHECK (
         (status = 'denied' AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
         (status = 'approved' AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
-        (status = 'litigation')
+        (status = 'litigation')ScheduleConfig
     )
 );
 
