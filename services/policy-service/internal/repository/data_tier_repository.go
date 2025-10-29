@@ -540,9 +540,9 @@ func (r *DataTierRepository) CountDataTiersWCategory(options DataTierWCategoryQu
 }
 
 // buildDataTierWCategoryQuery builds the dynamic query based on options
-func (r *DataTierRepository) buildDataTierWCategoryQuery(options DataTierWCategoryQueryOptions) (string, []interface{}) {
+func (r *DataTierRepository) buildDataTierWCategoryQuery(options DataTierWCategoryQueryOptions) (string, []any) {
 	var conditions []string
-	var args []interface{}
+	var args []any
 	argIndex := 1
 
 	baseQuery := `
@@ -653,9 +653,9 @@ func (r *DataTierRepository) buildDataTierWCategoryQuery(options DataTierWCatego
 }
 
 // buildDataTierWCategoryCountQuery builds count query
-func (r *DataTierRepository) buildDataTierWCategoryCountQuery(options DataTierWCategoryQueryOptions) (string, []interface{}) {
+func (r *DataTierRepository) buildDataTierWCategoryCountQuery(options DataTierWCategoryQueryOptions) (string, []any) {
 	var conditions []string
-	var args []interface{}
+	var args []any
 	argIndex := 1
 
 	baseQuery := `

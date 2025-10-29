@@ -1352,3 +1352,18 @@ func (r *BasePolicyRepository) GetBasePolicyDataSourceCount(policyID uuid.UUID) 
 
 	return count, nil
 }
+
+func (r *BasePolicyRepository) GetTemplateDocumentURL(id uuid.UUID) (*string, error) {
+	var url *string
+	query := `SELECT template_document_url FROM base_policy WHERE id = $1`
+
+	err := r.db.Get(&url, query, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("base policy not found")
+		}
+		return nil, fmt.Errorf("failed to get template document url: %w", err)
+	}
+
+	return url, nil
+}

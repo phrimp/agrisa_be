@@ -1,6 +1,7 @@
 package minio
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -168,6 +169,19 @@ func (mc *MinioClient) UploadFile(ctx context.Context, bucketName, objectName st
 	}
 
 	log.Printf("Successfully uploaded file: %s to bucket: %s", objectName, bucketName)
+	return nil
+}
+
+// UploadBytes uploads byte data to the specified bucket
+func (mc *MinioClient) UploadBytes(ctx context.Context, bucketName, objectName string, data []byte, contentType string) error {
+	reader := bytes.NewReader(data)
+	_, err := mc.client.PutObject(ctx, bucketName, objectName, reader, int64(len(data)),
+		minio.PutObjectOptions{ContentType: contentType})
+	if err != nil {
+		return fmt.Errorf("failed to upload bytes to %s in bucket %s: %w", objectName, bucketName, err)
+	}
+
+	log.Printf("Successfully uploaded %d bytes to: %s in bucket: %s", len(data), objectName, bucketName)
 	return nil
 }
 
