@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"os"
 	"sync"
 	"time"
@@ -59,18 +60,17 @@ func (s *JobScheduler) AddJob(job JobPayload) {
 }
 
 func (s *JobScheduler) Run(ctx context.Context) {
-	fmt.Printf("[Scheduler %s] Running.\n", s.Name)
+	slog.Info("Job scheduler starting", "scheduler_name", s.Name, "job_count", len(s.Jobs))
 	defer s.Ticker.Stop()
 
 	for {
 		select {
 		case <-s.Ticker.C:
-			fmt.Printf("[Scheduler %s] Ticker fired. Submitting jobs.\n", s.Name)
+			slog.Info("Scheduler ticker fired, submitting jobs", "scheduler_name", s.Name, "job_count", len(s.Jobs))
 			s.submitJobs(ctx)
 
 		case <-ctx.Done():
-			// The manager signaled a global shutdown
-			fmt.Printf("[Scheduler %s] Shutting down.\n", s.Name)
+			slog.Info("Scheduler shutting down", "scheduler_name", s.Name)
 			return
 		}
 	}
@@ -89,7 +89,16 @@ func (s *JobScheduler) submitJobs(ctx context.Context) {
 		// Use a short timeout for the submit itself
 		submitCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		if err := s.Pool.SubmitJob(submitCtx, job); err != nil {
-			fmt.Printf("[Scheduler %s] FAILED to submit job: %v\n", s.Name, err)
+			slog.Error("Failed to submit job to pool",
+				"scheduler_name", s.Name,
+				"job_id", job.JobID,
+				"job_type", job.Type,
+				"error", err)
+		} else {
+			slog.Debug("Job submitted successfully",
+				"scheduler_name", s.Name,
+				"job_id", job.JobID,
+				"job_type", job.Type)
 		}
 		cancel()
 	}

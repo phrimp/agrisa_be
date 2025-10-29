@@ -2,7 +2,7 @@ package worker
 
 import (
 	"context"
-	"fmt"
+	"log/slog"
 	"sync"
 )
 
@@ -55,8 +55,8 @@ func (m *WorkerManager) ManagerContext() context.Context {
 }
 
 func (m *WorkerManager) Run() {
-	fmt.Println("[Manager] Running...")
-	defer fmt.Println("[Manager] Halted.")
+	slog.Info("Worker manager starting")
+	defer slog.Info("Worker manager halted")
 
 	for {
 		select {
@@ -68,9 +68,9 @@ func (m *WorkerManager) Run() {
 				m.stopPool(cmd.PoolName)
 			}
 		case <-m.managerContext.Done():
-			fmt.Println("[Manager] Shutdown signal received. Stopping all pools...")
+			slog.Info("Worker manager shutdown signal received, stopping all pools")
 			for name, cancel := range m.poolCancels {
-				fmt.Printf("[Manager] Signaling pool '%s' to stop\n", name)
+				slog.Info("Signaling pool to stop", "pool_name", name)
 				cancel()
 			}
 			return
@@ -82,10 +82,10 @@ func (m *WorkerManager) startPool(cmd WorkerManagerCMD) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, exists := m.poolCancels[cmd.PoolName]; exists {
-		fmt.Printf("[Manager] Warning: Pool '%s' already exists.\n", cmd.PoolName)
+		slog.Warn("Pool already exists, skipping start", "pool_name", cmd.PoolName, "pool_type", cmd.PoolType)
 		return
 	}
-	fmt.Printf("[Manager] Starting pool '%s'\n", cmd.PoolName)
+	slog.Info("Starting pool", "pool_name", cmd.PoolName, "pool_type", cmd.PoolType)
 	poolCtx, poolCancel := context.WithCancel(m.managerContext)
 	m.poolCancels[cmd.PoolName] = poolCancel
 	m.pools[cmd.PoolName] = cmd.Pool
@@ -98,10 +98,10 @@ func (m *WorkerManager) stopPool(name string) {
 	defer m.mu.Unlock()
 	cancel, exists := m.poolCancels[name]
 	if !exists {
-		fmt.Printf("[Manager] Warning: Pool '%s' not found.\n", name)
+		slog.Warn("Pool not found, cannot stop", "pool_name", name)
 		return
 	}
-	fmt.Printf("[Manager] Stopping pool '%s'\n", name)
+	slog.Info("Stopping pool", "pool_name", name)
 	cancel()
 	delete(m.poolCancels, name)
 	delete(m.pools, name)
@@ -134,9 +134,9 @@ func (m *WorkerManager) GetPool(name string) (Pool, bool) {
 }
 
 func (m *WorkerManager) Shutdown() {
-	fmt.Println("[Manager] Initiating shutdown...")
+	slog.Info("Worker manager initiating shutdown")
 	m.managerCancel()
 	m.wg.Wait()
 	close(m.cmdChan)
-	fmt.Println("[Manager] Shutdown complete.")
+	slog.Info("Worker manager shutdown complete")
 }
