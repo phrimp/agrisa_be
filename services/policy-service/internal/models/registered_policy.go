@@ -31,12 +31,23 @@ type RegisteredPolicy struct {
 	TotalDataCost           float64            `json:"total_data_cost" db:"total_data_cost"`
 	Status                  PolicyStatus       `json:"status" db:"status"`
 	UnderwritingStatus      UnderwritingStatus `json:"underwriting_status" db:"underwriting_status"`
-	Reason                  *string            `json:"reason,omitempty" db:"reason"`
-	ReasonEvidence          any                `json:"reason_evidence" db:"reason_evidence"`
 	SignedPolicyDocumentURL *string            `json:"signed_policy_document_url,omitempty" db:"signed_policy_document_url"`
 	CreatedAt               time.Time          `json:"created_at" db:"created_at"`
 	UpdatedAt               time.Time          `json:"updated_at" db:"updated_at"`
 	RegisteredBy            *string            `json:"registered_by,omitempty" db:"registered_by"`
+}
+
+type RegisteredPolicyUnderwriting struct {
+	ID                  uuid.UUID          `json:"id" db:"id"`
+	RegisteredPolicyID  uuid.UUID          `json:"registered_policy_id" db:"registered_policy_id"`
+	ValidationTimestamp int64              `json:"validation_timestamp" db:"validation_timestamp"`
+	UnderwritingStatus  UnderwritingStatus `json:"underwriting_status" db:"underwriting_status"`
+	Recommendations     utils.JSONMap      `json:"recommendations,omitempty" db:"recommendations"`
+	Reason              *string            `json:"reason,omitempty" db:"reason"`
+	ReasonEvidence      utils.JSONMap      `json:"reason_evidence,omitempty" db:"reason_evidence"`
+	ValidatedBy         *string            `json:"validated_by,omitempty" db:"validated_by"`
+	ValidationNotes     *string            `json:"validation_notes,omitempty" db:"validation_notes"`
+	CreatedAt           time.Time          `json:"created_at" db:"created_at"`
 }
 type CancelRequest struct {
 	ID                 uuid.UUID `json:"id" db:"id"`
@@ -52,7 +63,7 @@ type CancelRequest struct {
 	RequestedBy string              `json:"requested_by" db:"requested_by"`
 	RequestedAt time.Time           `json:"requested_at" db:"requested_at"`
 
-	CompensateAmount int64 `json:"compensate_amount" db:"compensate_amount"`
+	CompensateAmount int `json:"compensate_amount" db:"compensate_amount"`
 
 	// Processing details
 	ReviewedBy  *string    `json:"reviewed_by,omitempty" db:"reviewed_by"`

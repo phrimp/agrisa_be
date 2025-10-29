@@ -160,3 +160,9 @@ const (
 	CancelRequestStatusLitigation CancelRequestStatus = "litigation"
 	CancelRequestStatusDenied     CancelRequestStatus = "denied"
 )
+
+type ClaimRejectionType string
+
+const (
+	ClaimRejectionTypeClaimDataIncorrect ClaimRejectionType = "claim_data_incorrect"
+)

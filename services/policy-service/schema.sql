@@ -28,7 +28,7 @@ CREATE TYPE photo_type AS ENUM ('crop', 'boundary', 'land_certificate', 'other')
 CREATE TYPE monitor_frequency AS ENUM ('hour', 'day', 'week', 'month', 'year');
 CREATE TYPE cancel_request_type as ENUM ('contract_violation', 'other');
 CREATE TYPE cancel_request_status as ENUM ('approved', 'litigation', 'denied');
-
+CREATE TYPE claim_rejection_type as ENUM ('claim_data_incorrect');
 -- ============================================================================
 -- CORE DATA SOURCE & PRICING TABLES
 -- ============================================================================
@@ -403,8 +403,6 @@ CREATE TABLE registered_policy (
     -- Status
     status policy_status DEFAULT 'draft',
     underwriting_status underwriting_status DEFAULT 'pending',
-    reason TEXT,
-    reason_evidence JSONB,
     
     -- Documents
     signed_policy_document_url VARCHAR(500),
@@ -431,6 +429,27 @@ COMMENT ON TABLE registered_policy IS 'Policy instances - data_complexity_score 
 COMMENT ON COLUMN registered_policy.data_complexity_score IS 'Snapshot from base_policy at registration time';
 COMMENT ON COLUMN registered_policy.monthly_data_cost IS 'Snapshot from base_policy at registration time';
 COMMENT ON COLUMN registered_policy.total_data_cost IS 'monthly_data_cost × coverage_months';
+
+CREATE TABLE registered_policy_underwriting (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    registered_policy_id UUID NOT NULL REFERENCES registered_policy(id) ON DELETE CASCADE,
+    
+    validation_timestamp INT NOT NULL,
+    underwriting_status underwriting_status DEFAULT 'pending',
+    
+    recommendations JSONB,
+    
+    reason TEXT,
+    reason_evidence JSONB,
+
+    validated_by VARCHAR(100),
+    validation_notes TEXT,
+    
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_policy_underwriting ON registered_policy_underwriting(registered_policy_id);
+CREATE INDEX idx_policy_underwriting_status ON registered_policy_underwriting(underwriting_status);
 
 
 CREATE TABLE cancel_request (
@@ -518,6 +537,25 @@ CREATE INDEX idx_claim_farm ON claim(farm_id);
 CREATE INDEX idx_claim_status ON claim(status);
 CREATE INDEX idx_claim_trigger_timestamp ON claim(trigger_timestamp);
 CREATE INDEX idx_claim_number ON claim(claim_number);
+
+CREATE TABLE claim_rejection (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    claim_id UUID NOT NULL REFERENCES claim(id),
+    
+    validation_timestamp INT NOT NULL,
+    claim_rejection_type claim_rejection_type DEFAULT 'claim_data_incorrect',
+    
+    reason TEXT,
+    reason_evidence JSONB,
+
+    validated_by VARCHAR(100),
+    validation_notes TEXT,
+    
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_claim_rejection_claim ON claim_rejection(claim_id);
+CREATE INDEX idx_claim_rejection_type ON claim_rejection(claim_rejection_type);
 
 CREATE TABLE payout (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
