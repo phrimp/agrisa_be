@@ -99,7 +99,7 @@ type BasePolicyDocumentValidation struct {
 	Mismatches          utils.JSONMap    `json:"mismatches,omitempty" db:"mismatches"`                     // JSONB
 	Warnings            utils.JSONMap    `json:"warnings,omitempty" db:"warnings"`                         // JSONB
 	Recommendations     utils.JSONMap    `json:"recommendations,omitempty" db:"recommendations"`           // JSONB
-	ExtractedParameters utils.JSONMap    `json:"extracted_parameters,omitempty" db:"extracted_parameters"` // JSONB
+	ExtractedParameters utils.JSONMap    `json:"extracted_parameters,omitempty" db:"extracted_parameters"` // JSONB -- Deprecated
 	ValidatedBy         *string          `json:"validated_by,omitempty" db:"validated_by"`
 	ValidationNotes     *string          `json:"validation_notes,omitempty" db:"validation_notes"`
 	CreatedAt           time.Time        `json:"created_at" db:"created_at"`

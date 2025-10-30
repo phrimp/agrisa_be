@@ -183,7 +183,7 @@ func (s *BasePolicyService) validateBasePolicyTrigger(triggerGr *models.BasePoli
 		return fmt.Errorf("invalid operator: %s", triggerGr.LogicalOperator)
 	}
 	if triggerGr.MonitorInterval <= 0 {
-		return fmt.Errorf("monitor frequency must be greater than 0")
+		return fmt.Errorf("monitor interval must be greater than 0")
 	}
 	if !s.isValidMonitorFrequencyUnit(triggerGr.MonitorFrequencyUnit) {
 		return fmt.Errorf("invalid monitor frequency unit: %s", triggerGr.MonitorFrequencyUnit)
@@ -722,6 +722,20 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 			completePolicy.Conditions = conditions
 		}
 
+		// Get validations for this policy
+		validations, err := s.basePolicyRepo.GetValidationsFromRedis(ctx, basePolicy.ID)
+		if err != nil {
+			slog.Warn("Failed to get validations from Redis",
+				"base_policy_id", basePolicy.ID,
+				"error", err)
+			// Non-critical: continue without validations
+		} else if len(validations) > 0 {
+			completePolicy.Validations = validations
+			slog.Debug("Retrieved validations for policy",
+				"base_policy_id", basePolicy.ID,
+				"validation_count", len(validations))
+		}
+
 		completePolicies = append(completePolicies, completePolicy)
 	}
 
@@ -1008,10 +1022,29 @@ func (s *BasePolicyService) commitSinglePolicyInTransaction(ctx context.Context,
 		}
 	}
 
+	// 4. Insert BasePolicyDocumentValidations if present
+	if len(policy.Validations) > 0 {
+		slog.Info("Committing validations to database",
+			"base_policy_id", policy.BasePolicy.ID,
+			"validation_count", len(policy.Validations))
+
+		for _, validation := range policy.Validations {
+			if err := s.basePolicyRepo.CreateBasePolicyDocumentValidationTx(tx, validation); err != nil {
+				return fmt.Errorf("failed to insert validation %s: %w",
+					validation.ID, err)
+			}
+		}
+
+		slog.Info("Successfully committed validations",
+			"base_policy_id", policy.BasePolicy.ID,
+			"validation_count", len(policy.Validations))
+	}
+
 	slog.Info("Policy committed successfully",
 		"base_policy_id", policy.BasePolicy.ID,
 		"trigger_present", policy.Trigger != nil,
-		"condition_count", len(policy.Conditions))
+		"condition_count", len(policy.Conditions),
+		"validation_count", len(policy.Validations))
 
 	return nil
 }
@@ -1027,6 +1060,7 @@ func (s *BasePolicyService) cleanupCommittedPoliciesFromRedis(ctx context.Contex
 			fmt.Sprintf("*--%s--BasePolicyTrigger--*", policy.TriggerID),
 			fmt.Sprintf("*--*--BasePolicyTriggerCondition--*--%s--*", policy.BasePolicyID),
 			fmt.Sprintf("*--%s--CompletePolicyResponse", policy.BasePolicyID),
+			fmt.Sprintf("%s--BasePolicyDocumentValidation--*", policy.BasePolicyID),
 		}
 
 		for _, pattern := range patterns {
@@ -1094,7 +1128,6 @@ func (s *BasePolicyService) GetCompletePolicyDetail(
 	ctx context.Context,
 	filter models.PolicyDetailFilterRequest,
 ) (*models.CompletePolicyDetailResponse, error) {
-
 	slog.Info("Getting complete policy detail",
 		"id", filter.ID,
 		"provider_id", filter.ProviderID,
@@ -1167,7 +1200,6 @@ func (s *BasePolicyService) getDocumentInfo(
 	policy *models.BasePolicy,
 	expiryHours int,
 ) *models.PolicyDocumentInfo {
-
 	docInfo := &models.PolicyDocumentInfo{
 		HasDocument: false,
 	}

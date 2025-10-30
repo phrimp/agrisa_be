@@ -115,25 +115,48 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 			slog.Error("commit temp policy data failed", "error", err)
 			return nil, fmt.Errorf("commit temp policy data failed: %w", err)
 		}
+		if result.TotalCommitted == 0 {
+			slog.Error("commit temp policy data failed", "detail", result)
+			return nil, fmt.Errorf("commit temp policy data failed: %v", result)
+		}
+
 		slog.Info("commit temp policy data successfully", "result", result)
-	}
 
-	// Save validation record
-	if err := s.basePolicyRepo.CreateBasePolicyDocumentValidation(validation); err != nil {
-		slog.Error("Failed to create validation record",
-			"base_policy_id", request.BasePolicyID,
-			"validation_id", validation.ID,
-			"error", err)
-		return nil, fmt.Errorf("failed to create validation record: %w", err)
-	}
+		// Save validation record
+		if err := s.basePolicyRepo.CreateBasePolicyDocumentValidation(validation); err != nil {
+			slog.Error("Failed to create validation record",
+				"base_policy_id", request.BasePolicyID,
+				"validation_id", validation.ID,
+				"error", err)
+			return nil, fmt.Errorf("failed to create validation record: %w", err)
+		}
 
-	// Update policy status (without score - score is deprecated)
-	if err := s.UpdateBasePolicyValidationStatus(ctx, request.BasePolicyID, request.ValidationStatus, nil); err != nil {
-		slog.Error("Failed to update policy validation status",
+		// Update policy status (without score - score is deprecated)
+		if err := s.UpdateBasePolicyValidationStatus(ctx, request.BasePolicyID, request.ValidationStatus, nil); err != nil {
+			slog.Error("Failed to update policy validation status",
+				"base_policy_id", request.BasePolicyID,
+				"validation_status", request.ValidationStatus,
+				"error", err)
+			return nil, fmt.Errorf("failed to update policy validation status: %w", err)
+		}
+	} else {
+		// Save validation to Redis for non-passed or non-cached policies
+		slog.Info("Saving validation to Redis for non-passed status",
 			"base_policy_id", request.BasePolicyID,
 			"validation_status", request.ValidationStatus,
-			"error", err)
-		return nil, fmt.Errorf("failed to update policy validation status: %w", err)
+			"validation_id", validation.ID)
+
+		if err := s.basePolicyRepo.SaveValidationToRedis(ctx, validation); err != nil {
+			slog.Error("Failed to save validation to Redis",
+				"base_policy_id", request.BasePolicyID,
+				"validation_id", validation.ID,
+				"error", err)
+			return nil, fmt.Errorf("failed to save validation to Redis: %w", err)
+		}
+
+		slog.Info("Successfully saved validation to Redis",
+			"base_policy_id", request.BasePolicyID,
+			"validation_id", validation.ID)
 	}
 
 	// Commit transaction
