@@ -1037,52 +1037,23 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidation(validation *mo
 	validation.CreatedAt = time.Now()
 
 	// Serialize JSONB fields to []byte before database insertion
-	var mismatchesBytes, warningsBytes, recommendationsBytes, extractedParamsBytes []byte
 	var err error
-
-	if validation.Mismatches != nil {
-		mismatchesBytes, err = utils.SerializeMapToBytes(validation.Mismatches)
-		if err != nil {
-			return fmt.Errorf("failed to serialize mismatches: %w", err)
-		}
-	}
-
-	if validation.Warnings != nil {
-		warningsBytes, err = utils.SerializeMapToBytes(validation.Warnings)
-		if err != nil {
-			return fmt.Errorf("failed to serialize warnings: %w", err)
-		}
-	}
-
-	if validation.Recommendations != nil {
-		recommendationsBytes, err = utils.SerializeMapToBytes(validation.Recommendations)
-		if err != nil {
-			return fmt.Errorf("failed to serialize recommendations: %w", err)
-		}
-	}
-
-	if validation.ExtractedParameters != nil {
-		extractedParamsBytes, err = utils.SerializeMapToBytes(validation.ExtractedParameters)
-		if err != nil {
-			return fmt.Errorf("failed to serialize extracted_parameters: %w", err)
-		}
-	}
 
 	query := `
 		INSERT INTO base_policy_document_validation (
 			id, base_policy_id, validation_timestamp, validation_status, overall_score,
 			total_checks, passed_checks, failed_checks, warning_count, mismatches,
-			warnings, recommendations, extracted_parameters, validated_by,
+			warnings, recommendations, validated_by,
 			validation_notes, created_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
 		)`
 
 	_, err = r.db.Exec(query,
 		validation.ID, validation.BasePolicyID, validation.ValidationTimestamp,
 		validation.ValidationStatus, validation.OverallScore, validation.TotalChecks,
 		validation.PassedChecks, validation.FailedChecks, validation.WarningCount,
-		mismatchesBytes, warningsBytes, recommendationsBytes, extractedParamsBytes,
+		validation.Mismatches, validation.WarningCount, validation.Recommendations,
 		validation.ValidatedBy, validation.ValidationNotes, validation.CreatedAt)
 	if err != nil {
 		slog.Error("Failed to create base policy document validation",
@@ -1377,7 +1348,6 @@ func (r *BasePolicyRepository) GetCompletePolicyByFilter(
 	ctx context.Context,
 	filter models.PolicyDetailFilterRequest,
 ) (*models.BasePolicy, []models.TriggerWithConditions, error) {
-
 	slog.Info("Retrieving complete policy with filters",
 		"id", filter.ID,
 		"provider_id", filter.ProviderID,
@@ -1466,7 +1436,6 @@ func (r *BasePolicyRepository) GetTriggersWithConditionsByPolicyID(
 	ctx context.Context,
 	policyID uuid.UUID,
 ) ([]models.TriggerWithConditions, error) {
-
 	type TriggerConditionRow struct {
 		// Trigger fields
 		TriggerID            uuid.UUID               `db:"trigger_id"`
@@ -1480,25 +1449,25 @@ func (r *BasePolicyRepository) GetTriggersWithConditionsByPolicyID(
 		TriggerUpdatedAt     time.Time               `db:"trigger_updated_at"`
 
 		// Condition fields (nullable for triggers without conditions)
-		ConditionID            *uuid.UUID                      `db:"condition_id"`
-		ConditionTriggerID     *uuid.UUID                      `db:"condition_trigger_id"`
-		DataSourceID           *uuid.UUID                      `db:"data_source_id"`
-		ThresholdOperator      *models.ThresholdOperator       `db:"threshold_operator"`
-		ThresholdValue         *float64                        `db:"threshold_value"`
-		EarlyWarningThreshold  *float64                        `db:"early_warning_threshold"`
-		AggregationFunction    *models.AggregationFunction     `db:"aggregation_function"`
-		AggregationWindowDays  *int                            `db:"aggregation_window_days"`
-		ConsecutiveRequired    *bool                           `db:"consecutive_required"`
-		IncludeComponent       *bool                           `db:"include_component"`
-		BaselineWindowDays     *int                            `db:"baseline_window_days"`
-		BaselineFunction       *models.AggregationFunction     `db:"baseline_function"`
-		ValidationWindowDays   *int                            `db:"validation_window_days"`
-		ConditionOrder         *int                            `db:"condition_order"`
-		BaseCost               *float64                        `db:"base_cost"`
-		CategoryMultiplier     *float64                        `db:"category_multiplier"`
-		TierMultiplier         *float64                        `db:"tier_multiplier"`
-		CalculatedCost         *float64                        `db:"calculated_cost"`
-		ConditionCreatedAt     *time.Time                      `db:"condition_created_at"`
+		ConditionID           *uuid.UUID                  `db:"condition_id"`
+		ConditionTriggerID    *uuid.UUID                  `db:"condition_trigger_id"`
+		DataSourceID          *uuid.UUID                  `db:"data_source_id"`
+		ThresholdOperator     *models.ThresholdOperator   `db:"threshold_operator"`
+		ThresholdValue        *float64                    `db:"threshold_value"`
+		EarlyWarningThreshold *float64                    `db:"early_warning_threshold"`
+		AggregationFunction   *models.AggregationFunction `db:"aggregation_function"`
+		AggregationWindowDays *int                        `db:"aggregation_window_days"`
+		ConsecutiveRequired   *bool                       `db:"consecutive_required"`
+		IncludeComponent      *bool                       `db:"include_component"`
+		BaselineWindowDays    *int                        `db:"baseline_window_days"`
+		BaselineFunction      *models.AggregationFunction `db:"baseline_function"`
+		ValidationWindowDays  *int                        `db:"validation_window_days"`
+		ConditionOrder        *int                        `db:"condition_order"`
+		BaseCost              *float64                    `db:"base_cost"`
+		CategoryMultiplier    *float64                    `db:"category_multiplier"`
+		TierMultiplier        *float64                    `db:"tier_multiplier"`
+		CalculatedCost        *float64                    `db:"calculated_cost"`
+		ConditionCreatedAt    *time.Time                  `db:"condition_created_at"`
 	}
 
 	query := `

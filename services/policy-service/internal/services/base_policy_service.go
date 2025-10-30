@@ -183,7 +183,7 @@ func (s *BasePolicyService) validateBasePolicyTrigger(triggerGr *models.BasePoli
 		return fmt.Errorf("invalid operator: %s", triggerGr.LogicalOperator)
 	}
 	if triggerGr.MonitorInterval <= 0 {
-		return fmt.Errorf("monitor frequency must be greater than 0")
+		return fmt.Errorf("monitor interval must be greater than 0")
 	}
 	if !s.isValidMonitorFrequencyUnit(triggerGr.MonitorFrequencyUnit) {
 		return fmt.Errorf("invalid monitor frequency unit: %s", triggerGr.MonitorFrequencyUnit)
@@ -1094,7 +1094,6 @@ func (s *BasePolicyService) GetCompletePolicyDetail(
 	ctx context.Context,
 	filter models.PolicyDetailFilterRequest,
 ) (*models.CompletePolicyDetailResponse, error) {
-
 	slog.Info("Getting complete policy detail",
 		"id", filter.ID,
 		"provider_id", filter.ProviderID,
@@ -1167,7 +1166,6 @@ func (s *BasePolicyService) getDocumentInfo(
 	policy *models.BasePolicy,
 	expiryHours int,
 ) *models.PolicyDocumentInfo {
-
 	docInfo := &models.PolicyDocumentInfo{
 		HasDocument: false,
 	}
