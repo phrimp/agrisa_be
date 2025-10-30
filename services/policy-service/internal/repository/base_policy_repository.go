@@ -1044,18 +1044,19 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidation(validation *mo
 		INSERT INTO base_policy_document_validation (
 			id, base_policy_id, validation_timestamp, validation_status, overall_score,
 			total_checks, passed_checks, failed_checks, warning_count, mismatches,
-			warnings, recommendations, validated_by,
+			warnings, recommendations, extracted_parameters, validated_by,
 			validation_notes, created_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 		)`
 
 	_, err = r.db.Exec(query,
 		validation.ID, validation.BasePolicyID, validation.ValidationTimestamp,
 		validation.ValidationStatus, validation.OverallScore, validation.TotalChecks,
 		validation.PassedChecks, validation.FailedChecks, validation.WarningCount,
-		validation.Mismatches, validation.WarningCount, validation.Recommendations,
-		validation.ValidatedBy, validation.ValidationNotes, validation.CreatedAt)
+		validation.Mismatches, validation.Warnings, validation.Recommendations,
+		validation.ExtractedParameters, validation.ValidatedBy, validation.ValidationNotes,
+		validation.CreatedAt)
 	if err != nil {
 		slog.Error("Failed to create base policy document validation",
 			"validation_id", validation.ID,
@@ -1699,38 +1700,8 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidationTx(
 
 	validation.CreatedAt = time.Now()
 
-	// Serialize JSONB fields
-	var mismatchesBytes, warningsBytes, recommendationsBytes, extractedParamsBytes []byte
-	var err error
-
-	if validation.Mismatches != nil {
-		mismatchesBytes, err = utils.SerializeMapToBytes(validation.Mismatches)
-		if err != nil {
-			return fmt.Errorf("failed to serialize mismatches: %w", err)
-		}
-	}
-
-	if validation.Warnings != nil {
-		warningsBytes, err = utils.SerializeMapToBytes(validation.Warnings)
-		if err != nil {
-			return fmt.Errorf("failed to serialize warnings: %w", err)
-		}
-	}
-
-	if validation.Recommendations != nil {
-		recommendationsBytes, err = utils.SerializeMapToBytes(validation.Recommendations)
-		if err != nil {
-			return fmt.Errorf("failed to serialize recommendations: %w", err)
-		}
-	}
-
-	if validation.ExtractedParameters != nil {
-		extractedParamsBytes, err = utils.SerializeMapToBytes(validation.ExtractedParameters)
-		if err != nil {
-			return fmt.Errorf("failed to serialize extracted parameters: %w", err)
-		}
-	}
-
+	// PostgreSQL pq driver automatically handles Go maps -> JSONB conversion
+	// Pass raw map objects directly (do NOT serialize to []byte)
 	query := `
 		INSERT INTO base_policy_document_validation (
 			id, base_policy_id, validation_timestamp, validation_status,
@@ -1741,7 +1712,7 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidationTx(
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 		)`
 
-	_, err = tx.ExecContext(context.Background(),
+	_, err := tx.ExecContext(context.Background(),
 		query,
 		validation.ID,
 		validation.BasePolicyID,
@@ -1752,10 +1723,10 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidationTx(
 		validation.PassedChecks,
 		validation.FailedChecks,
 		validation.WarningCount,
-		mismatchesBytes,
-		warningsBytes,
-		recommendationsBytes,
-		extractedParamsBytes,
+		validation.Mismatches,           // Raw map, not serialized
+		validation.Warnings,             // Raw map, not serialized
+		validation.Recommendations,      // Raw map, not serialized
+		validation.ExtractedParameters,  // Raw map, not serialized
 		validation.ValidatedBy,
 		validation.ValidationNotes,
 		validation.CreatedAt,
