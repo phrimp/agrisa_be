@@ -227,9 +227,10 @@ type CompletePolicyCreationResponse struct {
 
 // CompletePolicyData represents a complete policy with all related entities
 type CompletePolicyData struct {
-	BasePolicy *BasePolicy                   `json:"base_policy"`
-	Trigger    *BasePolicyTrigger            `json:"trigger,omitempty"`
-	Conditions []*BasePolicyTriggerCondition `json:"conditions,omitempty"`
+	BasePolicy  *BasePolicy                     `json:"base_policy"`
+	Trigger     *BasePolicyTrigger              `json:"trigger,omitempty"`
+	Conditions  []*BasePolicyTriggerCondition   `json:"conditions,omitempty"`
+	Validations []*BasePolicyDocumentValidation `json:"validations,omitempty"`
 }
 
 // ValidatePolicyRequest represents the request for manual policy validation

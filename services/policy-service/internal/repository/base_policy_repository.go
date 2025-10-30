@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"policy-service/internal/models"
+	"sort"
 	"strings"
 	"time"
 
@@ -1377,7 +1378,6 @@ func (r *BasePolicyRepository) GetCompletePolicyByFilter(
 	ctx context.Context,
 	filter models.PolicyDetailFilterRequest,
 ) (*models.BasePolicy, []models.TriggerWithConditions, error) {
-
 	slog.Info("Retrieving complete policy with filters",
 		"id", filter.ID,
 		"provider_id", filter.ProviderID,
@@ -1466,7 +1466,6 @@ func (r *BasePolicyRepository) GetTriggersWithConditionsByPolicyID(
 	ctx context.Context,
 	policyID uuid.UUID,
 ) ([]models.TriggerWithConditions, error) {
-
 	type TriggerConditionRow struct {
 		// Trigger fields
 		TriggerID            uuid.UUID               `db:"trigger_id"`
@@ -1480,25 +1479,25 @@ func (r *BasePolicyRepository) GetTriggersWithConditionsByPolicyID(
 		TriggerUpdatedAt     time.Time               `db:"trigger_updated_at"`
 
 		// Condition fields (nullable for triggers without conditions)
-		ConditionID            *uuid.UUID                      `db:"condition_id"`
-		ConditionTriggerID     *uuid.UUID                      `db:"condition_trigger_id"`
-		DataSourceID           *uuid.UUID                      `db:"data_source_id"`
-		ThresholdOperator      *models.ThresholdOperator       `db:"threshold_operator"`
-		ThresholdValue         *float64                        `db:"threshold_value"`
-		EarlyWarningThreshold  *float64                        `db:"early_warning_threshold"`
-		AggregationFunction    *models.AggregationFunction     `db:"aggregation_function"`
-		AggregationWindowDays  *int                            `db:"aggregation_window_days"`
-		ConsecutiveRequired    *bool                           `db:"consecutive_required"`
-		IncludeComponent       *bool                           `db:"include_component"`
-		BaselineWindowDays     *int                            `db:"baseline_window_days"`
-		BaselineFunction       *models.AggregationFunction     `db:"baseline_function"`
-		ValidationWindowDays   *int                            `db:"validation_window_days"`
-		ConditionOrder         *int                            `db:"condition_order"`
-		BaseCost               *float64                        `db:"base_cost"`
-		CategoryMultiplier     *float64                        `db:"category_multiplier"`
-		TierMultiplier         *float64                        `db:"tier_multiplier"`
-		CalculatedCost         *float64                        `db:"calculated_cost"`
-		ConditionCreatedAt     *time.Time                      `db:"condition_created_at"`
+		ConditionID           *uuid.UUID                  `db:"condition_id"`
+		ConditionTriggerID    *uuid.UUID                  `db:"condition_trigger_id"`
+		DataSourceID          *uuid.UUID                  `db:"data_source_id"`
+		ThresholdOperator     *models.ThresholdOperator   `db:"threshold_operator"`
+		ThresholdValue        *float64                    `db:"threshold_value"`
+		EarlyWarningThreshold *float64                    `db:"early_warning_threshold"`
+		AggregationFunction   *models.AggregationFunction `db:"aggregation_function"`
+		AggregationWindowDays *int                        `db:"aggregation_window_days"`
+		ConsecutiveRequired   *bool                       `db:"consecutive_required"`
+		IncludeComponent      *bool                       `db:"include_component"`
+		BaselineWindowDays    *int                        `db:"baseline_window_days"`
+		BaselineFunction      *models.AggregationFunction `db:"baseline_function"`
+		ValidationWindowDays  *int                        `db:"validation_window_days"`
+		ConditionOrder        *int                        `db:"condition_order"`
+		BaseCost              *float64                    `db:"base_cost"`
+		CategoryMultiplier    *float64                    `db:"category_multiplier"`
+		TierMultiplier        *float64                    `db:"tier_multiplier"`
+		CalculatedCost        *float64                    `db:"calculated_cost"`
+		ConditionCreatedAt    *time.Time                  `db:"condition_created_at"`
 	}
 
 	query := `
@@ -1610,4 +1609,197 @@ func (r *BasePolicyRepository) GetTriggersWithConditionsByPolicyID(
 	}
 
 	return result, nil
+}
+
+// SaveValidationToRedis saves a validation record to Redis using validation ID
+func (r *BasePolicyRepository) SaveValidationToRedis(
+	ctx context.Context,
+	validation *models.BasePolicyDocumentValidation,
+) error {
+	// Build Redis key using validation ID (no index calculation needed)
+	key := fmt.Sprintf("%s--BasePolicyDocumentValidation--%s",
+		validation.BasePolicyID, validation.ID)
+
+	slog.Info("Saving validation to Redis",
+		"base_policy_id", validation.BasePolicyID,
+		"validation_id", validation.ID,
+		"key", key)
+
+	// Serialize validation
+	validationBytes, err := utils.SerializeModel(validation)
+	if err != nil {
+		slog.Error("Failed to serialize validation",
+			"validation_id", validation.ID,
+			"error", err)
+		return fmt.Errorf("failed to serialize validation: %w", err)
+	}
+
+	// Save to Redis with TTL (24 hours)
+	ttl := 24 * time.Hour
+	if err := r.redisClient.Set(ctx, key, validationBytes, ttl).Err(); err != nil {
+		slog.Error("Failed to save validation to Redis",
+			"validation_id", validation.ID,
+			"key", key,
+			"error", err)
+		return fmt.Errorf("failed to save validation to Redis: %w", err)
+	}
+
+	slog.Info("Successfully saved validation to Redis",
+		"base_policy_id", validation.BasePolicyID,
+		"validation_id", validation.ID,
+		"key", key)
+
+	return nil
+}
+
+// GetValidationsFromRedis retrieves all validation records for a policy
+func (r *BasePolicyRepository) GetValidationsFromRedis(
+	ctx context.Context,
+	basePolicyID uuid.UUID,
+) ([]*models.BasePolicyDocumentValidation, error) {
+	pattern := fmt.Sprintf("%s--BasePolicyDocumentValidation--*", basePolicyID)
+
+	slog.Debug("Finding validation keys",
+		"base_policy_id", basePolicyID,
+		"pattern", pattern)
+
+	keys, err := r.FindKeysByPattern(ctx, pattern, "")
+	if err != nil {
+		slog.Error("Failed to find validation keys",
+			"base_policy_id", basePolicyID,
+			"pattern", pattern,
+			"error", err)
+		return nil, fmt.Errorf("failed to find validation keys: %w", err)
+	}
+
+	if len(keys) == 0 {
+		slog.Debug("No validations found in Redis",
+			"base_policy_id", basePolicyID)
+		return []*models.BasePolicyDocumentValidation{}, nil
+	}
+
+	validations := make([]*models.BasePolicyDocumentValidation, 0, len(keys))
+
+	for _, key := range keys {
+		validationBytes, err := r.GetTempBasePolicyModels(ctx, key)
+		if err != nil {
+			slog.Warn("Failed to get validation data",
+				"key", key,
+				"error", err)
+			continue
+		}
+
+		var validation models.BasePolicyDocumentValidation
+		if err := utils.DeserializeModel(validationBytes, &validation); err != nil {
+			slog.Warn("Failed to deserialize validation",
+				"key", key,
+				"error", err)
+			continue
+		}
+
+		validations = append(validations, &validation)
+	}
+
+	// Sort by validation timestamp for chronological order
+	sort.Slice(validations, func(i, j int) bool {
+		return validations[i].ValidationTimestamp < validations[j].ValidationTimestamp
+	})
+
+	slog.Info("Retrieved validations from Redis",
+		"base_policy_id", basePolicyID,
+		"validation_count", len(validations))
+
+	return validations, nil
+}
+
+// CreateBasePolicyDocumentValidationTx creates validation in a transaction
+func (r *BasePolicyRepository) CreateBasePolicyDocumentValidationTx(
+	tx *sqlx.Tx,
+	validation *models.BasePolicyDocumentValidation,
+) error {
+	if validation.ID == uuid.Nil {
+		validation.ID = uuid.New()
+	}
+
+	slog.Info("Creating validation in transaction",
+		"validation_id", validation.ID,
+		"base_policy_id", validation.BasePolicyID,
+		"validation_status", validation.ValidationStatus)
+
+	validation.CreatedAt = time.Now()
+
+	// Serialize JSONB fields
+	var mismatchesBytes, warningsBytes, recommendationsBytes, extractedParamsBytes []byte
+	var err error
+
+	if validation.Mismatches != nil {
+		mismatchesBytes, err = utils.SerializeMapToBytes(validation.Mismatches)
+		if err != nil {
+			return fmt.Errorf("failed to serialize mismatches: %w", err)
+		}
+	}
+
+	if validation.Warnings != nil {
+		warningsBytes, err = utils.SerializeMapToBytes(validation.Warnings)
+		if err != nil {
+			return fmt.Errorf("failed to serialize warnings: %w", err)
+		}
+	}
+
+	if validation.Recommendations != nil {
+		recommendationsBytes, err = utils.SerializeMapToBytes(validation.Recommendations)
+		if err != nil {
+			return fmt.Errorf("failed to serialize recommendations: %w", err)
+		}
+	}
+
+	if validation.ExtractedParameters != nil {
+		extractedParamsBytes, err = utils.SerializeMapToBytes(validation.ExtractedParameters)
+		if err != nil {
+			return fmt.Errorf("failed to serialize extracted parameters: %w", err)
+		}
+	}
+
+	query := `
+		INSERT INTO base_policy_document_validation (
+			id, base_policy_id, validation_timestamp, validation_status,
+			overall_score, total_checks, passed_checks, failed_checks,
+			warning_count, mismatches, warnings, recommendations,
+			extracted_parameters, validated_by, validation_notes, created_at
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+		)`
+
+	_, err = tx.ExecContext(context.Background(),
+		query,
+		validation.ID,
+		validation.BasePolicyID,
+		validation.ValidationTimestamp,
+		validation.ValidationStatus,
+		validation.OverallScore,
+		validation.TotalChecks,
+		validation.PassedChecks,
+		validation.FailedChecks,
+		validation.WarningCount,
+		mismatchesBytes,
+		warningsBytes,
+		recommendationsBytes,
+		extractedParamsBytes,
+		validation.ValidatedBy,
+		validation.ValidationNotes,
+		validation.CreatedAt,
+	)
+	if err != nil {
+		slog.Error("Failed to insert validation in transaction",
+			"validation_id", validation.ID,
+			"base_policy_id", validation.BasePolicyID,
+			"error", err)
+		return fmt.Errorf("failed to insert validation: %w", err)
+	}
+
+	slog.Info("Validation created in transaction",
+		"validation_id", validation.ID,
+		"base_policy_id", validation.BasePolicyID)
+
+	return nil
 }
