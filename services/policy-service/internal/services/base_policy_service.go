@@ -6,25 +6,30 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	minioSDK "github.com/minio/minio-go/v7"
 )
 
 type BasePolicyService struct {
 	basePolicyRepo *repository.BasePolicyRepository
 	dataSourceRepo *repository.DataSourceRepository
 	dataTierRepo   *repository.DataTierRepository
+	minioClient    *minio.MinioClient
 }
 
-func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository) *BasePolicyService {
+func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient) *BasePolicyService {
 	return &BasePolicyService{
 		basePolicyRepo: basePolicyRepo,
 		dataSourceRepo: dataSourceRepo,
 		dataTierRepo:   dataTierRepo,
+		minioClient:    minioClient,
 	}
 }
 
@@ -1078,4 +1083,204 @@ func (s *BasePolicyService) GetAllPolicyCreationResponse(ctx context.Context) (a
 		res = append(res, jsonFormat)
 	}
 	return res, nil
+}
+
+// ============================================================================
+// COMPLETE POLICY DETAIL SERVICE METHODS
+// ============================================================================
+
+// GetCompletePolicyDetail retrieves complete policy details with document
+func (s *BasePolicyService) GetCompletePolicyDetail(
+	ctx context.Context,
+	filter models.PolicyDetailFilterRequest,
+) (*models.CompletePolicyDetailResponse, error) {
+
+	slog.Info("Getting complete policy detail",
+		"id", filter.ID,
+		"provider_id", filter.ProviderID,
+		"crop_type", filter.CropType,
+		"status", filter.Status)
+
+	start := time.Now()
+
+	// Step 1: Get base policy and triggers
+	basePolicy, triggers, err := s.basePolicyRepo.GetCompletePolicyByFilter(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+
+	// Step 2: Calculate metadata
+	totalConditions := 0
+	for _, trigger := range triggers {
+		totalConditions += len(trigger.Conditions)
+	}
+
+	totalDataCost, err := s.basePolicyRepo.CalculateTotalBasePolicyDataCost(basePolicy.ID)
+	if err != nil {
+		slog.Warn("Failed to calculate total data cost",
+			"policy_id", basePolicy.ID,
+			"error", err)
+		totalDataCost = 0
+	}
+
+	dataSourceCount, err := s.basePolicyRepo.GetBasePolicyDataSourceCount(basePolicy.ID)
+	if err != nil {
+		slog.Warn("Failed to get data source count",
+			"policy_id", basePolicy.ID,
+			"error", err)
+		dataSourceCount = 0
+	}
+
+	metadata := models.PolicyDetailMetadata{
+		TotalTriggers:   len(triggers),
+		TotalConditions: totalConditions,
+		TotalDataCost:   totalDataCost,
+		DataSourceCount: dataSourceCount,
+		RetrievedAt:     time.Now(),
+	}
+
+	// Step 3: Get document info from MinIO
+	var documentInfo *models.PolicyDocumentInfo
+	if filter.IncludePDF {
+		documentInfo = s.getDocumentInfo(ctx, basePolicy, filter.PDFExpiryHours)
+	}
+
+	response := &models.CompletePolicyDetailResponse{
+		BasePolicy: *basePolicy,
+		Triggers:   triggers,
+		Document:   documentInfo,
+		Metadata:   metadata,
+	}
+
+	slog.Info("Successfully retrieved complete policy detail",
+		"policy_id", basePolicy.ID,
+		"triggers", metadata.TotalTriggers,
+		"conditions", metadata.TotalConditions,
+		"duration", time.Since(start))
+
+	return response, nil
+}
+
+// getDocumentInfo retrieves document metadata and presigned URL from MinIO
+func (s *BasePolicyService) getDocumentInfo(
+	ctx context.Context,
+	policy *models.BasePolicy,
+	expiryHours int,
+) *models.PolicyDocumentInfo {
+
+	docInfo := &models.PolicyDocumentInfo{
+		HasDocument: false,
+	}
+
+	// Check if template document URL exists
+	if policy.TemplateDocumentURL == nil || *policy.TemplateDocumentURL == "" {
+		slog.Info("No template document URL found for policy",
+			"policy_id", policy.ID)
+		return docInfo
+	}
+
+	docInfo.HasDocument = true
+	docInfo.DocumentURL = policy.TemplateDocumentURL
+	docInfo.BucketName = minio.Storage.PolicyDocuments
+
+	// Extract object name from URL
+	// Assuming URL format: "policy-documents/provider_id/policy_id/document.pdf"
+	// or just the object path without bucket name
+	objectName := s.extractObjectNameFromURL(*policy.TemplateDocumentURL)
+	docInfo.ObjectName = objectName
+
+	slog.Info("Processing document info",
+		"policy_id", policy.ID,
+		"bucket", docInfo.BucketName,
+		"object", objectName)
+
+	// Check if MinIO client is available
+	if s.minioClient == nil {
+		errMsg := "MinIO client not initialized"
+		docInfo.Error = &errMsg
+		slog.Error("MinIO client is nil",
+			"policy_id", policy.ID)
+		return docInfo
+	}
+
+	// Check if file exists in MinIO
+	exists, err := s.minioClient.FileExists(ctx, docInfo.BucketName, objectName)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to check file existence: %v", err)
+		docInfo.Error = &errMsg
+		slog.Error("MinIO file check failed",
+			"bucket", docInfo.BucketName,
+			"object", objectName,
+			"error", err)
+		return docInfo
+	}
+
+	if !exists {
+		errMsg := "Document file not found in storage"
+		docInfo.Error = &errMsg
+		slog.Warn("Document file not found",
+			"bucket", docInfo.BucketName,
+			"object", objectName)
+		return docInfo
+	}
+
+	// Get file metadata
+	minioClient := s.minioClient.GetClient()
+	objInfo, err := minioClient.StatObject(ctx, docInfo.BucketName, objectName, minioSDK.StatObjectOptions{})
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to get file metadata: %v", err)
+		docInfo.Error = &errMsg
+		slog.Error("MinIO stat object failed",
+			"bucket", docInfo.BucketName,
+			"object", objectName,
+			"error", err)
+		return docInfo
+	}
+
+	docInfo.ContentType = objInfo.ContentType
+	docInfo.FileSizeBytes = objInfo.Size
+
+	// Generate presigned URL
+	expiry := time.Duration(expiryHours) * time.Hour
+	presignedURL, err := s.minioClient.GetPresignedURL(ctx, docInfo.BucketName, objectName, expiry)
+	if err != nil {
+		errMsg := fmt.Sprintf("Failed to generate presigned URL: %v", err)
+		docInfo.Error = &errMsg
+		slog.Error("MinIO presigned URL generation failed",
+			"bucket", docInfo.BucketName,
+			"object", objectName,
+			"error", err)
+		return docInfo
+	}
+
+	docInfo.PresignedURL = &presignedURL
+	expiryTime := time.Now().Add(expiry)
+	docInfo.PresignedExpiry = &expiryTime
+
+	slog.Info("Successfully generated document info",
+		"policy_id", policy.ID,
+		"object", objectName,
+		"size_bytes", docInfo.FileSizeBytes,
+		"expiry_hours", expiryHours)
+
+	return docInfo
+}
+
+// extractObjectNameFromURL extracts object name from MinIO URL
+func (s *BasePolicyService) extractObjectNameFromURL(url string) string {
+	// Remove any leading/trailing whitespace
+	url = strings.TrimSpace(url)
+
+	// If URL contains bucket name prefix, remove it
+	// Example: "policy-documents/provider_001/policy_123/document.pdf"
+	// We want: "provider_001/policy_123/document.pdf"
+
+	// Check if URL starts with bucket name
+	bucketPrefix := minio.Storage.PolicyDocuments + "/"
+	if strings.HasPrefix(url, bucketPrefix) {
+		return strings.TrimPrefix(url, bucketPrefix)
+	}
+
+	// If no bucket prefix, return as is
+	return url
 }

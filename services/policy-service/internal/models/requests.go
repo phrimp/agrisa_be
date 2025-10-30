@@ -1,6 +1,7 @@
 package models
 
 import (
+	utils "agrisa_utils"
 	"errors"
 	"fmt"
 	"net/url"
@@ -629,4 +630,82 @@ type FailedPolicyInfo struct {
 	BasePolicyID uuid.UUID `json:"base_policy_id"`
 	ErrorMessage string    `json:"error_message"`
 	FailureStage string    `json:"failure_stage"` // "discovery", "validation", "commit", "cleanup"
+}
+
+// ============================================================================
+// COMPLETE POLICY DETAIL RESPONSE MODELS
+// ============================================================================
+
+// CompletePolicyDetailResponse - Main response wrapper for complete policy details
+type CompletePolicyDetailResponse struct {
+	BasePolicy BasePolicy              `json:"base_policy"`
+	Triggers   []TriggerWithConditions `json:"triggers"`
+	Document   *PolicyDocumentInfo     `json:"document,omitempty"`
+	Metadata   PolicyDetailMetadata    `json:"metadata"`
+}
+
+// TriggerWithConditions - Trigger with nested conditions
+type TriggerWithConditions struct {
+	ID                   uuid.UUID                    `json:"id"`
+	BasePolicyID         uuid.UUID                    `json:"base_policy_id"`
+	LogicalOperator      LogicalOperator              `json:"logical_operator"`
+	GrowthStage          *string                      `json:"growth_stage,omitempty"`
+	MonitorInterval      int                          `json:"monitor_interval"`
+	MonitorFrequencyUnit MonitorFrequency             `json:"monitor_frequency_unit"`
+	BlackoutPeriods      utils.JSONMap                `json:"blackout_periods,omitempty"`
+	CreatedAt            time.Time                    `json:"created_at"`
+	UpdatedAt            time.Time                    `json:"updated_at"`
+	Conditions           []BasePolicyTriggerCondition `json:"conditions"`
+}
+
+// PolicyDocumentInfo - Document metadata and access info from MinIO
+type PolicyDocumentInfo struct {
+	HasDocument     bool       `json:"has_document"`
+	DocumentURL     *string    `json:"document_url,omitempty"`
+	PresignedURL    *string    `json:"presigned_url,omitempty"`
+	PresignedExpiry *time.Time `json:"presigned_url_expiry,omitempty"`
+	BucketName      string     `json:"bucket_name,omitempty"`
+	ObjectName      string     `json:"object_name,omitempty"`
+	ContentType     string     `json:"content_type,omitempty"`
+	FileSizeBytes   int64      `json:"file_size_bytes,omitempty"`
+	Error           *string    `json:"error,omitempty"`
+}
+
+// PolicyDetailMetadata - Summary statistics for policy details
+type PolicyDetailMetadata struct {
+	TotalTriggers   int       `json:"total_triggers"`
+	TotalConditions int       `json:"total_conditions"`
+	TotalDataCost   float64   `json:"total_data_cost"`
+	DataSourceCount int       `json:"data_source_count"`
+	RetrievedAt     time.Time `json:"retrieved_at"`
+}
+
+// PolicyDetailFilterRequest - Query parameters for filtering policy details
+type PolicyDetailFilterRequest struct {
+	ID             *uuid.UUID       `query:"id"`
+	ProviderID     string           `query:"provider_id"`
+	CropType       string           `query:"crop_type"`
+	Status         BasePolicyStatus `query:"status"`
+	IncludePDF     bool             `query:"include_pdf"`
+	PDFExpiryHours int              `query:"pdf_expiry_hours"`
+}
+
+// Validate validates the filter request
+func (r *PolicyDetailFilterRequest) Validate() error {
+	// At least one filter required
+	if r.ID == nil && r.ProviderID == "" && r.CropType == "" && r.Status == "" {
+		return fmt.Errorf("at least one filter parameter is required (id, provider_id, crop_type, or status)")
+	}
+
+	// Set defaults
+	if r.PDFExpiryHours <= 0 {
+		r.PDFExpiryHours = 24 // Default 24 hours
+	}
+
+	// Validate PDF expiry hours range (1-168 hours = 1 week max)
+	if r.PDFExpiryHours > 168 {
+		return fmt.Errorf("pdf_expiry_hours must be between 1 and 168 hours")
+	}
+
+	return nil
 }

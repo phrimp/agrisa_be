@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"policy-service/internal/config"
+	"policy-service/internal/database/minio"
 	"policy-service/internal/database/postgres"
 	"policy-service/internal/database/redis"
 	"policy-service/internal/handlers"
@@ -86,6 +87,14 @@ func main() {
 		log.Printf("error connect to redis: %s", err)
 	}
 
+	// Initialize MinIO client
+	minioClient, err := minio.NewMinioClient(cfg.MinioCfg)
+	if err != nil {
+		log.Printf("error initializing MinIO client: %s", err)
+		log.Println("Warning: MinIO features will be disabled")
+		minioClient = nil // Continue without MinIO
+	}
+
 	// Initialize repositories
 	dataTierRepo := repository.NewDataTierRepository(db)
 	basePolicyRepo := repository.NewBasePolicyRepository(db, redisClient.GetClient())
@@ -94,7 +103,7 @@ func main() {
 	// Initialize services
 	dataTierService := services.NewDataTierService(dataTierRepo)
 	dataSourceService := services.NewDataSourceService(dataSourceRepo)
-	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo)
+	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient)
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService)
 
 	// Expiration Listener

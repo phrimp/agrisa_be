@@ -1367,3 +1367,247 @@ func (r *BasePolicyRepository) GetTemplateDocumentURL(id uuid.UUID) (*string, er
 
 	return url, nil
 }
+
+// ============================================================================
+// COMPLETE POLICY DETAIL RETRIEVAL METHODS
+// ============================================================================
+
+// GetCompletePolicyByFilter retrieves complete policy details with filters
+func (r *BasePolicyRepository) GetCompletePolicyByFilter(
+	ctx context.Context,
+	filter models.PolicyDetailFilterRequest,
+) (*models.BasePolicy, []models.TriggerWithConditions, error) {
+
+	slog.Info("Retrieving complete policy with filters",
+		"id", filter.ID,
+		"provider_id", filter.ProviderID,
+		"crop_type", filter.CropType,
+		"status", filter.Status)
+
+	start := time.Now()
+
+	// Step 1: Get base policy
+	var policy models.BasePolicy
+	query := `
+		SELECT
+			id, insurance_provider_id, product_name, product_code, product_description,
+			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
+			is_per_hectare, premium_base_rate, max_premium_payment_prolong,
+			fix_payout_amount, is_payout_per_hectare, over_threshold_multiplier,
+			payout_base_rate, payout_cap, enrollment_start_day, enrollment_end_day,
+			auto_renewal, renewal_discount_rate, base_policy_invalid_date,
+			insurance_valid_from_day, insurance_valid_to_day, status,
+			template_document_url, document_validation_status,
+			document_validation_score, important_additional_information,
+			created_at, updated_at, created_by, cancel_premium_rate
+		FROM base_policy
+		WHERE 1=1`
+
+	args := []interface{}{}
+	argPos := 1
+
+	if filter.ID != nil {
+		query += fmt.Sprintf(" AND id = $%d", argPos)
+		args = append(args, *filter.ID)
+		argPos++
+	}
+
+	if filter.ProviderID != "" {
+		query += fmt.Sprintf(" AND insurance_provider_id = $%d", argPos)
+		args = append(args, filter.ProviderID)
+		argPos++
+	}
+
+	if filter.CropType != "" {
+		query += fmt.Sprintf(" AND crop_type = $%d", argPos)
+		args = append(args, filter.CropType)
+		argPos++
+	}
+
+	if filter.Status != "" {
+		query += fmt.Sprintf(" AND status = $%d", argPos)
+		args = append(args, filter.Status)
+		argPos++
+	}
+
+	query += " LIMIT 1"
+
+	err := r.db.Get(&policy, query, args...)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			slog.Warn("Base policy not found with filters",
+				"id", filter.ID,
+				"provider_id", filter.ProviderID)
+			return nil, nil, fmt.Errorf("base policy not found")
+		}
+		slog.Error("Failed to get base policy", "error", err)
+		return nil, nil, fmt.Errorf("failed to get base policy: %w", err)
+	}
+
+	// Step 2: Get triggers with conditions
+	triggers, err := r.GetTriggersWithConditionsByPolicyID(ctx, policy.ID)
+	if err != nil {
+		slog.Error("Failed to get triggers with conditions",
+			"policy_id", policy.ID,
+			"error", err)
+		return nil, nil, fmt.Errorf("failed to get triggers: %w", err)
+	}
+
+	slog.Info("Successfully retrieved complete policy",
+		"policy_id", policy.ID,
+		"triggers", len(triggers),
+		"duration", time.Since(start))
+
+	return &policy, triggers, nil
+}
+
+// GetTriggersWithConditionsByPolicyID retrieves triggers with nested conditions
+func (r *BasePolicyRepository) GetTriggersWithConditionsByPolicyID(
+	ctx context.Context,
+	policyID uuid.UUID,
+) ([]models.TriggerWithConditions, error) {
+
+	type TriggerConditionRow struct {
+		// Trigger fields
+		TriggerID            uuid.UUID               `db:"trigger_id"`
+		BasePolicyID         uuid.UUID               `db:"base_policy_id"`
+		LogicalOperator      models.LogicalOperator  `db:"logical_operator"`
+		GrowthStage          *string                 `db:"growth_stage"`
+		MonitorInterval      int                     `db:"monitor_interval"`
+		MonitorFrequencyUnit models.MonitorFrequency `db:"monitor_frequency_unit"`
+		BlackoutPeriods      utils.JSONMap           `db:"blackout_periods"`
+		TriggerCreatedAt     time.Time               `db:"trigger_created_at"`
+		TriggerUpdatedAt     time.Time               `db:"trigger_updated_at"`
+
+		// Condition fields (nullable for triggers without conditions)
+		ConditionID            *uuid.UUID                      `db:"condition_id"`
+		ConditionTriggerID     *uuid.UUID                      `db:"condition_trigger_id"`
+		DataSourceID           *uuid.UUID                      `db:"data_source_id"`
+		ThresholdOperator      *models.ThresholdOperator       `db:"threshold_operator"`
+		ThresholdValue         *float64                        `db:"threshold_value"`
+		EarlyWarningThreshold  *float64                        `db:"early_warning_threshold"`
+		AggregationFunction    *models.AggregationFunction     `db:"aggregation_function"`
+		AggregationWindowDays  *int                            `db:"aggregation_window_days"`
+		ConsecutiveRequired    *bool                           `db:"consecutive_required"`
+		IncludeComponent       *bool                           `db:"include_component"`
+		BaselineWindowDays     *int                            `db:"baseline_window_days"`
+		BaselineFunction       *models.AggregationFunction     `db:"baseline_function"`
+		ValidationWindowDays   *int                            `db:"validation_window_days"`
+		ConditionOrder         *int                            `db:"condition_order"`
+		BaseCost               *float64                        `db:"base_cost"`
+		CategoryMultiplier     *float64                        `db:"category_multiplier"`
+		TierMultiplier         *float64                        `db:"tier_multiplier"`
+		CalculatedCost         *float64                        `db:"calculated_cost"`
+		ConditionCreatedAt     *time.Time                      `db:"condition_created_at"`
+	}
+
+	query := `
+		SELECT
+			bt.id as trigger_id,
+			bt.base_policy_id,
+			bt.logical_operator,
+			bt.growth_stage,
+			bt.monitor_interval,
+			bt.monitor_frequency_unit,
+			bt.blackout_periods,
+			bt.created_at as trigger_created_at,
+			bt.updated_at as trigger_updated_at,
+
+			btc.id as condition_id,
+			btc.base_policy_trigger_id as condition_trigger_id,
+			btc.data_source_id,
+			btc.threshold_operator,
+			btc.threshold_value,
+			btc.early_warning_threshold,
+			btc.aggregation_function,
+			btc.aggregation_window_days,
+			btc.consecutive_required,
+			btc.include_component,
+			btc.baseline_window_days,
+			btc.baseline_function,
+			btc.validation_window_days,
+			btc.condition_order,
+			btc.base_cost,
+			btc.category_multiplier,
+			btc.tier_multiplier,
+			btc.calculated_cost,
+			btc.created_at as condition_created_at
+		FROM base_policy_trigger bt
+		LEFT JOIN base_policy_trigger_condition btc ON bt.id = btc.base_policy_trigger_id
+		WHERE bt.base_policy_id = $1
+		ORDER BY bt.created_at, btc.condition_order`
+
+	var rows []TriggerConditionRow
+	err := r.db.Select(&rows, query, policyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query triggers with conditions: %w", err)
+	}
+
+	// Group results by trigger
+	triggerMap := make(map[uuid.UUID]*models.TriggerWithConditions)
+	var triggerOrder []uuid.UUID
+
+	for _, row := range rows {
+		// Create trigger if not exists
+		if _, exists := triggerMap[row.TriggerID]; !exists {
+			triggerMap[row.TriggerID] = &models.TriggerWithConditions{
+				ID:                   row.TriggerID,
+				BasePolicyID:         row.BasePolicyID,
+				LogicalOperator:      row.LogicalOperator,
+				GrowthStage:          row.GrowthStage,
+				MonitorInterval:      row.MonitorInterval,
+				MonitorFrequencyUnit: row.MonitorFrequencyUnit,
+				BlackoutPeriods:      row.BlackoutPeriods,
+				CreatedAt:            row.TriggerCreatedAt,
+				UpdatedAt:            row.TriggerUpdatedAt,
+				Conditions:           []models.BasePolicyTriggerCondition{},
+			}
+			triggerOrder = append(triggerOrder, row.TriggerID)
+		}
+
+		// Add condition if exists
+		if row.ConditionID != nil {
+			condition := models.BasePolicyTriggerCondition{
+				ID:                    *row.ConditionID,
+				BasePolicyTriggerID:   *row.ConditionTriggerID,
+				DataSourceID:          *row.DataSourceID,
+				ThresholdOperator:     *row.ThresholdOperator,
+				ThresholdValue:        *row.ThresholdValue,
+				AggregationFunction:   *row.AggregationFunction,
+				AggregationWindowDays: *row.AggregationWindowDays,
+				ConsecutiveRequired:   *row.ConsecutiveRequired,
+				IncludeComponent:      *row.IncludeComponent,
+				ValidationWindowDays:  *row.ValidationWindowDays,
+				ConditionOrder:        *row.ConditionOrder,
+				BaseCost:              *row.BaseCost,
+				CategoryMultiplier:    *row.CategoryMultiplier,
+				TierMultiplier:        *row.TierMultiplier,
+				CalculatedCost:        *row.CalculatedCost,
+				CreatedAt:             *row.ConditionCreatedAt,
+			}
+
+			if row.EarlyWarningThreshold != nil {
+				condition.EarlyWarningThreshold = row.EarlyWarningThreshold
+			}
+			if row.BaselineWindowDays != nil {
+				condition.BaselineWindowDays = row.BaselineWindowDays
+			}
+			if row.BaselineFunction != nil {
+				condition.BaselineFunction = row.BaselineFunction
+			}
+
+			triggerMap[row.TriggerID].Conditions = append(
+				triggerMap[row.TriggerID].Conditions,
+				condition,
+			)
+		}
+	}
+
+	// Convert map to slice maintaining order
+	result := make([]models.TriggerWithConditions, 0, len(triggerOrder))
+	for _, triggerID := range triggerOrder {
+		result = append(result, *triggerMap[triggerID])
+	}
+
+	return result, nil
+}

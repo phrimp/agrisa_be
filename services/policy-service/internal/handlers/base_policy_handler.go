@@ -1,9 +1,11 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"policy-service/internal/models"
 	"policy-service/internal/services"
+	"strings"
 	"time"
 
 	utils "agrisa_utils"
@@ -35,6 +37,7 @@ func (bph *BasePolicyHandler) Register(app *fiber.App) {
 	policyGroup.Post("/validate", bph.ValidatePolicy)                              // POST /base-policies/validate - Validate policy & auto-commit
 	policyGroup.Post("/commit", bph.CommitPolicies)                                // POST /base-policies/commit - Manual commit policies to DB
 	policyGroup.Get("/active", bph.GetAllActivePolicy)
+	policyGroup.Get("/detail", bph.GetCompletePolicyDetail)                        // GET  /base-policies/detail - Get complete policy details with PDF
 
 	// Utility routes
 	policyGroup.Get("/count", bph.GetBasePolicyCount)                                 // GET  /base-policies/count - Total policy count
@@ -253,4 +256,65 @@ func (bph *BasePolicyHandler) UpdateBasePolicyValidationStatus(c fiber.Ctx) erro
 		"validation_score":  updateReq.ValidationScore,
 		"updated_at":        time.Now(),
 	}))
+}
+
+// ============================================================================
+// COMPLETE POLICY DETAIL OPERATION
+// ============================================================================
+
+// GetCompletePolicyDetail retrieves complete base policy details with document
+func (bph *BasePolicyHandler) GetCompletePolicyDetail(c fiber.Ctx) error {
+	var filter models.PolicyDetailFilterRequest
+
+	// Parse UUID if provided
+	if idParam := c.Query("id"); idParam != "" {
+		parsedID, err := uuid.Parse(idParam)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(
+				utils.CreateErrorResponse("INVALID_UUID",
+					"Invalid policy ID format"))
+		}
+		filter.ID = &parsedID
+	}
+
+	// Parse other query parameters
+	filter.ProviderID = c.Query("provider_id")
+	filter.CropType = c.Query("crop_type")
+	if statusParam := c.Query("status"); statusParam != "" {
+		filter.Status = models.BasePolicyStatus(statusParam)
+	}
+
+	// Parse boolean parameters
+	includePDFParam := c.Query("include_pdf", "true")
+	filter.IncludePDF = includePDFParam != "false" && includePDFParam != "0"
+
+	// Parse PDF expiry hours (default 24)
+	filter.PDFExpiryHours = 24 // Default 24 hours
+	if expiryParam := c.Query("pdf_expiry_hours"); expiryParam != "" {
+		var expiry int
+		if _, err := fmt.Sscanf(expiryParam, "%d", &expiry); err == nil && expiry > 0 {
+			filter.PDFExpiryHours = expiry
+		}
+	}
+
+	// Validate filter
+	if err := filter.Validate(); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("VALIDATION_FAILED", err.Error()))
+	}
+
+	// Get complete policy detail
+	detail, err := bph.basePolicyService.GetCompletePolicyDetail(c.Context(), filter)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return c.Status(http.StatusNotFound).JSON(
+				utils.CreateErrorResponse("POLICY_NOT_FOUND",
+					"No base policy found matching the criteria"))
+		}
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED",
+				fmt.Sprintf("Failed to retrieve policy details: %v", err)))
+	}
+
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(detail))
 }
