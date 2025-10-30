@@ -115,6 +115,11 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 			slog.Error("commit temp policy data failed", "error", err)
 			return nil, fmt.Errorf("commit temp policy data failed: %w", err)
 		}
+		if result.TotalCommitted == 0 {
+			slog.Error("commit temp policy data failed", "detail", result)
+			return nil, fmt.Errorf("commit temp policy data failed: %v", result)
+		}
+
 		slog.Info("commit temp policy data successfully", "result", result)
 
 		// Save validation record
