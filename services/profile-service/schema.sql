@@ -44,7 +44,7 @@ CREATE TABLE insurance_partners (
     status VARCHAR(50) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'active', 'suspended', 'terminated', 'under_review')),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_updated_by_id UUID,
+    last_updated_by_id VARCHAR,
     last_updated_by_name VARCHAR,
     legal_document_urls TEXT[] DEFAULT ARRAY[]::TEXT[]
 );

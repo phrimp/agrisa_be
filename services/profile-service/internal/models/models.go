@@ -52,7 +52,7 @@ type InsurancePartner struct {
 	Status                     string         `db:"status"`
 	CreatedAt                  time.Time      `db:"created_at"`
 	UpdatedAt                  time.Time      `db:"updated_at"`
-	LastUpdatedByID            *uuid.UUID     `db:"last_updated_by_id"`
+	LastUpdatedByID            *string        `db:"last_updated_by_id"`
 	LastUpdatedByName          *string        `db:"last_updated_by_name"`
 	LegalDocumentURLs          pq.StringArray `db:"legal_document_urls"`
 }
