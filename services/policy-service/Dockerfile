@@ -29,6 +29,9 @@ RUN chown -R appuser:appgroup /app
 # Create log directory
 RUN mkdir -p /agrisa/log/policy_service
 RUN chown -R appuser:appgroup /agrisa/log/policy_service
+# Create data directory for scheduler files
+RUN mkdir -p /data
+RUN chown -R appuser:appgroup /data
 USER appuser
 # Command to run
 CMD ["./main"]

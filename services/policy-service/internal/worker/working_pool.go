@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,6 +39,10 @@ func NewWorkingPool(
 	}
 }
 
+func (p *WorkingPool) GetName() string {
+	return strings.Split(p.QueueName, ":")[0]
+}
+
 func (p *WorkingPool) RegisterJob(
 	jobType string,
 	jobFunc func(params map[string]any) error,
@@ -56,6 +61,13 @@ func (p *WorkingPool) SubmitJob(ctx context.Context, job JobPayload) error {
 
 func (p *WorkingPool) Start(ctx context.Context, managerWg *sync.WaitGroup) {
 	defer managerWg.Done()
+
+	// Skip if Redis client is not available (e.g., in tests)
+	if p.RedisClient == nil {
+		slog.Warn("Working pool skipping start: Redis client not available", "queue_name", p.QueueName)
+		<-ctx.Done()
+		return
+	}
 
 	slog.Info("Working pool starting",
 		"queue_name", p.QueueName,
@@ -270,6 +282,11 @@ func (p *WorkingPool) handleJobResult(
 // requeueStaleJobs moves any jobs from "running" back to "pending"
 // on startup. This handles jobs that were lost during a crash.
 func (p *WorkingPool) requeueStaleJobs(ctx context.Context) {
+	// Skip if Redis client is not available (e.g., in tests)
+	if p.RedisClient == nil {
+		return
+	}
+
 	requeueCount := 0
 	for {
 		// Atomically move a job from "running" to "pending".

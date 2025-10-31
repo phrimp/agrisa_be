@@ -731,7 +731,7 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 			// Non-critical: continue without validations
 		} else if len(validations) > 0 {
 			completePolicy.Validations = validations
-			slog.Debug("Retrieved validations for policy",
+			slog.Info("Retrieved validations for policy",
 				"base_policy_id", basePolicy.ID,
 				"validation_count", len(validations))
 		}

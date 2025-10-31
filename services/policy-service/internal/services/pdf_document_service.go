@@ -150,7 +150,7 @@ func validateInputs(pdfData []byte, values map[string]string) error {
 		if strings.TrimSpace(key) == "" {
 			return errors.New("empty key in values map")
 		}
-		slog.Debug("Validating value", "key", key, "value_length", len(value))
+		slog.Info("Validating value", "key", key, "value_length", len(value))
 	}
 
 	return nil

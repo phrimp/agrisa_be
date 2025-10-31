@@ -1,9 +1,11 @@
 package services
 
 import (
+	utils "agrisa_utils"
 	"context"
 	"fmt"
 	"log/slog"
+	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"strings"
 	"sync"
@@ -15,6 +17,7 @@ import (
 // PolicyExpirationService handles auto-commit of expired archive policies
 type PolicyExpirationService struct {
 	redisClient   *redis.Client
+	minioClient   *minio.MinioClient
 	policyService *BasePolicyService
 	stopChannel   chan struct{}
 	stats         *ExpirationStats
@@ -30,8 +33,9 @@ type ExpirationStats struct {
 }
 
 // NewPolicyExpirationService creates a new expiration service instance
-func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePolicyService) *PolicyExpirationService {
+func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePolicyService, minioClient *minio.MinioClient) *PolicyExpirationService {
 	return &PolicyExpirationService{
+		minioClient:   minioClient,
 		redisClient:   redisClient,
 		policyService: policyService,
 		stopChannel:   make(chan struct{}),
@@ -74,7 +78,36 @@ func (s *PolicyExpirationService) Stop() {
 // isArchivePolicyKey checks if the expired key is a BasePolicy with archive:true
 func (s *PolicyExpirationService) isArchivePolicyKey(expiredKey string) bool {
 	// Pattern: {provider}--{policyID}--BasePolicy--archive:true
-	return strings.Contains(expiredKey, "--BasePolicy--archive:true--COMMIT_EVENT")
+	if strings.Contains(expiredKey, "--BasePolicy--archive:true--COMMIT_EVENT") {
+		return true
+	}
+	expiredKey = strings.Split(expiredKey, "--COMMIT_EVENT")[0]
+	go s.processUnArchivedExpiredPolicy(context.Background(), expiredKey)
+	return false
+}
+
+func (s *PolicyExpirationService) processUnArchivedExpiredPolicy(ctx context.Context, expiredKey string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("Panic recovery", "panic", r)
+		}
+	}()
+	policyData, err := s.policyService.basePolicyRepo.GetTempBasePolicyModels(ctx, expiredKey)
+	if err != nil {
+		slog.Error("Failed to extract Policy data", "error", err)
+		return
+	}
+	var policy models.BasePolicy
+	err = utils.DeserializeModel(policyData, &policy)
+	if err != nil {
+		slog.Error("Failed to deserialze policy model", "error", err)
+		return
+	}
+
+	err = s.minioClient.DeleteFile(ctx, minio.Storage.PolicyDocuments, *policy.TemplateDocumentURL)
+	if err != nil {
+		slog.Error("Failed to delete Temp Policy Document", "error", err)
+	}
 }
 
 // processExpiredPolicy handles a single expired archive policy

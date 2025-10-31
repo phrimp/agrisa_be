@@ -125,7 +125,7 @@ services:
     ports:
       - ":6379"
     volumes:
-      - redis_data:/data
+      - ./data/redis:/data
       - ./logs/redis:/var/log/redis
     environment:
       - REDIS_LOG_LEVEL=${REDIS_LOG_LEVEL:-notice}
@@ -467,6 +467,7 @@ services:
     volumes:
       - ./logs/policy_service:/agrisa/log/policy_service
       - ./services/policy-service/schema.sql:/app/schema.sql:ro
+      - ./services/policy-service/data:/data
     networks:
       - traefik-net
     depends_on:

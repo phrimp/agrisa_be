@@ -99,12 +99,17 @@ func main() {
 	dataTierRepo := repository.NewDataTierRepository(db)
 	basePolicyRepo := repository.NewBasePolicyRepository(db, redisClient.GetClient())
 	dataSourceRepo := repository.NewDataSourceRepository(db)
+	registeredPolicyRepo := repository.NewRegisteredPolicyRepository(db)
+
+	// Initialize WorkerManagerV2
+	workerManager := worker.NewWorkerManagerV2(db, redisClient)
 
 	// Initialize services
 	dataTierService := services.NewDataTierService(dataTierRepo)
 	dataSourceService := services.NewDataSourceService(dataSourceRepo)
 	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient)
-	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService)
+	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, workerManager)
+	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
 
 	// Expiration Listener
 	ctx, cancel := context.WithCancel(context.Background())
@@ -116,13 +121,20 @@ func main() {
 		}
 	}()
 
-	workerManager := worker.NewWorkerManager()
-	go workerManager.Run()
+	// Register job handlers with WorkerManagerV2
+	workerManager.RegisterJobHandler("fetch-farm-monitoring-data", registeredPolicyService.FetchFarmMonitoringDataJob)
+	workerManager.RegisterJobHandler("document-validation", basePolicyService.AIPolicyValidationJob)
+
+	// Recover active policy worker infrastructure after restart
+	if err := registeredPolicyService.RecoverActivePolicies(ctx); err != nil {
+		log.Printf("Warning: failed to recover active policies: %v", err)
+		// Non-fatal: continue startup even if recovery fails
+	}
 
 	// Initialize handlers
 	dataTierHandler := handlers.NewDataTierHandler(dataTierService)
 	dataSourceHandler := handlers.NewDataSourceHandler(dataSourceService)
-	basePolicyHandler := handlers.NewBasePolicyHandler(basePolicyService)
+	basePolicyHandler := handlers.NewBasePolicyHandler(basePolicyService, minioClient)
 
 	// Register routes
 	dataTierHandler.Register(app)
@@ -144,4 +156,5 @@ func main() {
 
 	<-shutdownChan
 	log.Println("Shutting down server...")
+	workerManager.Shutdown()
 }

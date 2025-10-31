@@ -175,3 +175,7 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 
 	return validation, nil
 }
+
+func (s *BasePolicyService) AIPolicyValidationJob(params map[string]any) error {
+	return nil
+}

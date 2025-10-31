@@ -29,4 +29,6 @@ type Pool interface {
 		jobType string,
 		jobFunc func(params map[string]any) error,
 	)
+
+	GetName() string
 }
