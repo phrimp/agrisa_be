@@ -241,4 +241,4 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 // BUSINESS PROCESS
 // ============================================================================
 
-func (s *RegisteredPolicyService) RegisterAPolicy()
+func (s *RegisteredPolicyService) RegisterAPolicy() {}

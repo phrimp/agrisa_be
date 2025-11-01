@@ -65,7 +65,7 @@ func (s *JobScheduler) submitJobs(ctx context.Context) {
 	copy(jobsToRun, s.Jobs)
 	s.mu.RUnlock()
 
-	newJobs := make([]JobPayload, len(jobsToRun))
+	newJobs := make([]JobPayload, 0, len(jobsToRun))
 	for _, job := range jobsToRun {
 		job.JobID = uuid.NewString()
 		job.RetryCount = 0

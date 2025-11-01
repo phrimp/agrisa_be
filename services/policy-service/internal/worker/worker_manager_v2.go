@@ -176,18 +176,18 @@ func (m *WorkerManagerV2) CreatePolicyWorkerInfrastructure(
 		// TODO: Add jobs for each data source endpoint
 		// This requires loading trigger conditions which reference data sources
 		// For now, we'll create a placeholder job that can be populated later
-		job := JobPayload{
-			JobID: uuid.NewString(),
-			Type:  "fetch-farm-monitoring-data",
-			Params: map[string]any{
-				"policy_id":      registeredPolicy.ID.String(),
-				"base_policy_id": basePolicy.ID.String(),
-				"farm_id":        registeredPolicy.FarmID.String(),
-				"trigger_id":     basePolicyTrigger.ID.String(),
-			},
-			MaxRetries: 3,
-		}
-		scheduler.AddJob(job)
+		//job := JobPayload{
+		//	JobID: uuid.NewString(),
+		//	Type:  "fetch-farm-monitoring-data",
+		//	Params: map[string]any{
+		//		"policy_id":      registeredPolicy.ID.String(),
+		//		"base_policy_id": basePolicy.ID.String(),
+		//		"farm_id":        registeredPolicy.FarmID.String(),
+		//		"trigger_id":     basePolicyTrigger.ID.String(),
+		//	},
+		//	MaxRetries: 3,
+		//}
+		//scheduler.AddJob(job)
 
 		schedulerState := &WorkerSchedulerState{
 			PolicyID:             registeredPolicy.ID,
@@ -404,9 +404,10 @@ func (m *WorkerManagerV2) CreateAIWorkerInfrastructure(ctx context.Context) (*uu
 
 	job := JobPayload{
 		JobID:      uuid.NewString(),
-		Type:       "AI-JobScheduler",
+		Type:       "document-validation",
 		Params:     map[string]any{},
 		MaxRetries: 100,
+		OneTime:    true,
 	}
 	scheduler.AddJob(job)
 	aiUUID := uuid.New()

@@ -467,7 +467,6 @@ services:
     volumes:
       - ./logs/policy_service:/agrisa/log/policy_service
       - ./services/policy-service/schema.sql:/app/schema.sql:ro
-      - ./services/policy-service/data:/data
     networks:
       - traefik-net
     depends_on:

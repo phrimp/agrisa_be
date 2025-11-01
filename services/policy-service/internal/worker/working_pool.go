@@ -115,13 +115,16 @@ func (p *WorkingPool) worker(ctx context.Context, wg *sync.WaitGroup, id int) {
 
 		if err == redis.Nil {
 			// No job, just a timeout. Check for shutdown.
+			continue
 		} else if err != nil && err != context.Canceled {
 			slog.Error("Redis error while fetching job",
 				"worker_id", id,
 				"queue_name", p.QueueName,
 				"error", err)
 			time.Sleep(1 * time.Second)
+			continue
 		} else if err == context.Canceled {
+			return
 			// Context was canceled, stop trying to get jobs.
 		}
 
@@ -129,6 +132,7 @@ func (p *WorkingPool) worker(ctx context.Context, wg *sync.WaitGroup, id int) {
 		if checkErr != nil {
 			fmt.Printf("[Worker %d] Failed to check quota: %v. Re-queueing job.\n", id, checkErr)
 			p.requeueJob(ctx, jobPayload) // Put it back in pending
+			continue
 		}
 
 		if !canRun {
@@ -136,12 +140,14 @@ func (p *WorkingPool) worker(ctx context.Context, wg *sync.WaitGroup, id int) {
 			p.requeueJob(ctx, jobPayload)
 			// Sleep to not to spam quota check
 			time.Sleep(1 * time.Hour)
+			continue
 		}
 
 		fmt.Printf("[Worker %d] Quota OK. Waiting for rate-limit token...\n", id)
 		if err := p.limiter.Wait(ctx); err != nil {
 			fmt.Printf("[Worker %d] Canceled while waiting for token. Re-queueing.\n", id)
 			p.requeueJob(ctx, jobPayload)
+			continue
 
 		}
 
@@ -203,6 +209,7 @@ func (p *WorkingPool) dispatchJob(ctx context.Context, payload string, workerID 
 		}
 	}()
 
+	slog.Info("payload string", "payload", payload)
 	var jobData JobPayload
 	if err := json.Unmarshal([]byte(payload), &jobData); err != nil {
 		slog.Error("Failed to unmarshal job payload",
