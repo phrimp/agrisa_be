@@ -91,7 +91,7 @@ type BasePolicyDocumentValidation struct {
 	BasePolicyID        uuid.UUID        `json:"base_policy_id" db:"base_policy_id"`
 	ValidationTimestamp int64            `json:"validation_timestamp" db:"validation_timestamp"`
 	ValidationStatus    ValidationStatus `json:"validation_status" db:"validation_status"`
-	OverallScore        *float64         `json:"overall_score,omitempty" db:"overall_score"`
+	OverallScore        *float64         `json:"overall_score,omitempty" db:"overall_score"` // Deprecated
 	TotalChecks         int              `json:"total_checks" db:"total_checks"`
 	PassedChecks        int              `json:"passed_checks" db:"passed_checks"`
 	FailedChecks        int              `json:"failed_checks" db:"failed_checks"`

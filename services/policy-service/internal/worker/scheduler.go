@@ -46,7 +46,10 @@ func (s *JobScheduler) Run(ctx context.Context) {
 	for {
 		select {
 		case <-s.Ticker.C:
-			slog.Info("Scheduler ticker fired, submitting jobs", "scheduler_name", s.Name, "job_count", len(s.Jobs))
+			s.mu.RLock()
+			jobCount := len(s.Jobs)
+			s.mu.RUnlock()
+			slog.Info("...", "job_count", jobCount)
 			s.submitJobs(ctx)
 
 		case <-ctx.Done():
@@ -62,6 +65,7 @@ func (s *JobScheduler) submitJobs(ctx context.Context) {
 	copy(jobsToRun, s.Jobs)
 	s.mu.RUnlock()
 
+	newJobs := make([]JobPayload, len(jobsToRun))
 	for _, job := range jobsToRun {
 		job.JobID = uuid.NewString()
 		job.RetryCount = 0
@@ -81,5 +85,11 @@ func (s *JobScheduler) submitJobs(ctx context.Context) {
 				"job_type", job.Type)
 		}
 		cancel()
+		if !job.OneTime {
+			newJobs = append(newJobs, job)
+		}
 	}
+	s.mu.Lock()
+	s.Jobs = newJobs
+	s.mu.Unlock()
 }

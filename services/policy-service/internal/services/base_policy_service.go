@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"policy-service/internal/ai/gemini"
 	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
@@ -22,14 +23,16 @@ type BasePolicyService struct {
 	dataSourceRepo *repository.DataSourceRepository
 	dataTierRepo   *repository.DataTierRepository
 	minioClient    *minio.MinioClient
+	geminiClient   *gemini.GeminiClient
 }
 
-func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient) *BasePolicyService {
+func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient, geminiClient *gemini.GeminiClient) *BasePolicyService {
 	return &BasePolicyService{
 		basePolicyRepo: basePolicyRepo,
 		dataSourceRepo: dataSourceRepo,
 		dataTierRepo:   dataTierRepo,
 		minioClient:    minioClient,
+		geminiClient:   geminiClient,
 	}
 }
 

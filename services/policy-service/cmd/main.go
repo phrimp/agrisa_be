@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"policy-service/internal/ai/gemini"
 	"policy-service/internal/config"
 	"policy-service/internal/database/minio"
 	"policy-service/internal/database/postgres"
@@ -87,6 +89,11 @@ func main() {
 		log.Printf("error connect to redis: %s", err)
 	}
 
+	geminiClient, err := gemini.NewGenAIClient(cfg.GeminiAPICfg.APIKey, cfg.GeminiAPICfg.FlashName, cfg.GeminiAPICfg.ProName)
+	if err != nil {
+		slog.Error("error initializing gemini client", "error", err)
+	}
+
 	// Initialize MinIO client
 	minioClient, err := minio.NewMinioClient(cfg.MinioCfg)
 	if err != nil {
@@ -107,7 +114,7 @@ func main() {
 	// Initialize services
 	dataTierService := services.NewDataTierService(dataTierRepo)
 	dataSourceService := services.NewDataSourceService(dataSourceRepo)
-	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient)
+	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, geminiClient)
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, workerManager)
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
 
@@ -124,6 +131,15 @@ func main() {
 	// Register job handlers with WorkerManagerV2
 	workerManager.RegisterJobHandler("fetch-farm-monitoring-data", registeredPolicyService.FetchFarmMonitoringDataJob)
 	workerManager.RegisterJobHandler("document-validation", basePolicyService.AIPolicyValidationJob)
+	worker.AIWorkerPoolUUID, err = workerManager.CreateAIWorkerInfrastructure(workerManager.ManagerContext())
+	if err != nil {
+		slog.Error("error create AI worker pool", "error", err)
+	} else {
+		err = workerManager.StartAIWorkerInfrastructure(workerManager.ManagerContext(), *worker.AIWorkerPoolUUID)
+		if err != nil {
+			slog.Error("error starting AI worker pool", "error", err)
+		}
+	}
 
 	// Recover active policy worker infrastructure after restart
 	if err := registeredPolicyService.RecoverActivePolicies(ctx); err != nil {

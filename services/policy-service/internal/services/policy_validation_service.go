@@ -3,9 +3,14 @@ package services
 import (
 	utils "agrisa_utils"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"policy-service/internal/ai/gemini"
+	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -182,5 +187,58 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 }
 
 func (s *BasePolicyService) AIPolicyValidationJob(params map[string]any) error {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("recover from panic", "panic", r)
+		}
+	}()
+	fileName := params["fileName"].(string)
+	basePolicyID := params["base_policy_id"].(string)
+
+	completePolicies, err := s.GetAllDraftPolicyWFilter(context.Background(), "", string(basePolicyID), "")
+	if len(completePolicies) == 0 || err != nil {
+		if strings.Contains(err.Error(), "") || len(completePolicies) == 0 {
+			return nil
+		}
+		return fmt.Errorf("failed to get all draft policy data: %w", err)
+	}
+	completePolicy := completePolicies[0]
+
+	if len(completePolicy.Validations) != 0 {
+		return nil
+	}
+
+	obj, err := s.minioClient.GetFile(context.Background(), minio.Storage.PolicyDocuments, fileName)
+	if err != nil {
+		return fmt.Errorf("error get document file from minio: %w", err)
+	}
+	defer obj.Close()
+
+	templateData, err := io.ReadAll(obj)
+	if err != nil {
+		return fmt.Errorf("failed to read PDF data: %w", err)
+	}
+
+	inputJSONBytes, err := json.MarshalIndent(completePolicy, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal input data to JSON: %w", err)
+	}
+	finalPrompt := fmt.Sprintf(gemini.ValidationPromptTemplate, string(inputJSONBytes))
+
+	aiRequestData := map[string]any{"pdf": templateData}
+
+	resp, err := s.geminiClient.SendAIWithPDF(context.Background(), finalPrompt, aiRequestData)
+	if err != nil {
+		return fmt.Errorf("error ai validation: %w", err)
+	}
+	var DocumentValidation models.BasePolicyDocumentValidation
+	respBytes, err := json.Marshal(resp)
+	if err != nil {
+		return fmt.Errorf("failed to marshal ai response: %w", err)
+	}
+	err = json.Unmarshal(respBytes, &DocumentValidation)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal ai response to DocumentValidation struct: %w", err)
+	}
 	return nil
 }

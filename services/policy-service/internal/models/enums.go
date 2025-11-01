@@ -56,10 +56,11 @@ const (
 type ValidationStatus string
 
 const (
-	ValidationPending ValidationStatus = "pending"
-	ValidationPassed  ValidationStatus = "passed"
-	ValidationFailed  ValidationStatus = "failed"
-	ValidationWarning ValidationStatus = "warning"
+	ValidationPending  ValidationStatus = "pending"
+	ValidationPassed   ValidationStatus = "passed"
+	ValidationPassedAI ValidationStatus = "passed_ai"
+	ValidationFailed   ValidationStatus = "failed"
+	ValidationWarning  ValidationStatus = "warning"
 )
 
 type ThresholdOperator string

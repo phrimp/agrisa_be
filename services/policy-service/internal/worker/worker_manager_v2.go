@@ -14,6 +14,8 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
+var AIWorkerPoolUUID *uuid.UUID
+
 // WorkerManagerV2 is the refactored worker manager with persistence and lifecycle management
 type WorkerManagerV2 struct {
 	// Pool and scheduler storage by policy ID
@@ -85,13 +87,20 @@ func (m *WorkerManagerV2) GetJobHandler(jobType string) (func(map[string]any) er
 	return handler, exists
 }
 
-// CreateWorkerInfrastructure creates pool + scheduler for a registered policy
-func (m *WorkerManagerV2) CreateWorkerInfrastructure(
+// CreatePolicyWorkerInfrastructure creates pool + scheduler for a registered policy
+func (m *WorkerManagerV2) CreatePolicyWorkerInfrastructure(
 	ctx context.Context,
 	registeredPolicy *models.RegisteredPolicy,
 	basePolicy *models.BasePolicy,
 	basePolicyTrigger *models.BasePolicyTrigger,
+	basePolicyCondition []models.BasePolicyTriggerCondition,
 ) error {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered", "panic", r)
+		}
+	}()
+
 	// Validate inputs first before accessing fields
 	if registeredPolicy == nil || basePolicy == nil || basePolicyTrigger == nil {
 		return fmt.Errorf("invalid parameters: all parameters must be non-nil")
@@ -128,10 +137,13 @@ func (m *WorkerManagerV2) CreateWorkerInfrastructure(
 		}
 
 		pool := NewWorkingPool(
-			5, // numWorkers - TODO: make configurable
+			len(basePolicyCondition),
 			poolName,
-			30*time.Minute, // jobTimeout - TODO: make configurable
+			30*time.Minute,
 			goRedisClient,
+			100,
+			len(basePolicyCondition),
+			-1,
 		)
 
 		// Register job handler for farm monitoring data fetch
@@ -214,8 +226,14 @@ func (m *WorkerManagerV2) CreateWorkerInfrastructure(
 	return nil
 }
 
-// StartWorkerInfrastructure starts pool + scheduler for a policy
-func (m *WorkerManagerV2) StartWorkerInfrastructure(ctx context.Context, policyID uuid.UUID) error {
+// StartPolicyWorkerInfrastructure starts pool + scheduler for a policy
+func (m *WorkerManagerV2) StartPolicyWorkerInfrastructure(ctx context.Context, policyID uuid.UUID) error {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered", "panic", r)
+		}
+	}()
+
 	slog.Info("Starting worker infrastructure", "policy_id", policyID)
 
 	m.mu.RLock()
@@ -257,6 +275,12 @@ func (m *WorkerManagerV2) StartWorkerInfrastructure(ctx context.Context, policyI
 
 // StopWorkerInfrastructure stops pool + scheduler for a policy
 func (m *WorkerManagerV2) StopWorkerInfrastructure(ctx context.Context, policyID uuid.UUID) error {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered", "panic", r)
+		}
+	}()
+
 	slog.Info("Stopping worker infrastructure", "policy_id", policyID)
 
 	m.mu.RLock()
@@ -340,8 +364,96 @@ func (m *WorkerManagerV2) ArchiveWorkerInfrastructure(ctx context.Context, polic
 	return nil
 }
 
+// TODO: Worker Infras for AI opperations
+
+func (m *WorkerManagerV2) CreateAIWorkerInfrastructure(ctx context.Context) (*uuid.UUID, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered", "panic", r)
+		}
+	}()
+
+	poolName := "AI-JobPool"
+
+	var goRedisClient *goredis.Client
+	if m.redisClient != nil {
+		goRedisClient = m.redisClient.GetClient()
+	}
+
+	pool := NewWorkingPool(
+		3,
+		poolName,
+		30*time.Minute,
+		goRedisClient,
+		0.083,
+		1,
+		100,
+	)
+
+	// Register job handler for farm monitoring data fetch
+	handler, exists := m.GetJobHandler("document-validation")
+	if !exists {
+		return nil, fmt.Errorf("job handler not registered: document-validation")
+	}
+	pool.RegisterJob("document-validation", handler)
+
+	schedulerName := "AI-JobScheduler"
+
+	monitorInterval := time.Duration(5 * time.Minute)
+	scheduler := NewJobScheduler(schedulerName, monitorInterval, pool)
+
+	job := JobPayload{
+		JobID:      uuid.NewString(),
+		Type:       "AI-JobScheduler",
+		Params:     map[string]any{},
+		MaxRetries: 100,
+	}
+	scheduler.AddJob(job)
+	aiUUID := uuid.New()
+	m.mu.Lock()
+	m.pools[aiUUID] = pool
+	m.poolsByName[poolName] = pool
+	m.schedulers[aiUUID] = scheduler
+	m.schedulersByName[schedulerName] = scheduler
+	m.mu.Unlock()
+
+	return &aiUUID, nil
+}
+
+func (m *WorkerManagerV2) StartAIWorkerInfrastructure(ctx context.Context, poolID uuid.UUID) error {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("Job panic recovered", "panic", r)
+		}
+	}()
+	slog.Info("Starting worker infrastructure", "pool_id", poolID)
+
+	m.mu.RLock()
+	pool, poolExists := m.pools[poolID]
+	scheduler, schedulerExists := m.schedulers[poolID]
+	m.mu.RUnlock()
+
+	if !poolExists || !schedulerExists {
+		return fmt.Errorf("pool or scheduler not exist")
+	}
+
+	poolCtx, poolCancel := context.WithCancel(m.managerCtx)
+	m.mu.Lock()
+	m.poolCancels[poolID] = poolCancel
+	m.mu.Unlock()
+
+	m.wg.Add(1)
+	go pool.Start(poolCtx, m.wg)
+
+	// Start scheduler
+	go scheduler.Run(m.managerCtx)
+
+	slog.Info("Worker infrastructure started successfully", "pool_id", poolID)
+
+	return nil
+}
+
 // RecoverWorkerInfrastructure recovers all active worker infrastructure after restart
-// Note: This method signature will need repository dependencies to be fully functional
 func (m *WorkerManagerV2) RecoverWorkerInfrastructure(ctx context.Context) error {
 	slog.Info("Recovering worker infrastructure from database")
 

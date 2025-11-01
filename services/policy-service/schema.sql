@@ -16,7 +16,7 @@ CREATE TYPE base_policy_status AS ENUM ('draft', 'active', 'archived');
 CREATE TYPE policy_status AS ENUM ('draft', 'pending_review', 'active', 'expired', 'cancelled', 'rejected');
 CREATE TYPE underwriting_status AS ENUM ('pending', 'approved', 'rejected');
 CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'overdue', 'cancelled', 'refunded');
-CREATE TYPE validation_status AS ENUM ('pending', 'passed', 'failed', 'warning');
+CREATE TYPE validation_status AS ENUM ('pending', 'passed', 'passed_ai', 'failed', 'warning');
 CREATE TYPE threshold_operator AS ENUM ('<', '>', '<=', '>=', '==', '!=', 'change_gt', 'change_lt');
 CREATE TYPE aggregation_function AS ENUM ('sum', 'avg', 'min', 'max', 'change');
 CREATE TYPE logical_operator AS ENUM ('AND', 'OR');
@@ -26,9 +26,9 @@ CREATE TYPE data_quality AS ENUM ('good', 'acceptable', 'poor');
 CREATE TYPE farm_status AS ENUM ('active', 'inactive', 'archived');
 CREATE TYPE photo_type AS ENUM ('crop', 'boundary', 'land_certificate', 'other');
 CREATE TYPE monitor_frequency AS ENUM ('hour', 'day', 'week', 'month', 'year');
-CREATE TYPE cancel_request_type as ENUM ('contract_violation', 'other');
-CREATE TYPE cancel_request_status as ENUM ('approved', 'litigation', 'denied');
-CREATE TYPE claim_rejection_type as ENUM ('claim_data_incorrect');
+CREATE TYPE cancel_request_type as ENUM ('contract_violation', 'other', 'non_payment', 'policyholder_request', 'regulatory_change');
+CREATE TYPE cancel_request_status as ENUM ('approved', 'litigation', 'denied', 'pending_review');
+CREATE TYPE claim_rejection_type as ENUM ('claim_data_incorrect', 'trigger_not_met', 'policy_not_active', 'location_mismatch', 'duplicate_claim', 'suspected_fraud', 'other');
 -- ============================================================================
 -- CORE DATA SOURCE & PRICING TABLES
 -- ============================================================================
@@ -704,6 +704,9 @@ CREATE INDEX idx_eval_log_base_policy ON trigger_evaluation_log(base_policy_id);
 CREATE INDEX idx_eval_log_trigger ON trigger_evaluation_log(base_policy_trigger_id);
 CREATE INDEX idx_eval_log_result ON trigger_evaluation_log(evaluation_result);
 
+-- ============================================================================
+-- WORKER
+-- ============================================================================
 
 -- Worker Pool State Table
 CREATE TABLE IF NOT EXISTS worker_pool_state (

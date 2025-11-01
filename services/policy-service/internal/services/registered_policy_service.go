@@ -31,7 +31,7 @@ func NewRegisteredPolicyService(
 	}
 }
 
-// CreatePolicyWithWorkerInfrastructure creates a registered policy and its worker infrastructure
+// CreatePolicyWithWorkerInfrastructure creates a registered policy and its worker infrastructure HELPER FUNCTION -- NOT BUSINESS FUNCTION
 func (s *RegisteredPolicyService) CreatePolicyWithWorkerInfrastructure(
 	ctx context.Context,
 	policy *models.RegisteredPolicy,
@@ -52,8 +52,7 @@ func (s *RegisteredPolicyService) CreatePolicyWithWorkerInfrastructure(
 		return fmt.Errorf("failed to load base policy: %w", err)
 	}
 
-	// Load base policy trigger (assuming first trigger for now)
-	// TODO: Handle multiple triggers when that feature is implemented
+	// Load base policy trigger, there is only 1 trigger at the moment but use slice anyway
 	triggers, err := s.basePolicyRepo.GetBasePolicyTriggersByPolicyID(policy.BasePolicyID)
 	if err != nil {
 		return fmt.Errorf("failed to load base policy triggers: %w", err)
@@ -67,8 +66,13 @@ func (s *RegisteredPolicyService) CreatePolicyWithWorkerInfrastructure(
 
 	basePolicyTrigger := &triggers[0]
 
+	conditions, err := s.basePolicyRepo.GetBasePolicyTriggerConditionsByTriggerID(basePolicyTrigger.ID)
+	if err != nil {
+		return fmt.Errorf("failed to load base policy trigger conditions %w", err)
+	}
+
 	// 3. Create worker infrastructure
-	if err := s.workerManager.CreateWorkerInfrastructure(ctx, policy, basePolicy, basePolicyTrigger); err != nil {
+	if err := s.workerManager.CreatePolicyWorkerInfrastructure(ctx, policy, basePolicy, basePolicyTrigger, conditions); err != nil {
 		return fmt.Errorf("failed to create worker infrastructure: %w", err)
 	}
 
@@ -82,7 +86,7 @@ func (s *RegisteredPolicyService) CreatePolicyWithWorkerInfrastructure(
 func (s *RegisteredPolicyService) StartPolicyMonitoring(ctx context.Context, policyID uuid.UUID) error {
 	slog.Info("Starting policy monitoring", "policy_id", policyID)
 
-	if err := s.workerManager.StartWorkerInfrastructure(ctx, policyID); err != nil {
+	if err := s.workerManager.StartPolicyWorkerInfrastructure(ctx, policyID); err != nil {
 		return fmt.Errorf("failed to start worker infrastructure: %w", err)
 	}
 
@@ -174,13 +178,18 @@ func (s *RegisteredPolicyService) recoverPolicyInfrastructure(ctx context.Contex
 
 	basePolicyTrigger := &triggers[0]
 
+	conditions, err := s.basePolicyRepo.GetBasePolicyTriggerConditionsByTriggerID(basePolicyTrigger.ID)
+	if err != nil {
+		return fmt.Errorf("failed to load base policy trigger conditions %w", err)
+	}
+
 	// 4. Recreate worker infrastructure
-	if err := s.workerManager.CreateWorkerInfrastructure(ctx, policy, basePolicy, basePolicyTrigger); err != nil {
+	if err := s.workerManager.CreatePolicyWorkerInfrastructure(ctx, policy, basePolicy, basePolicyTrigger, conditions); err != nil {
 		return fmt.Errorf("failed to create worker infrastructure: %w", err)
 	}
 
 	// 5. Start worker infrastructure
-	if err := s.workerManager.StartWorkerInfrastructure(ctx, policyID); err != nil {
+	if err := s.workerManager.StartPolicyWorkerInfrastructure(ctx, policyID); err != nil {
 		return fmt.Errorf("failed to start worker infrastructure: %w", err)
 	}
 
@@ -227,3 +236,9 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 	return nil
 }
+
+// ============================================================================
+// BUSINESS PROCESS
+// ============================================================================
+
+func (s *RegisteredPolicyService) RegisterAPolicy()

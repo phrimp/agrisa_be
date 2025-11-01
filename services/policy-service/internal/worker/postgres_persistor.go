@@ -51,7 +51,6 @@ func (p *PostgresPersistor) CreatePoolState(ctx context.Context, state *WorkerPo
 		state.LastJobAt,
 		metadataJSON,
 	)
-
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" { // unique_violation
 			return fmt.Errorf("pool already exists for policy %s: %w", state.PolicyID, err)
@@ -87,7 +86,6 @@ func (p *PostgresPersistor) UpdatePoolState(ctx context.Context, state *WorkerPo
 		state.LastJobAt,
 		metadataJSON,
 	)
-
 	if err != nil {
 		return fmt.Errorf("failed to update pool state: %w", err)
 	}
@@ -201,7 +199,6 @@ func (p *PostgresPersistor) CreateSchedulerState(ctx context.Context, state *Wor
 		state.RunCount,
 		metadataJSON,
 	)
-
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
 			return fmt.Errorf("scheduler already exists for policy %s: %w", state.PolicyID, err)
@@ -241,7 +238,6 @@ func (p *PostgresPersistor) UpdateSchedulerState(ctx context.Context, state *Wor
 		state.RunCount,
 		metadataJSON,
 	)
-
 	if err != nil {
 		return fmt.Errorf("failed to update scheduler state: %w", err)
 	}
@@ -356,7 +352,6 @@ func (p *PostgresPersistor) CreateJobExecution(ctx context.Context, execution *W
 		resultJSON,
 		execution.CreatedAt,
 	)
-
 	if err != nil {
 		return fmt.Errorf("failed to create job execution: %w", err)
 	}
@@ -391,7 +386,6 @@ func (p *PostgresPersistor) UpdateJobExecution(ctx context.Context, execution *W
 		execution.ErrorMessage,
 		resultJSON,
 	)
-
 	if err != nil {
 		return fmt.Errorf("failed to update job execution: %w", err)
 	}
@@ -547,7 +541,6 @@ func (p *postgresTxPersistor) CreatePoolState(ctx context.Context, state *Worker
 		state.JobTimeout, state.PoolStatus, state.CreatedAt, state.StartedAt,
 		state.StoppedAt, state.LastJobAt, metadataJSON,
 	)
-
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
 			return fmt.Errorf("pool already exists for policy %s: %w", state.PolicyID, err)
@@ -640,7 +633,6 @@ func (p *postgresTxPersistor) CreateSchedulerState(ctx context.Context, state *W
 		state.SchedulerStatus, state.CreatedAt, state.StartedAt, state.StoppedAt,
 		state.LastRunAt, state.NextRunAt, state.RunCount, metadataJSON,
 	)
-
 	if err != nil {
 		if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
 			return fmt.Errorf("scheduler already exists for policy %s: %w", state.PolicyID, err)
