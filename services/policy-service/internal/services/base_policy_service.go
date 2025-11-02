@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"policy-service/internal/ai/gemini"
 	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
@@ -22,14 +23,16 @@ type BasePolicyService struct {
 	dataSourceRepo *repository.DataSourceRepository
 	dataTierRepo   *repository.DataTierRepository
 	minioClient    *minio.MinioClient
+	geminiClient   *gemini.GeminiClient
 }
 
-func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient) *BasePolicyService {
+func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient, geminiClient *gemini.GeminiClient) *BasePolicyService {
 	return &BasePolicyService{
 		basePolicyRepo: basePolicyRepo,
 		dataSourceRepo: dataSourceRepo,
 		dataTierRepo:   dataTierRepo,
 		minioClient:    minioClient,
+		geminiClient:   geminiClient,
 	}
 }
 
@@ -754,7 +757,7 @@ func (s *BasePolicyService) GetAllDraftPolicyWFilter(ctx context.Context, provid
 			// Non-critical: continue without validations
 		} else if len(validations) > 0 {
 			completePolicy.Validations = validations
-			slog.Debug("Retrieved validations for policy",
+			slog.Info("Retrieved validations for policy",
 				"base_policy_id", basePolicy.ID,
 				"validation_count", len(validations))
 		}

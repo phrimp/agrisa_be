@@ -16,7 +16,7 @@ CREATE TYPE base_policy_status AS ENUM ('draft', 'active', 'archived');
 CREATE TYPE policy_status AS ENUM ('draft', 'pending_review', 'active', 'expired', 'cancelled', 'rejected');
 CREATE TYPE underwriting_status AS ENUM ('pending', 'approved', 'rejected');
 CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'overdue', 'cancelled', 'refunded');
-CREATE TYPE validation_status AS ENUM ('pending', 'passed', 'failed', 'warning');
+CREATE TYPE validation_status AS ENUM ('pending', 'passed', 'passed_ai', 'failed', 'warning');
 CREATE TYPE threshold_operator AS ENUM ('<', '>', '<=', '>=', '==', '!=', 'change_gt', 'change_lt');
 CREATE TYPE aggregation_function AS ENUM ('sum', 'avg', 'min', 'max', 'change');
 CREATE TYPE logical_operator AS ENUM ('AND', 'OR');
@@ -26,9 +26,9 @@ CREATE TYPE data_quality AS ENUM ('good', 'acceptable', 'poor');
 CREATE TYPE farm_status AS ENUM ('active', 'inactive', 'archived');
 CREATE TYPE photo_type AS ENUM ('crop', 'boundary', 'land_certificate', 'other');
 CREATE TYPE monitor_frequency AS ENUM ('hour', 'day', 'week', 'month', 'year');
-CREATE TYPE cancel_request_type as ENUM ('contract_violation', 'other');
-CREATE TYPE cancel_request_status as ENUM ('approved', 'litigation', 'denied');
-CREATE TYPE claim_rejection_type as ENUM ('claim_data_incorrect');
+CREATE TYPE cancel_request_type as ENUM ('contract_violation', 'other', 'non_payment', 'policyholder_request', 'regulatory_change');
+CREATE TYPE cancel_request_status as ENUM ('approved', 'litigation', 'denied', 'pending_review');
+CREATE TYPE claim_rejection_type as ENUM ('claim_data_incorrect', 'trigger_not_met', 'policy_not_active', 'location_mismatch', 'duplicate_claim', 'suspected_fraud', 'other');
 -- ============================================================================
 -- CORE DATA SOURCE & PRICING TABLES
 -- ============================================================================
@@ -480,7 +480,7 @@ CREATE TABLE cancel_request (
     CONSTRAINT review_consistency CHECK (
         (status = 'denied' AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
         (status = 'approved' AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
-        (status = 'litigation')ScheduleConfig
+        (status = 'litigation')
     )
 );
 
@@ -703,6 +703,77 @@ CREATE INDEX idx_eval_log_registered_policy_time ON trigger_evaluation_log(regis
 CREATE INDEX idx_eval_log_base_policy ON trigger_evaluation_log(base_policy_id);
 CREATE INDEX idx_eval_log_trigger ON trigger_evaluation_log(base_policy_trigger_id);
 CREATE INDEX idx_eval_log_result ON trigger_evaluation_log(evaluation_result);
+
+-- ============================================================================
+-- WORKER
+-- ============================================================================
+
+-- Worker Pool State Table
+CREATE TABLE IF NOT EXISTS worker_pool_state (
+    policy_id UUID PRIMARY KEY REFERENCES registered_policy(id) ON DELETE CASCADE,
+    pool_name VARCHAR(255) NOT NULL UNIQUE,
+    queue_name_base VARCHAR(255) NOT NULL,
+    num_workers INT NOT NULL CHECK (num_workers > 0),
+    job_timeout INTERVAL NOT NULL,
+    pool_status VARCHAR(50) NOT NULL CHECK (pool_status IN ('created', 'active', 'stopped', 'archived')),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMP,
+    stopped_at TIMESTAMP,
+    last_job_at TIMESTAMP,
+    metadata JSONB DEFAULT '{}'::jsonb,
+
+    CONSTRAINT pool_name_format CHECK (pool_name ~ '^policy-[a-f0-9-]+-pool$')
+);
+
+-- Worker Scheduler State Table
+CREATE TABLE IF NOT EXISTS worker_scheduler_state (
+    policy_id UUID PRIMARY KEY REFERENCES registered_policy(id) ON DELETE CASCADE,
+    scheduler_name VARCHAR(255) NOT NULL UNIQUE,
+    monitor_interval INTERVAL NOT NULL,
+    monitor_frequency_unit VARCHAR(20) NOT NULL CHECK (monitor_frequency_unit IN ('hour', 'day', 'week', 'month')),
+    scheduler_status VARCHAR(50) NOT NULL CHECK (scheduler_status IN ('created', 'active', 'stopped', 'archived')),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    started_at TIMESTAMP,
+    stopped_at TIMESTAMP,
+    last_run_at TIMESTAMP,
+    next_run_at TIMESTAMP,
+    run_count BIGINT DEFAULT 0,
+    metadata JSONB DEFAULT '{}'::jsonb,
+
+    CONSTRAINT scheduler_name_format CHECK (scheduler_name ~ '^policy-[a-f0-9-]+-scheduler$')
+);
+
+-- Worker Job Execution History Table
+CREATE TABLE IF NOT EXISTS worker_job_execution (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    policy_id UUID NOT NULL REFERENCES registered_policy(id) ON DELETE CASCADE,
+    job_id VARCHAR(255) NOT NULL,
+    job_type VARCHAR(100) NOT NULL,
+    status VARCHAR(50) NOT NULL CHECK (status IN ('pending', 'running', 'completed', 'failed', 'retrying')),
+    retry_count INT DEFAULT 0,
+    max_retries INT DEFAULT 3,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP,
+    error_message TEXT,
+    result_summary JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+    CONSTRAINT job_execution_times CHECK (completed_at IS NULL OR completed_at >= started_at)
+);
+
+-- Indexes for Performance
+CREATE INDEX IF NOT EXISTS idx_worker_pool_status ON worker_pool_state(pool_status);
+CREATE INDEX IF NOT EXISTS idx_worker_pool_last_job ON worker_pool_state(last_job_at);
+CREATE INDEX IF NOT EXISTS idx_worker_scheduler_status ON worker_scheduler_state(scheduler_status);
+CREATE INDEX IF NOT EXISTS idx_worker_scheduler_next_run ON worker_scheduler_state(next_run_at);
+CREATE INDEX IF NOT EXISTS idx_worker_job_policy_id ON worker_job_execution(policy_id);
+CREATE INDEX IF NOT EXISTS idx_worker_job_status ON worker_job_execution(status);
+CREATE INDEX IF NOT EXISTS idx_worker_job_created_at ON worker_job_execution(created_at DESC);
+
+-- Comments for Documentation
+COMMENT ON TABLE worker_pool_state IS 'Persistence state for worker pools tied to registered policies';
+COMMENT ON TABLE worker_scheduler_state IS 'Persistence state for schedulers tied to registered policies';
+COMMENT ON TABLE worker_job_execution IS 'Execution history and status of worker jobs';
 
 -- ============================================================================
 -- SAMPLE DATA

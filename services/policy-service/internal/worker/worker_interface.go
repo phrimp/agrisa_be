@@ -18,6 +18,7 @@ type JobPayload struct {
 	Params     map[string]any `json:"params"`
 	MaxRetries int            `json:"max_retries"`
 	RetryCount int            `json:"retry_count"`
+	OneTime    bool           `json:"one_time"`
 }
 
 type Pool interface {
@@ -29,4 +30,6 @@ type Pool interface {
 		jobType string,
 		jobFunc func(params map[string]any) error,
 	)
+
+	GetName() string
 }

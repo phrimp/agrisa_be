@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"policy-service/internal/services"
 	"strings"
@@ -17,11 +18,13 @@ import (
 
 type BasePolicyHandler struct {
 	basePolicyService *services.BasePolicyService
+	minioClient       *minio.MinioClient
 }
 
-func NewBasePolicyHandler(basePolicyService *services.BasePolicyService) *BasePolicyHandler {
+func NewBasePolicyHandler(basePolicyService *services.BasePolicyService, minioClient *minio.MinioClient) *BasePolicyHandler {
 	return &BasePolicyHandler{
 		basePolicyService: basePolicyService,
+		minioClient:       minioClient,
 	}
 }
 
@@ -95,6 +98,12 @@ func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 	response, err := bph.basePolicyService.CreateCompletePolicy(c.Context(), &req, expiration)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("CREATION_FAILED", err.Error()))
+	}
+
+	pathName := "/document/" + req.PolicyDocument.Name + "-" + response.BasePolicyID.String()
+	err = bph.minioClient.UploadBytes(c, minio.Storage.PolicyDocuments, pathName, []byte(req.PolicyDocument.Data), "application/pdf")
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("FILE_UPLOAD_FAILED", err.Error()))
 	}
 
 	return c.Status(http.StatusCreated).JSON(utils.CreateSuccessResponse(response))

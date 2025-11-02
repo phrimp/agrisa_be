@@ -212,6 +212,12 @@ func (r CompletePolicyCreationRequest) Validate() error {
 	if len(r.Conditions) > 50 {
 		return errors.New("cannot have more than 50 conditions")
 	}
+	if r.PolicyDocument.Name == "" {
+		return errors.New("policy document name is required")
+	}
+	if r.PolicyDocument.Data == "" {
+		return errors.New("document data is required")
+	}
 	return nil
 }
 

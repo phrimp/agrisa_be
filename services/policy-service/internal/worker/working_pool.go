@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/time/rate"
 )
 
 type WorkingPool struct {
@@ -19,6 +21,8 @@ type WorkingPool struct {
 	JobTimeout          time.Duration
 	RedisClient         *redis.Client
 	dispatcher          map[string]func(map[string]any) error
+	limiter             *rate.Limiter
+	QuotaLimit          int64
 }
 
 func NewWorkingPool(
@@ -26,7 +30,11 @@ func NewWorkingPool(
 	queueNameBase string, // e.g., "queue:general"
 	jobTimeout time.Duration,
 	redisClient *redis.Client,
+	callsPerSecond float64,
+	burst int,
+	dailyQuota int64,
 ) *WorkingPool {
+	limiter := rate.NewLimiter(rate.Limit(callsPerSecond), burst)
 	return &WorkingPool{
 		NumWorkers:          numWorkers,
 		QueueName:           queueNameBase + ":pending",
@@ -35,7 +43,13 @@ func NewWorkingPool(
 		JobTimeout:          jobTimeout,
 		RedisClient:         redisClient,
 		dispatcher:          make(map[string]func(map[string]any) error),
+		limiter:             limiter,
+		QuotaLimit:          dailyQuota,
 	}
+}
+
+func (p *WorkingPool) GetName() string {
+	return strings.Split(p.QueueName, ":")[0]
 }
 
 func (p *WorkingPool) RegisterJob(
@@ -56,6 +70,13 @@ func (p *WorkingPool) SubmitJob(ctx context.Context, job JobPayload) error {
 
 func (p *WorkingPool) Start(ctx context.Context, managerWg *sync.WaitGroup) {
 	defer managerWg.Done()
+
+	// Skip if Redis client is not available (e.g., in tests)
+	if p.RedisClient == nil {
+		slog.Warn("Working pool skipping start: Redis client not available", "queue_name", p.QueueName)
+		<-ctx.Done()
+		return
+	}
 
 	slog.Info("Working pool starting",
 		"queue_name", p.QueueName,
@@ -94,24 +115,45 @@ func (p *WorkingPool) worker(ctx context.Context, wg *sync.WaitGroup, id int) {
 
 		if err == redis.Nil {
 			// No job, just a timeout. Check for shutdown.
+			continue
 		} else if err != nil && err != context.Canceled {
 			slog.Error("Redis error while fetching job",
 				"worker_id", id,
 				"queue_name", p.QueueName,
 				"error", err)
 			time.Sleep(1 * time.Second)
+			continue
 		} else if err == context.Canceled {
+			return
 			// Context was canceled, stop trying to get jobs.
-		} else if jobPayload != "" {
-			// SUCCESS: We got a job. It is now safe in the "running" queue.
-			slog.Debug("Worker received job", "worker_id", id, "queue_name", p.QueueName)
-
-			jobErr := p.dispatchJob(ctx, jobPayload, id)
-
-			// We MUST remove the job from the "running" queue,
-			// whether it succeeded or failed.
-			p.handleJobResult(ctx, jobPayload, jobErr, id)
 		}
+
+		canRun, checkErr := p.checkQuota(ctx)
+		if checkErr != nil {
+			fmt.Printf("[Worker %d] Failed to check quota: %v. Re-queueing job.\n", id, checkErr)
+			p.requeueJob(ctx, jobPayload) // Put it back in pending
+			continue
+		}
+
+		if !canRun {
+			fmt.Printf("[Worker %d] Daily quota exceeded. Re-queueing job.\n", id)
+			p.requeueJob(ctx, jobPayload)
+			// Sleep to not to spam quota check
+			time.Sleep(1 * time.Hour)
+			continue
+		}
+
+		fmt.Printf("[Worker %d] Quota OK. Waiting for rate-limit token...\n", id)
+		if err := p.limiter.Wait(ctx); err != nil {
+			fmt.Printf("[Worker %d] Canceled while waiting for token. Re-queueing.\n", id)
+			p.requeueJob(ctx, jobPayload)
+			continue
+
+		}
+
+		fmt.Printf("[Worker %d] Token acquired. Running job.\n", id)
+		jobErr := p.dispatchJob(ctx, jobPayload, id)
+		p.handleJobResult(ctx, jobPayload, jobErr, id)
 
 		// Check for shutdown signal
 		if ctx.Err() != nil {
@@ -119,6 +161,41 @@ func (p *WorkingPool) worker(ctx context.Context, wg *sync.WaitGroup, id int) {
 			return
 		}
 	}
+}
+
+func (p *WorkingPool) requeueJob(ctx context.Context, jobPayload string) {
+	p.RedisClient.LRem(ctx, p.RunningQueueName, 1, jobPayload)
+	p.RedisClient.LPush(ctx, p.QueueName, jobPayload)
+}
+
+func (p *WorkingPool) checkQuota(ctx context.Context) (bool, error) {
+	if p.QuotaLimit <= 0 {
+		return true, nil
+	}
+	today := time.Now().Format("2006-01-02")
+	quotaKey := fmt.Sprintf("quota:%s:%s", p.QueueName, today)
+
+	tx := p.RedisClient.TxPipeline()
+	incr := tx.Incr(ctx, quotaKey)
+
+	now := time.Now()
+	midnightUTC := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
+	durationUntilMidnight := midnightUTC.Sub(now)
+
+	tx.Expire(ctx, quotaKey, durationUntilMidnight)
+
+	_, err := tx.Exec(ctx)
+	if err != nil {
+		return false, err
+	}
+
+	currentCount := incr.Val()
+
+	if currentCount > p.QuotaLimit {
+		return false, nil
+	}
+
+	return true, nil
 }
 
 // dispatchJob runs a single job with panic recovery and timeouts.
@@ -132,6 +209,7 @@ func (p *WorkingPool) dispatchJob(ctx context.Context, payload string, workerID 
 		}
 	}()
 
+	slog.Info("payload string", "payload", payload)
 	var jobData JobPayload
 	if err := json.Unmarshal([]byte(payload), &jobData); err != nil {
 		slog.Error("Failed to unmarshal job payload",
@@ -270,6 +348,11 @@ func (p *WorkingPool) handleJobResult(
 // requeueStaleJobs moves any jobs from "running" back to "pending"
 // on startup. This handles jobs that were lost during a crash.
 func (p *WorkingPool) requeueStaleJobs(ctx context.Context) {
+	// Skip if Redis client is not available (e.g., in tests)
+	if p.RedisClient == nil {
+		return
+	}
+
 	requeueCount := 0
 	for {
 		// Atomically move a job from "running" to "pending".
