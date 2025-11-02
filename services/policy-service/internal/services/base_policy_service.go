@@ -471,6 +471,29 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 		}
 	}()
 
+	if request.PolicyDocument.Data != "" && request.PolicyDocument.Name != "" {
+		// upload policy document to Minio
+		files := minio.FileUploadRequest{
+			minio.FileUpload{
+				FieldName: "template_document_url",
+				FileName:  request.PolicyDocument.Name,
+				Data:      request.PolicyDocument.Data,
+			},
+		}
+
+		allowedExts := []string{}
+
+		uploadedFiles, err := s.minioClient.FileProcessing(files, ctx, allowedExts, 100)
+		if err != nil {
+			slog.Error("File processing failed",
+				"base_policy_id", basePolicyID,
+				"error", err)
+			return nil, fmt.Errorf("file processing failed: %w", err)
+		}
+
+		request.BasePolicy.TemplateDocumentURL = &uploadedFiles[0].ResourceURL
+	}
+
 	// Serialize and store BasePolicy
 	slog.Info("Serializing base policy",
 		"base_policy_id", basePolicyID,

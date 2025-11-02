@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"policy-service/internal/models"
 	"policy-service/internal/services"
@@ -37,7 +38,7 @@ func (bph *BasePolicyHandler) Register(app *fiber.App) {
 	policyGroup.Post("/validate", bph.ValidatePolicy)                              // POST /base-policies/validate - Validate policy & auto-commit
 	policyGroup.Post("/commit", bph.CommitPolicies)                                // POST /base-policies/commit - Manual commit policies to DB
 	policyGroup.Get("/active", bph.GetAllActivePolicy)
-	policyGroup.Get("/detail", bph.GetCompletePolicyDetail)                        // GET  /base-policies/detail - Get complete policy details with PDF
+	policyGroup.Get("/detail", bph.GetCompletePolicyDetail) // GET  /base-policies/detail - Get complete policy details with PDF
 
 	// Utility routes
 	policyGroup.Get("/count", bph.GetBasePolicyCount)                                 // GET  /base-policies/count - Total policy count
@@ -72,6 +73,8 @@ func (bph *BasePolicyHandler) GetAllActivePolicy(c fiber.Ctx) error {
 func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 	var req models.CompletePolicyCreationRequest
 	if err := c.Bind().Body(&req); err != nil {
+		// add logging
+		log.Printf("Error binding request body: %v", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 	createdBy := c.Get("X-User-ID")

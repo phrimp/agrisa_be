@@ -1,11 +1,16 @@
 package minio
 
 import (
+	utils "agrisa_utils"
 	"bytes"
 	"context"
+	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"net/url"
+	"path/filepath"
 	"policy-service/internal/config"
 	"strconv"
 	"strings"
@@ -19,6 +24,25 @@ import (
 type MinioClient struct {
 	client *minio.Client
 	config config.MinioConfig
+}
+
+type FileUpload struct {
+	FieldName string `json:"fieldName"`
+	FileName  string `json:"fileName"`
+	Data      string `json:"Data"`
+}
+
+type FileUploadRequest []FileUpload
+
+type FileUploadValidationErr struct {
+	FieldName string `json:"field_name"`
+	FileName  string `json:"file_name"`
+	Message   string `json:"message"`
+}
+
+type FileUploadedInfo struct {
+	FieldName   string
+	ResourceURL string
 }
 
 // Storage defines bucket names for different data types in policy service
@@ -278,3 +302,200 @@ func (mc *MinioClient) Close() error {
 	return nil
 }
 
+func GetContentType(objectName string) string {
+	ext := strings.ToLower(filepath.Ext(objectName))
+
+	switch ext {
+	case ".pdf":
+		return "application/pdf"
+	case ".docx":
+		return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	case ".pptx":
+		return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	case ".ppt":
+		return "application/vnd.ms-powerpoint"
+	case ".doc":
+		return "application/msword"
+	case ".xlsx":
+		return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+	case ".xls":
+		return "application/vnd.ms-excel"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	case ".gif":
+		return "image/gif"
+	case ".txt":
+		return "text/plain"
+	case ".csv":
+		return "text/csv"
+	case ".json":
+		return "application/json"
+	case ".zip":
+		return "application/zip"
+	default:
+		return "application/octet-stream" // fallback an toàn
+	}
+}
+
+func FileSize(unit string, f *FileUpload) (float64, error) {
+	data, err := base64.StdEncoding.DecodeString(f.Data)
+	if err != nil {
+		return 0, fmt.Errorf("decode base64 error: %w", err)
+	}
+	sizeInBytes := float64(len(data))
+	unit = strings.ToLower(unit)
+	switch unit {
+	case "b":
+		return sizeInBytes, nil
+	case "kb":
+		return sizeInBytes / 1024, nil
+	case "mb":
+		return sizeInBytes / (1024 * 1024), nil
+	case "gb":
+		return sizeInBytes / (1024 * 1024 * 1024), nil
+	default:
+		return 0, fmt.Errorf("invalid unit '%s', must be one of: b, kb, mb, gb", unit)
+	}
+}
+
+func ValidateFiles(files FileUploadRequest, allowedExts []string, maxMB int64) *FileUploadValidationErr {
+	for _, f := range files {
+		if f.FileName == "" {
+			return &FileUploadValidationErr{
+				FieldName: "data",
+				FileName:  "",
+				Message:   "A file has an invalid name — please check it.",
+			}
+		}
+
+		ext := strings.ToLower(filepath.Ext(f.FileName))
+		found := false
+
+		if len(allowedExts) == 0 {
+			found = true
+		}
+
+		for _, allowed := range allowedExts {
+			if strings.ToLower(allowed) == ext {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return &FileUploadValidationErr{
+				FieldName: "data",
+				FileName:  f.FileName,
+				Message:   "The file extension is invalid.",
+			}
+		}
+
+		if maxMB != -1 {
+			uploadFileSize, err := FileSize("mb", &f)
+			if err != nil {
+				return &FileUploadValidationErr{
+					FieldName: "data",
+					FileName:  f.FileName,
+					Message:   "Invalid base64 data.",
+				}
+			}
+			if uploadFileSize > float64(maxMB) {
+				return &FileUploadValidationErr{
+					FieldName: "data",
+					FileName:  f.FileName,
+					Message:   "There is a file that exceeds the maximum allowed size.",
+				}
+			}
+		}
+
+	}
+	return nil
+}
+
+func CreateErrorFromValidation(validationErr FileUploadValidationErr) error {
+
+	jsonBytes, err := utils.SerializeModel(validationErr)
+	if err != nil {
+		return fmt.Errorf("error serializing validation error: %w", err)
+	}
+	jsonString := string(jsonBytes)
+
+	return errors.New(jsonString)
+}
+
+func Base64ToBytes(base64String string) ([]byte, error) {
+	bytes, err := base64.StdEncoding.DecodeString(base64String)
+	if err != nil {
+		return nil, err
+	}
+	return bytes, nil
+}
+
+func GetSafeFileName(fileName string) string {
+	safeFileName := url.PathEscape(fileName)
+	return safeFileName
+}
+
+func (mc *MinioClient) UploadFilesToMinio(
+	filesUpload []FileUpload,
+	ctx context.Context,
+	bucketName string,
+) ([]FileUploadedInfo, error) {
+	var fileUploadedInfos []FileUploadedInfo
+
+	resourceBaseURL := mc.GetConfig().MinioResourceURL
+
+	for _, fu := range filesUpload {
+		bytes, err := Base64ToBytes(fu.Data)
+		if err != nil {
+			fmt.Println("Lỗi:", err)
+			return nil, err
+		}
+
+		contentType := GetContentType(fu.FileName)
+		safeFileName := GetSafeFileName(fu.FileName)
+
+		err = mc.UploadBytes(ctx, bucketName, safeFileName, bytes, contentType)
+		if err != nil {
+			log.Fatalf("Internal error - upload %s: %v", safeFileName, err)
+			return nil, err
+		}
+
+		minioResourceURL := resourceBaseURL + bucketName + "/" + safeFileName
+
+		fileUploadedInfo := FileUploadedInfo{
+			FieldName:   "document_template_upload",
+			ResourceURL: minioResourceURL,
+		}
+
+		fileUploadedInfos = append(fileUploadedInfos, fileUploadedInfo)
+	}
+
+	return fileUploadedInfos, nil
+}
+
+func (mc *MinioClient) FileProcessing(files FileUploadRequest, ctx context.Context, allowedExts []string, maxFileSizeMB int64) ([]FileUploadedInfo, error) {
+	// check if files are empty or not
+	if len(files) == 0 {
+		return nil, CreateErrorFromValidation(FileUploadValidationErr{
+			FieldName: "data",
+			FileName:  "",
+			Message:   "No files were uploaded.",
+		})
+	}
+
+	// validate files
+	validationErr := ValidateFiles(files, allowedExts, maxFileSizeMB)
+	if validationErr != nil {
+		return nil, CreateErrorFromValidation(*validationErr)
+	}
+
+	// Upload files to MinIO
+	fileUploadedInfos, err := mc.UploadFilesToMinio(files, ctx, Storage.PolicyDocuments)
+	if err != nil {
+		return nil, fmt.Errorf("failed to upload files to MinIO: %w", err)
+	}
+
+	return fileUploadedInfos, nil
+}
