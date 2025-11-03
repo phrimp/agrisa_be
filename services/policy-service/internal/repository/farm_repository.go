@@ -1,6 +1,7 @@
 package repository
 
 import (
+	utils "agrisa_utils"
 	"fmt"
 	"policy-service/internal/models"
 	"time"
@@ -109,12 +110,21 @@ func (r *FarmRepository) Update(farm *models.Farm) error {
 }
 
 func (r *FarmRepository) Delete(id uuid.UUID) error {
-	query := `DELETE FROM farm WHERE id = $1`
+	query := `UPDATE farm SET status = $1, updated_at = $2 WHERE id = $3`
 
-	_, err := r.db.Exec(query, id)
+	err := utils.ExecWithCheck(r.db, query, utils.ExecUpdate, "deleted", time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to delete farm: %w", err)
 	}
-
 	return nil
+}
+
+func (r *FarmRepository) GetFarmByFarmCode(farmCode string) (*models.Farm, error) {
+	query := `SELECT * FROM farm WHERE farm_code = $1`
+	var farm models.Farm
+	err := r.db.Get(&farm, query, farmCode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get farm by farm code: %w", err)
+	}
+	return &farm, nil
 }
