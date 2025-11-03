@@ -29,6 +29,8 @@ CREATE TYPE monitor_frequency AS ENUM ('hour', 'day', 'week', 'month', 'year');
 CREATE TYPE cancel_request_type as ENUM ('contract_violation', 'other', 'non_payment', 'policyholder_request', 'regulatory_change');
 CREATE TYPE cancel_request_status as ENUM ('approved', 'litigation', 'denied', 'pending_review');
 CREATE TYPE claim_rejection_type as ENUM ('claim_data_incorrect', 'trigger_not_met', 'policy_not_active', 'location_mismatch', 'duplicate_claim', 'suspected_fraud', 'other');
+CREATE TYPE risk_analysis_type AS ENUM ('ai_model', 'document_validation', 'cross_reference', 'manual');
+CREATE TYPE risk_level AS ENUM ('low', 'medium', 'high', 'critical');
 -- ============================================================================
 -- CORE DATA SOURCE & PRICING TABLES
 -- ============================================================================
@@ -246,7 +248,8 @@ CREATE TABLE base_policy (
     template_document_url VARCHAR(500),
     document_validation_status validation_status DEFAULT 'pending',
     document_validation_score DECIMAL(3,2),
-    important_additional_information JSONB,
+    document_tags JSONB,
+    important_additional_information TEXT,
     
     -- Metadata
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -451,6 +454,47 @@ CREATE TABLE registered_policy_underwriting (
 CREATE INDEX idx_policy_underwriting ON registered_policy_underwriting(registered_policy_id);
 CREATE INDEX idx_policy_underwriting_status ON registered_policy_underwriting(underwriting_status);
 
+CREATE TABLE registered_policy_risk_analysis (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    registered_policy_id UUID NOT NULL REFERENCES registered_policy(id) ON DELETE CASCADE,
+    
+    -- Analysis Status & Type
+    analysis_status validation_status DEFAULT 'pending',
+    analysis_type risk_analysis_type NOT NULL,
+    analysis_source VARCHAR(100),
+    
+    -- Analysis Timestamp
+    analysis_timestamp INT NOT NULL,
+    
+    -- High-Level Results
+    overall_risk_score DECIMAL(5,4),
+    overall_risk_level risk_level, -- 'low', 'medium', 'high', 'critical'
+    
+    -- Detailed Findings (JSONB)
+    identified_risks JSONB, -- Array of objects: [{"risk_code": "BOUNDARY_MISMATCH", "description": "Farm boundary overlaps with existing policy", "score": 0.85}, ...]
+    recommendations JSONB, -- Array of strings: ["MANUAL_REVIEW_REQUIRED", "REJECT_APPLICATION"]
+    raw_output JSONB, -- Full JSON response from the analysis engine (e.g., AI model)
+    
+    -- Metadata
+    analysis_notes TEXT, -- Human-readable summary or notes
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Indexes for performance
+CREATE INDEX idx_risk_analysis_policy ON registered_policy_risk_analysis(registered_policy_id);
+CREATE INDEX idx_risk_analysis_status ON registered_policy_risk_analysis(analysis_status);
+CREATE INDEX idx_risk_analysis_level ON registered_policy_risk_analysis(overall_risk_level);
+CREATE INDEX idx_risk_analysis_type ON registered_policy_risk_analysis(analysis_type);
+
+-- Comments
+COMMENT ON TABLE registered_policy_risk_analysis IS 'Stores AI/document-based risk analysis results for a specific policy application.';
+COMMENT ON COLUMN registered_policy_risk_analysis.registered_policy_id IS 'Link to the specific policy application being analyzed.';
+COMMENT ON COLUMN registered_policy_risk_analysis.analysis_status IS 'Overall status of the analysis job (pending, passed, failed, etc).';
+COMMENT ON COLUMN registered_policy_risk_analysis.analysis_type IS 'The method used for the risk analysis (AI, document, etc).';
+COMMENT ON COLUMN registered_policy_risk_analysis.overall_risk_score IS 'Normalized risk score (e.g., 0.0 = low, 1.0 = high).';
+COMMENT ON COLUMN registered_policy_risk_analysis.identified_risks IS 'JSON array of specific risk factors identified.';
+COMMENT ON COLUMN registered_policy_risk_analysis.recommendations IS 'JSON array of suggested actions for underwriting (e.g., MANUAL_REVIEW).';
+COMMENT ON COLUMN registered_policy_risk_analysis.raw_output IS 'Full raw JSON response from the analysis engine for debugging.';
 
 CREATE TABLE cancel_request (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

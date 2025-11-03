@@ -41,7 +41,8 @@ type BasePolicy struct {
 	TemplateDocumentURL            *string          `json:"template_document_url,omitempty" db:"template_document_url"`
 	DocumentValidationStatus       ValidationStatus `json:"document_validation_status" db:"document_validation_status"`
 	DocumentValidationScore        *float64         `json:"document_validation_score,omitempty" db:"document_validation_score"`
-	ImportantAdditionalInformation utils.JSONMap    `json:"important_additional_information,omitempty" db:"important_additional_information"`
+	DocumentTags                   utils.JSONMap    `json:"document_tags,omitempty" db:"document_tags"`
+	ImportantAdditionalInformation *string          `json:"important_additional_information,omitempty" db:"important_additional_information"`
 	CreatedAt                      time.Time        `json:"created_at" db:"created_at"`
 	UpdatedAt                      time.Time        `json:"updated_at" db:"updated_at"`
 	CreatedBy                      *string          `json:"created_by,omitempty" db:"created_by"`

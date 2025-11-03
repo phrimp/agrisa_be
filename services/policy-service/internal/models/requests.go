@@ -228,6 +228,7 @@ type CompletePolicyCreationResponse struct {
 	ConditionIDs    []uuid.UUID `json:"condition_ids"`
 	TotalConditions int         `json:"total_conditions"`
 	TotalDataCost   float64     `json:"total_data_cost"`
+	FilePath        string      `json:"-"`
 	CreatedAt       time.Time   `json:"created_at"`
 }
 

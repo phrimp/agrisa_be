@@ -106,45 +106,45 @@ This JSON represents what the system extracted/stored from the PDF. Your task is
 System must store exact enum values. Map PDF text to correct enum:
 
 **ThresholdOperator (system values):**
-- System stores: `"<"` | PDF shows: "less than", "below", "under", "<", "dưới", "nhỏ hơn", "thấp hơn"
-- System stores: `">"` | PDF shows: "greater than", "above", "over", ">", "trên", "lớn hơn", "cao hơn"
-- System stores: `"<="` | PDF shows: "less than or equal", "at most", "<=", "≤", "nhỏ hơn hoặc bằng", "tối đa"
-- System stores: `">="` | PDF shows: "greater than or equal", "at least", ">=", "≥", "lớn hơn hoặc bằng", "tối thiểu"
-- System stores: `"=="` | PDF shows: "equal", "equals", "==", "=", "bằng"
-- System stores: `"!="` | PDF shows: "not equal", "!=", "≠", "khác"
-- System stores: `"change_gt"` | PDF shows: "change greater than", "increase more than", "tăng trên", "thay đổi lớn hơn"
-- System stores: `"change_lt"` | PDF shows: "change less than", "decrease more than", "giảm hơn", "thay đổi nhỏ hơn"
+- System stores: "<" | PDF shows: "less than", "below", "under", "<", "dưới", "nhỏ hơn", "thấp hơn"
+- System stores: ">" | PDF shows: "greater than", "above", "over", ">", "trên", "lớn hơn", "cao hơn"
+- System stores: "<=" | PDF shows: "less than or equal", "at most", "<=", "≤", "nhỏ hơn hoặc bằng", "tối đa"
+- System stores: ">=" | PDF shows: "greater than or equal", "at least", ">=", "≥", "lớn hơn hoặc bằng", "tối thiểu"
+- System stores: "==" | PDF shows: "equal", "equals", "==", "=", "bằng"
+- System stores: "!=" | PDF shows: "not equal", "!=", "≠", "khác"
+- System stores: "change_gt" | PDF shows: "change greater than", "increase more than", "tăng trên", "thay đổi lớn hơn"
+- System stores: "change_lt" | PDF shows: "change less than", "decrease more than", "giảm hơn", "thay đổi nhỏ hơn"
 
 **LogicalOperator (system values):**
-- System stores: `"AND"` | PDF shows: "and", "và", "&", "all of", "both", "tất cả", "đồng thời"
-- System stores: `"OR"` | PDF shows: "or", "hoặc", "|", "any of", "either", "một trong", "bất kỳ"
+- System stores: "AND" | PDF shows: "and", "và", "&", "all of", "both", "tất cả", "đồng thời"
+- System stores: "OR" | PDF shows: "or", "hoặc", "|", "any of", "either", "một trong", "bất kỳ"
 
 **AggregationFunction (system values):**
-- System stores: `"sum"` | PDF shows: "sum", "total", "tổng", "cộng dồn", "cumulative"
-- System stores: `"avg"` | PDF shows: "average", "mean", "trung bình", "avg", "TB"
-- System stores: `"min"` | PDF shows: "minimum", "min", "lowest", "tối thiểu", "thấp nhất"
-- System stores: `"max"` | PDF shows: "maximum", "max", "highest", "tối đa", "cao nhất"
-- System stores: `"change"` | PDF shows: "change", "difference", "thay đổi", "delta", "biến động"
+- System stores: "sum" | PDF shows: "sum", "total", "tổng", "cộng dồn", "cumulative"
+- System stores: "avg" | PDF shows: "average", "mean", "trung bình", "avg", "TB"
+- System stores: "min" | PDF shows: "minimum", "min", "lowest", "tối thiểu", "thấp nhất"
+- System stores: "max" | PDF shows: "maximum", "max", "highest", "tối đa", "cao nhất"
+- System stores: "change" | PDF shows: "change", "difference", "thay đổi", "delta", "biến động"
 
 **MonitorFrequency (system values):**
-- System stores: `"hour"` | PDF shows: "hour", "hourly", "giờ", "per hour", "hàng giờ"
-- System stores: `"day"` | PDF shows: "day", "daily", "ngày", "per day", "hàng ngày"
-- System stores: `"week"` | PDF shows: "week", "weekly", "tuần", "per week", "hàng tuần"
-- System stores: `"month"` | PDF shows: "month", "monthly", "tháng", "per month", "hàng tháng"
-- System stores: `"year"` | PDF shows: "year", "yearly", "annual", "năm", "hàng năm"
+- System stores: "hour" | PDF shows: "hour", "hourly", "giờ", "per hour", "hàng giờ"
+- System stores: "day" | PDF shows: "day", "daily", "ngày", "per day", "hàng ngày"
+- System stores: "week" | PDF shows: "week", "weekly", "tuần", "per week", "hàng tuần"
+- System stores: "month" | PDF shows: "month", "monthly", "tháng", "per month", "hàng tháng"
+- System stores: "year" | PDF shows: "year", "yearly", "annual", "năm", "hàng năm"
 
 **BasePolicyStatus (system values):**
-- System stores: `"draft"` | PDF shows: "Draft", "Bản nháp", "Dự thảo"
-- System stores: `"active"` | PDF shows: "Active", "Hoạt động", "Hiệu lực", "In Force"
-- System stores: `"archived"` | PDF shows: "Archived", "Lưu trữ", "Hết hiệu lực"
+- System stores: "draft" | PDF shows: "Draft", "Bản nháp", "Dự thảo"
+- System stores: "active" | PDF shows: "Active", "Hoạt động", "Hiệu lực", "In Force"
+- System stores: "archived" | PDF shows: "Archived", "Lưu trữ", "Hết hiệu lực"
 
 **Boolean fields (system values):**
-- System stores: `true` | PDF shows: "Yes", "True", "Có", "✓", "✔", "Enabled", "Được áp dụng"
-- System stores: `false` | PDF shows: "No", "False", "Không", "✗", "✘", "Disabled", "Không áp dụng"
+- System stores: true | PDF shows: "Yes", "True", "Có", "✓", "✔", "Enabled", "Được áp dụng"
+- System stores: false | PDF shows: "No", "False", "Không", "✗", "✘", "Disabled", "Không áp dụng"
 
 **Currency codes (system values):**
-- System stores: `"VND"` | PDF shows: "VND", "đ", "₫", "Đồng", "Vietnamese Dong"
-- System stores: `"USD"` | PDF shows: "USD", "$", "US Dollar", "Đô la Mỹ"
+- System stores: "VND" | PDF shows: "VND", "đ", "₫", "Đồng", "Vietnamese Dong"
+- System stores: "USD" | PDF shows: "USD", "$", "US Dollar", "Đô la Mỹ"
 
 **Crop types:**
 - System must match PDF exactly (case-insensitive)
@@ -159,9 +159,9 @@ System must store exact enum values. Map PDF text to correct enum:
 - If PDF doesn't number triggers, match by semantic content
 
 **JSON paths:**
-- Use dot notation: `base_policy.fix_premium_amount`
-- Use array indices: `triggers[0].monitor_interval`
-- Nested arrays: `triggers[0].conditions[1].threshold_value`
+- Use dot notation: base_policy.fix_premium_amount
+- Use array indices: triggers[0].monitor_interval
+- Nested arrays: triggers[0].conditions[1].threshold_value
 
 ### Date/Time Field Handling
 
@@ -179,16 +179,16 @@ System must store exact enum values. Map PDF text to correct enum:
 ### Special Calculation Fields
 
 **is_per_hectare:**
-- System stores: `true` → PDF must indicate "per hectare", "per ha", "/ha", "theo héc-ta", "mỗi héc-ta"
-- System stores: `false` → PDF must indicate "per policy", "total", "fixed", "tổng", "cố định"
+- System stores: true → PDF must indicate "per hectare", "per ha", "/ha", "theo héc-ta", "mỗi héc-ta"
+- System stores: false → PDF must indicate "per policy", "total", "fixed", "tổng", "cố định"
 
 **consecutive_required:**
-- System stores: `true` → PDF must indicate "consecutive", "liên tiếp", "continuous", "liên tục"
-- System stores: `false` → PDF may indicate "cumulative", "total", "tổng cộng", "any occurrence"
+- System stores: true → PDF must indicate "consecutive", "liên tiếp", "continuous", "liên tục"
+- System stores: false → PDF may indicate "cumulative", "total", "tổng cộng", "any occurrence"
 
 **auto_renewal:**
-- System stores: `true` → PDF must indicate "automatic renewal", "auto-renew", "tự động gia hạn"
-- System stores: `false` → PDF must indicate "manual renewal", "không tự động", "needs renewal action"
+- System stores: true → PDF must indicate "automatic renewal", "auto-renew", "tự động gia hạn"
+- System stores: false → PDF must indicate "manual renewal", "không tự động", "needs renewal action"
 
 ### Null/Optional Field Handling
 
@@ -271,7 +271,7 @@ Return a single valid JSON object with this exact structure:
 ## VALIDATION STATUS LOGIC
 
 Use this exact decision tree:
-```
+
 1. Count CRITICAL field mismatches:
    IF any CRITICAL field mismatch found:
      → validation_status = "failed"
@@ -294,7 +294,6 @@ Use this exact decision tree:
    ELSE:
      → validation_status = "passed_ai"
      → System data matches PDF document
-```
 
 ---
 

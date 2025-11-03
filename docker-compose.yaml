@@ -463,6 +463,9 @@ services:
       - MINIO_LOCATION=${MINIO_LOCATION}
       - MINIO_SECURE=${MINIO_SECURE}
       - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
+      - GEMINI_KEY=${GEMINI_KEY}
+      - GEMINI_FLASH_MODEL=${GEMINI_FLASH_MODEL}
+      - GEMINI_PRO_MODEL=${GEMINI_PRO_MODEL}
 
     volumes:
       - ./logs/policy_service:/agrisa/log/policy_service

@@ -10,7 +10,6 @@ import (
 	"policy-service/internal/ai/gemini"
 	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -189,28 +188,57 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 func (s *BasePolicyService) AIPolicyValidationJob(params map[string]any) error {
 	defer func() {
 		if r := recover(); r != nil {
-			slog.Error("recover from panic", "panic", r)
+			slog.Error("AIPolicyValidationJob: recovered from panic", "panic", r)
 		}
 	}()
-	fileName := params["fileName"].(string)
-	basePolicyID := params["base_policy_id"].(string)
 
-	completePolicies, err := s.GetAllDraftPolicyWFilter(context.Background(), "", string(basePolicyID), "")
-	if len(completePolicies) == 0 || err != nil {
-		if strings.Contains(err.Error(), "") || len(completePolicies) == 0 {
-			return nil
-		}
-		return fmt.Errorf("failed to get all draft policy data: %w", err)
+	// Extract and validate parameters
+	fileName, ok := params["fileName"].(string)
+	if !ok || fileName == "" {
+		return fmt.Errorf("invalid or missing fileName parameter")
 	}
-	completePolicy := completePolicies[0]
 
-	if len(completePolicy.Validations) != 0 {
+	basePolicyIDStr, ok := params["base_policy_id"].(string)
+	if !ok || basePolicyIDStr == "" {
+		return fmt.Errorf("invalid or missing base_policy_id parameter")
+	}
+
+	slog.Info("Starting AI policy validation job",
+		"base_policy_id", basePolicyIDStr,
+		"file_name", fileName)
+
+	// Get policy data
+	completePolicies, err := s.GetAllDraftPolicyWFilter(context.Background(), "", basePolicyIDStr, "")
+	if err != nil {
+		return fmt.Errorf("failed to get draft policy data: %w", err)
+	}
+
+	if len(completePolicies) == 0 {
+		slog.Warn("No draft policies found for validation",
+			"base_policy_id", basePolicyIDStr)
 		return nil
 	}
 
+	completePolicy := completePolicies[0]
+
+	// Skip if already validated
+	if len(completePolicy.Validations) != 0 {
+		slog.Info("Policy already has validations, skipping",
+			"base_policy_id", basePolicyIDStr,
+			"validation_count", len(completePolicy.Validations))
+		return nil
+	}
+
+	// Parse base policy ID
+	basePolicyID, err := uuid.Parse(basePolicyIDStr)
+	if err != nil {
+		return fmt.Errorf("failed to parse base_policy_id: %w", err)
+	}
+
+	// Download document from MinIO
 	obj, err := s.minioClient.GetFile(context.Background(), minio.Storage.PolicyDocuments, fileName)
 	if err != nil {
-		return fmt.Errorf("error get document file from minio: %w", err)
+		return fmt.Errorf("failed to get document from MinIO: %w", err)
 	}
 	defer obj.Close()
 
@@ -219,26 +247,75 @@ func (s *BasePolicyService) AIPolicyValidationJob(params map[string]any) error {
 		return fmt.Errorf("failed to read PDF data: %w", err)
 	}
 
+	slog.Info("Document retrieved from MinIO",
+		"file_name", fileName,
+		"size_bytes", len(templateData))
+
+	// Prepare AI validation request
 	inputJSONBytes, err := json.MarshalIndent(completePolicy, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal input data to JSON: %w", err)
+		return fmt.Errorf("failed to marshal policy data to JSON: %w", err)
 	}
 	finalPrompt := fmt.Sprintf(gemini.ValidationPromptTemplate, string(inputJSONBytes))
 
 	aiRequestData := map[string]any{"pdf": templateData}
 
+	// Call AI validation service
+	slog.Info("Sending validation request to AI service",
+		"base_policy_id", basePolicyIDStr)
+
 	resp, err := s.geminiClient.SendAIWithPDF(context.Background(), finalPrompt, aiRequestData)
 	if err != nil {
-		return fmt.Errorf("error ai validation: %w", err)
+		return fmt.Errorf("AI validation request failed: %w", err)
 	}
-	var DocumentValidation models.BasePolicyDocumentValidation
+
+	// Parse AI response into validation request structure
+	var aiResponse models.BasePolicyDocumentValidation
 	respBytes, err := json.Marshal(resp)
 	if err != nil {
-		return fmt.Errorf("failed to marshal ai response: %w", err)
+		return fmt.Errorf("failed to marshal AI response: %w", err)
 	}
-	err = json.Unmarshal(respBytes, &DocumentValidation)
+
+	err = json.Unmarshal(respBytes, &aiResponse)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal ai response to DocumentValidation struct: %w", err)
+		return fmt.Errorf("failed to unmarshal AI response: %w", err)
 	}
+
+	slog.Info("AI validation response parsed",
+		"base_policy_id", basePolicyIDStr,
+		"validation_status", aiResponse.ValidationStatus,
+		"total_checks", aiResponse.TotalChecks,
+		"passed_checks", aiResponse.PassedChecks,
+		"failed_checks", aiResponse.FailedChecks)
+
+	// Create validation request using the same structure as ValidatePolicy
+	validationRequest := &models.ValidatePolicyRequest{
+		BasePolicyID:     basePolicyID,
+		ValidationStatus: aiResponse.ValidationStatus,
+		TotalChecks:      aiResponse.TotalChecks,
+		PassedChecks:     aiResponse.PassedChecks,
+		FailedChecks:     aiResponse.FailedChecks,
+		WarningCount:     aiResponse.WarningCount,
+		Mismatches:       aiResponse.Mismatches,
+		Warnings:         aiResponse.Warnings,
+		Recommendations:  aiResponse.Recommendations,
+		ValidatedBy:      "AI-System",
+		ValidationNotes:  nil,
+	}
+
+	// Use existing ValidatePolicy function for consistency
+	slog.Info("Saving validation using ValidatePolicy function",
+		"base_policy_id", basePolicyIDStr)
+
+	validation, err := s.ValidatePolicy(context.Background(), validationRequest)
+	if err != nil {
+		return fmt.Errorf("failed to save validation: %w", err)
+	}
+
+	slog.Info("AI policy validation job completed successfully",
+		"base_policy_id", basePolicyIDStr,
+		"validation_id", validation.ID,
+		"validation_status", validation.ValidationStatus)
+
 	return nil
 }

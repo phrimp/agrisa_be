@@ -100,7 +100,7 @@ func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("CREATION_FAILED", err.Error()))
 	}
 
-	pathName := "/document/" + req.PolicyDocument.Name + "-" + response.BasePolicyID.String()
+	pathName := response.FilePath
 	err = bph.minioClient.UploadBytes(c, minio.Storage.PolicyDocuments, pathName, []byte(req.PolicyDocument.Data), "application/pdf")
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("FILE_UPLOAD_FAILED", err.Error()))

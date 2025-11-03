@@ -103,10 +103,10 @@ func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
-			document_validation_status, document_validation_score, important_additional_information,
+			document_validation_status, document_validation_score, document_tags, important_additional_information,
 			created_at, updated_at, created_by
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
 		)`
 
 	_, err := r.db.Exec(query,
@@ -116,7 +116,7 @@ func (r *BasePolicyRepository) CreateBasePolicy(policy *models.BasePolicy) error
 		policy.OverThresholdMultiplier, policy.PayoutBaseRate, policy.PayoutCap, policy.EnrollmentStartDay,
 		policy.EnrollmentEndDay, policy.AutoRenewal, policy.RenewalDiscountRate, policy.BasePolicyInvalidDate,
 		policy.InsuranceValidFromDay, policy.InsuranceValidToDay, policy.Status, policy.TemplateDocumentURL,
-		policy.DocumentValidationStatus, policy.DocumentValidationScore, policy.ImportantAdditionalInformation,
+		policy.DocumentValidationStatus, policy.DocumentValidationScore, policy.DocumentTags, policy.ImportantAdditionalInformation,
 		policy.CreatedAt, policy.UpdatedAt, policy.CreatedBy)
 	if err != nil {
 		slog.Error("Failed to create base policy",
@@ -138,14 +138,14 @@ func (r *BasePolicyRepository) GetBasePolicyByID(id uuid.UUID) (*models.BasePoli
 
 	var policy models.BasePolicy
 	query := `
-		SELECT 
+		SELECT
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
 			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
-			document_validation_status, document_validation_score, important_additional_information,
+			document_validation_status, document_validation_score, document_tags, important_additional_information,
 			created_at, updated_at, created_by
 		FROM base_policy
 		WHERE id = $1`
@@ -176,14 +176,14 @@ func (r *BasePolicyRepository) GetAllBasePolicies() ([]models.BasePolicy, error)
 
 	var policies []models.BasePolicy
 	query := `
-		SELECT 
+		SELECT
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
 			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
-			document_validation_status, document_validation_score, important_additional_information,
+			document_validation_status, document_validation_score, document_tags, important_additional_information,
 			created_at, updated_at, created_by
 		FROM base_policy
 		ORDER BY created_at DESC`
@@ -203,14 +203,14 @@ func (r *BasePolicyRepository) GetAllBasePolicies() ([]models.BasePolicy, error)
 func (r *BasePolicyRepository) GetBasePoliciesByProvider(providerID string) ([]models.BasePolicy, error) {
 	var policies []models.BasePolicy
 	query := `
-		SELECT 
+		SELECT
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
 			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
-			document_validation_status, document_validation_score, important_additional_information,
+			document_validation_status, document_validation_score, document_tags, important_additional_information,
 			created_at, updated_at, created_by
 		FROM base_policy
 		WHERE insurance_provider_id = $1
@@ -227,14 +227,14 @@ func (r *BasePolicyRepository) GetBasePoliciesByProvider(providerID string) ([]m
 func (r *BasePolicyRepository) GetBasePoliciesByStatus(status models.BasePolicyStatus) ([]models.BasePolicy, error) {
 	var policies []models.BasePolicy
 	query := `
-		SELECT 
+		SELECT
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
 			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
-			document_validation_status, document_validation_score, important_additional_information,
+			document_validation_status, document_validation_score, document_tags, important_additional_information,
 			created_at, updated_at, created_by
 		FROM base_policy
 		WHERE status = $1
@@ -251,14 +251,14 @@ func (r *BasePolicyRepository) GetBasePoliciesByStatus(status models.BasePolicyS
 func (r *BasePolicyRepository) GetBasePoliciesByCropType(cropType string) ([]models.BasePolicy, error) {
 	var policies []models.BasePolicy
 	query := `
-		SELECT 
+		SELECT
 			id, insurance_provider_id, product_name, product_code, product_description,
 			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
 			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
-			document_validation_status, document_validation_score, important_additional_information,
+			document_validation_status, document_validation_score, document_tags, important_additional_information,
 			created_at, updated_at, created_by
 		FROM base_policy
 		WHERE crop_type = $1
@@ -282,13 +282,13 @@ func (r *BasePolicyRepository) UpdateBasePolicy(policy *models.BasePolicy) error
 	policy.UpdatedAt = time.Now()
 
 	// Serialize JSONB field to []byte before database update
-	var importantInfoBytes []byte
+	var documentTagsBytes []byte
 	var err error
 
-	if policy.ImportantAdditionalInformation != nil {
-		importantInfoBytes, err = utils.SerializeMapToBytes(policy.ImportantAdditionalInformation)
+	if policy.DocumentTags != nil {
+		documentTagsBytes, err = utils.SerializeMapToBytes(policy.DocumentTags)
 		if err != nil {
-			return fmt.Errorf("failed to serialize important_additional_information: %w", err)
+			return fmt.Errorf("failed to serialize document_tags: %w", err)
 		}
 	}
 
@@ -321,9 +321,10 @@ func (r *BasePolicyRepository) UpdateBasePolicy(policy *models.BasePolicy) error
 			template_document_url = $25,
 			document_validation_status = $26,
 			document_validation_score = $27,
-			important_additional_information = $28,
-			updated_at = $29
-		WHERE id = $30`
+			document_tags = $28,
+			important_additional_information = $29,
+			updated_at = $30
+		WHERE id = $31`
 
 	result, err := r.db.Exec(query,
 		policy.InsuranceProviderID, policy.ProductName, policy.ProductCode, policy.ProductDescription,
@@ -333,7 +334,7 @@ func (r *BasePolicyRepository) UpdateBasePolicy(policy *models.BasePolicy) error
 		policy.EnrollmentStartDay, policy.EnrollmentEndDay, policy.AutoRenewal, policy.RenewalDiscountRate,
 		policy.BasePolicyInvalidDate, policy.InsuranceValidFromDay, policy.InsuranceValidToDay, policy.Status,
 		policy.TemplateDocumentURL, policy.DocumentValidationStatus, policy.DocumentValidationScore,
-		importantInfoBytes, policy.UpdatedAt, policy.ID)
+		documentTagsBytes, policy.ImportantAdditionalInformation, policy.UpdatedAt, policy.ID)
 	if err != nil {
 		slog.Error("Failed to update base policy",
 			"policy_id", policy.ID,
@@ -879,13 +880,13 @@ func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.Ba
 	policy.UpdatedAt = time.Now()
 
 	// Serialize JSONB field to []byte before database insertion
-	var importantInfoBytes []byte
+	var documentTagsBytes []byte
 	var err error
 
-	if policy.ImportantAdditionalInformation != nil {
-		importantInfoBytes, err = utils.SerializeMapToBytes(policy.ImportantAdditionalInformation)
+	if policy.DocumentTags != nil {
+		documentTagsBytes, err = utils.SerializeMapToBytes(policy.DocumentTags)
 		if err != nil {
-			return fmt.Errorf("failed to serialize important_additional_information: %w", err)
+			return fmt.Errorf("failed to serialize document_tags: %w", err)
 		}
 	}
 
@@ -897,10 +898,10 @@ func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.Ba
 			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
 			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
-			document_validation_status, document_validation_score, important_additional_information,
+			document_validation_status, document_validation_score, document_tags, important_additional_information,
 			created_at, updated_at, created_by
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33
 		)`
 
 	_, err = tx.Exec(query,
@@ -910,7 +911,7 @@ func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.Ba
 		policy.OverThresholdMultiplier, policy.PayoutBaseRate, policy.PayoutCap, policy.EnrollmentStartDay,
 		policy.EnrollmentEndDay, policy.AutoRenewal, policy.RenewalDiscountRate, policy.BasePolicyInvalidDate,
 		policy.InsuranceValidFromDay, policy.InsuranceValidToDay, policy.Status, policy.TemplateDocumentURL,
-		policy.DocumentValidationStatus, policy.DocumentValidationScore, importantInfoBytes,
+		policy.DocumentValidationStatus, policy.DocumentValidationScore, documentTagsBytes, policy.ImportantAdditionalInformation,
 		policy.CreatedAt, policy.UpdatedAt, policy.CreatedBy)
 	return err
 }
@@ -1370,7 +1371,7 @@ func (r *BasePolicyRepository) GetCompletePolicyByFilter(
 			auto_renewal, renewal_discount_rate, base_policy_invalid_date,
 			insurance_valid_from_day, insurance_valid_to_day, status,
 			template_document_url, document_validation_status,
-			document_validation_score, important_additional_information,
+			document_validation_score, document_tags, important_additional_information,
 			created_at, updated_at, created_by, cancel_premium_rate
 		FROM base_policy
 		WHERE 1=1`
@@ -1723,10 +1724,10 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidationTx(
 		validation.PassedChecks,
 		validation.FailedChecks,
 		validation.WarningCount,
-		validation.Mismatches,           // Raw map, not serialized
-		validation.Warnings,             // Raw map, not serialized
-		validation.Recommendations,      // Raw map, not serialized
-		validation.ExtractedParameters,  // Raw map, not serialized
+		validation.Mismatches,          // Raw map, not serialized
+		validation.Warnings,            // Raw map, not serialized
+		validation.Recommendations,     // Raw map, not serialized
+		validation.ExtractedParameters, // Raw map, not serialized
 		validation.ValidatedBy,
 		validation.ValidationNotes,
 		validation.CreatedAt,

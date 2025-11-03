@@ -475,26 +475,28 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 	}()
 
 	if request.PolicyDocument.Data != "" && request.PolicyDocument.Name != "" {
-		// upload policy document to Minio
-		files := minio.FileUploadRequest{
-			minio.FileUpload{
-				FieldName: "template_document_url",
-				FileName:  request.PolicyDocument.Name,
-				Data:      request.PolicyDocument.Data,
-			},
-		}
+		//// upload policy document to Minio
+		//files := minio.FileUploadRequest{
+		//	minio.FileUpload{
+		//		FieldName: "template_document_url",
+		//		FileName:  request.PolicyDocument.Name,
+		//		Data:      request.PolicyDocument.Data,
+		//	},
+		//}
 
-		allowedExts := []string{}
+		// allowedExts := []string{}
 
-		uploadedFiles, err := s.minioClient.FileProcessing(files, ctx, allowedExts, 100)
-		if err != nil {
-			slog.Error("File processing failed",
-				"base_policy_id", basePolicyID,
-				"error", err)
-			return nil, fmt.Errorf("file processing failed: %w", err)
-		}
+		//processedInfo, err := s.minioClient.FileProcessing(files, ctx, allowedExts, 50)
+		//if err != nil {
+		//	slog.Error("File processing failed",
+		//		"base_policy_id", basePolicyID,
+		//		"error", err)
+		//	return nil, fmt.Errorf("file processing failed: %w", err)
+		//}
+		//slog.Info("file upload information", "info", processedInfo)
 
-		request.BasePolicy.TemplateDocumentURL = &uploadedFiles[0].ResourceURL
+		templatePath := request.PolicyDocument.Name + "-" + basePolicyID.String()
+		request.BasePolicy.TemplateDocumentURL = &templatePath
 	}
 
 	// Serialize and store BasePolicy
@@ -596,6 +598,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 		ConditionIDs:    conditionIDs,
 		TotalConditions: len(request.Conditions),
 		TotalDataCost:   totalCost,
+		FilePath:        *request.BasePolicy.TemplateDocumentURL,
 		CreatedAt:       time.Now(),
 	}
 
