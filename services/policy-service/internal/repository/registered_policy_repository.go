@@ -3,6 +3,7 @@ package repository
 import (
 	utils "agrisa_utils"
 	"fmt"
+	"log/slog"
 	"policy-service/internal/models"
 	"time"
 
@@ -320,4 +321,116 @@ func (r *RegisteredPolicyRepository) GetByFarmerIDWithFarm(farmerID string) ([]m
 	}
 
 	return results, nil
+}
+
+// ============================================================================
+// TRANSACTION SUPPORT
+// ============================================================================
+
+// BeginTransaction starts a new database transaction
+func (r *RegisteredPolicyRepository) BeginTransaction() (*sqlx.Tx, error) {
+	slog.Info("Beginning database transaction for registered policy")
+	tx, err := r.db.Beginx()
+	if err != nil {
+		slog.Error("Failed to begin transaction", "error", err)
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	return tx, nil
+}
+
+// CreateTx creates a registered policy within a transaction
+func (r *RegisteredPolicyRepository) CreateTx(tx *sqlx.Tx, policy *models.RegisteredPolicy) error {
+	if policy.ID == uuid.Nil {
+		policy.ID = uuid.New()
+	}
+	policy.CreatedAt = time.Now()
+	policy.UpdatedAt = time.Now()
+
+	query := `
+		INSERT INTO registered_policy (
+			id, policy_number, base_policy_id, insurance_provider_id, farm_id, farmer_id,
+			coverage_amount, coverage_start_date, coverage_end_date, planting_date,
+			area_multiplier, total_farmer_premium, premium_paid_by_farmer, premium_paid_at,
+			data_complexity_score, monthly_data_cost, total_data_cost,
+			status, underwriting_status, signed_policy_document_url,
+			created_at, updated_at, registered_by
+		) VALUES (
+			:id, :policy_number, :base_policy_id, :insurance_provider_id, :farm_id, :farmer_id,
+			:coverage_amount, :coverage_start_date, :coverage_end_date, :planting_date,
+			:area_multiplier, :total_farmer_premium, :premium_paid_by_farmer, :premium_paid_at,
+			:data_complexity_score, :monthly_data_cost, :total_data_cost,
+			:status, :underwriting_status, :signed_policy_document_url,
+			:created_at, :updated_at, :registered_by
+		)`
+
+	_, err := tx.NamedExec(query, policy)
+	if err != nil {
+		return fmt.Errorf("failed to create registered policy in transaction: %w", err)
+	}
+
+	return nil
+}
+
+// UpdateTx updates a registered policy within a transaction
+func (r *RegisteredPolicyRepository) UpdateTx(tx *sqlx.Tx, policy *models.RegisteredPolicy) error {
+	policy.UpdatedAt = time.Now()
+
+	query := `
+		UPDATE registered_policy SET
+			policy_number = :policy_number, base_policy_id = :base_policy_id,
+			insurance_provider_id = :insurance_provider_id, farm_id = :farm_id, farmer_id = :farmer_id,
+			coverage_amount = :coverage_amount, coverage_start_date = :coverage_start_date,
+			coverage_end_date = :coverage_end_date, planting_date = :planting_date,
+			area_multiplier = :area_multiplier, total_farmer_premium = :total_farmer_premium,
+			premium_paid_by_farmer = :premium_paid_by_farmer, premium_paid_at = :premium_paid_at,
+			data_complexity_score = :data_complexity_score, monthly_data_cost = :monthly_data_cost,
+			total_data_cost = :total_data_cost, status = :status, underwriting_status = :underwriting_status,
+			signed_policy_document_url = :signed_policy_document_url, updated_at = :updated_at,
+			registered_by = :registered_by
+		WHERE id = :id`
+
+	_, err := tx.NamedExec(query, policy)
+	if err != nil {
+		return fmt.Errorf("failed to update registered policy in transaction: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteTx deletes a registered policy within a transaction
+func (r *RegisteredPolicyRepository) DeleteTx(tx *sqlx.Tx, id uuid.UUID) error {
+	query := `DELETE FROM registered_policy WHERE id = $1`
+
+	_, err := tx.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete registered policy in transaction: %w", err)
+	}
+
+	return nil
+}
+
+// GetByIDTx retrieves a registered policy by ID within a transaction
+func (r *RegisteredPolicyRepository) GetByIDTx(tx *sqlx.Tx, id uuid.UUID) (*models.RegisteredPolicy, error) {
+	var policy models.RegisteredPolicy
+	query := `SELECT * FROM registered_policy WHERE id = $1`
+
+	err := tx.Get(&policy, query, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get registered policy in transaction: %w", err)
+	}
+
+	return &policy, nil
+}
+
+// GetByFarmIDTx retrieves registered policies by farm ID within a transaction
+func (r *RegisteredPolicyRepository) GetByFarmIDTx(tx *sqlx.Tx, farmID uuid.UUID) ([]models.RegisteredPolicy, error) {
+	var policies []models.RegisteredPolicy
+	query := `SELECT * FROM registered_policy WHERE farm_id = $1 ORDER BY created_at DESC`
+
+	err := tx.Select(&policies, query, farmID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get registered policies by farm in transaction: %w", err)
+	}
+
+	return policies, nil
 }

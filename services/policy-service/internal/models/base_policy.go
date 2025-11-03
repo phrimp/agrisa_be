@@ -79,7 +79,7 @@ type BasePolicyTriggerCondition struct {
 	ConditionOrder        int                  `json:"condition_order" db:"condition_order"`
 
 	// Data usage cost tracking fields (merged from BasePolicyDataUsage)
-	BaseCost           float64 `json:"base_cost" db:"base_cost"`
+	BaseCost           int64   `json:"base_cost" db:"base_cost"`
 	CategoryMultiplier float64 `json:"category_multiplier" db:"category_multiplier"`
 	TierMultiplier     float64 `json:"tier_multiplier" db:"tier_multiplier"`
 	CalculatedCost     float64 `json:"calculated_cost" db:"calculated_cost"`

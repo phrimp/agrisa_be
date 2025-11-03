@@ -362,7 +362,7 @@ func (s *BasePolicyService) validateDataSource(condition *models.BasePolicyTrigg
 	if condition.CategoryMultiplier != dataCategory.CategoryCostMultiplier {
 		return fmt.Errorf("data tier category multiplier mismatch")
 	}
-	totalCost := dataSource.BaseCost * dataTier.DataTierMultiplier * dataCategory.CategoryCostMultiplier
+	totalCost := float64(dataSource.BaseCost) * dataTier.DataTierMultiplier * dataCategory.CategoryCostMultiplier
 	if condition.CalculatedCost != totalCost {
 		slog.Error("Total cost calculation mismatch",
 			"condition_id", condition.ID,

@@ -24,7 +24,7 @@ type DataSource struct {
 	UpdateFrequency   *string        `json:"update_frequency,omitempty" db:"update_frequency"`
 	SpatialResolution *string        `json:"spatial_resolution,omitempty" db:"spatial_resolution"`
 	AccuracyRating    *float64       `json:"accuracy_rating,omitempty" db:"accuracy_rating"`
-	BaseCost          float64        `json:"base_cost" db:"base_cost"`
+	BaseCost          int64          `json:"base_cost" db:"base_cost"`
 	DataTierID        uuid.UUID      `json:"data_tier_id" db:"data_tier_id"`
 	DataProvider      *string        `json:"data_provider,omitempty" db:"data_provider"`
 	APIEndpoint       *string        `json:"api_endpoint,omitempty" db:"api_endpoint"`

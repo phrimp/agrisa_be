@@ -241,4 +241,13 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 // BUSINESS PROCESS
 // ============================================================================
 
-func (s *RegisteredPolicyService) RegisterAPolicy() {}
+func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicyRequest) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("recover from panic", "panic", r)
+		}
+	}()
+
+	if request.IsNewFarm {
+	}
+}

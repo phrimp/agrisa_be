@@ -93,7 +93,7 @@ CREATE TABLE data_source (
     accuracy_rating DECIMAL(3,2),
     
     -- BASE COST per policy per month
-    base_cost DECIMAL(8,4) NOT NULL DEFAULT 0.0,
+    base_cost BIGINT NOT NULL DEFAULT 0.0,
     
     -- Tier assignment
     data_tier_id UUID NOT NULL REFERENCES data_tier(id),
@@ -323,7 +323,7 @@ CREATE TABLE base_policy_trigger_condition (
     condition_order INT DEFAULT 0,
     
     -- Data usage cost tracking (merged from base_policy_data_usage)
-    base_cost DECIMAL(8,4) NOT NULL DEFAULT 0.0,
+    base_cost BIGINT NOT NULL DEFAULT 0.0,
     category_multiplier DECIMAL(4,2) NOT NULL DEFAULT 1.0,
     tier_multiplier DECIMAL(4,2) NOT NULL DEFAULT 1.0,
     calculated_cost DECIMAL(10,4) NOT NULL DEFAULT 0.0,

@@ -1466,7 +1466,7 @@ func (r *BasePolicyRepository) GetTriggersWithConditionsByPolicyID(
 		BaselineFunction      *models.AggregationFunction `db:"baseline_function"`
 		ValidationWindowDays  *int                        `db:"validation_window_days"`
 		ConditionOrder        *int                        `db:"condition_order"`
-		BaseCost              *float64                    `db:"base_cost"`
+		BaseCost              *int64                      `db:"base_cost"`
 		CategoryMultiplier    *float64                    `db:"category_multiplier"`
 		TierMultiplier        *float64                    `db:"tier_multiplier"`
 		CalculatedCost        *float64                    `db:"calculated_cost"`

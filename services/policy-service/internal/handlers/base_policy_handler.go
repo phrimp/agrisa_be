@@ -1,12 +1,15 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"policy-service/internal/services"
+	"policy-service/internal/worker"
 	"strings"
 	"time"
 
@@ -19,12 +22,14 @@ import (
 type BasePolicyHandler struct {
 	basePolicyService *services.BasePolicyService
 	minioClient       *minio.MinioClient
+	workerManager     *worker.WorkerManagerV2
 }
 
-func NewBasePolicyHandler(basePolicyService *services.BasePolicyService, minioClient *minio.MinioClient) *BasePolicyHandler {
+func NewBasePolicyHandler(basePolicyService *services.BasePolicyService, minioClient *minio.MinioClient, workerManager *worker.WorkerManagerV2) *BasePolicyHandler {
 	return &BasePolicyHandler{
 		basePolicyService: basePolicyService,
 		minioClient:       minioClient,
+		workerManager:     workerManager,
 	}
 }
 
@@ -100,11 +105,42 @@ func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("CREATION_FAILED", err.Error()))
 	}
 
+	// Decode base64 PDF data before uploading
 	pathName := response.FilePath
-	err = bph.minioClient.UploadBytes(c, minio.Storage.PolicyDocuments, pathName, []byte(req.PolicyDocument.Data), "application/pdf")
+	pdfData, err := base64.StdEncoding.DecodeString(req.PolicyDocument.Data)
 	if err != nil {
+		slog.Error("Failed to decode base64 PDF data",
+			"base_policy_id", response.BasePolicyID,
+			"error", err)
+		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_PDF_DATA", "Failed to decode base64 PDF data"))
+	}
+
+	err = bph.minioClient.UploadBytes(c.Context(), minio.Storage.PolicyDocuments, pathName, pdfData, "application/pdf")
+	if err != nil {
+		slog.Error("Failed to upload PDF to MinIO",
+			"base_policy_id", response.BasePolicyID,
+			"path", pathName,
+			"error", err)
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("FILE_UPLOAD_FAILED", err.Error()))
 	}
+
+	slog.Info("Successfully uploaded policy document",
+		"base_policy_id", response.BasePolicyID,
+		"path", pathName,
+		"size_bytes", len(pdfData))
+	// send job to AI
+	job := worker.JobPayload{
+		JobID:      uuid.NewString(),
+		Type:       "document-validation",
+		Params:     map[string]any{"fileName": pathName, "base_policy_id": response.BasePolicyID},
+		MaxRetries: 100,
+		OneTime:    true,
+	}
+	scheduler, ok := bph.workerManager.GetSchedulerByPolicyID(*worker.AIWorkerPoolUUID)
+	if !ok {
+		slog.Error("error get AI scheduler", "error", "scheduler doesn't exist")
+	}
+	scheduler.AddJob(job)
 
 	return c.Status(http.StatusCreated).JSON(utils.CreateSuccessResponse(response))
 }
