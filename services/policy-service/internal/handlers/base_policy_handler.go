@@ -3,10 +3,12 @@ package handlers
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"policy-service/internal/services"
+	"policy-service/internal/worker"
 	"strings"
 	"time"
 
@@ -19,12 +21,14 @@ import (
 type BasePolicyHandler struct {
 	basePolicyService *services.BasePolicyService
 	minioClient       *minio.MinioClient
+	workerManager     *worker.WorkerManagerV2
 }
 
-func NewBasePolicyHandler(basePolicyService *services.BasePolicyService, minioClient *minio.MinioClient) *BasePolicyHandler {
+func NewBasePolicyHandler(basePolicyService *services.BasePolicyService, minioClient *minio.MinioClient, workerManager *worker.WorkerManagerV2) *BasePolicyHandler {
 	return &BasePolicyHandler{
 		basePolicyService: basePolicyService,
 		minioClient:       minioClient,
+		workerManager:     workerManager,
 	}
 }
 
@@ -105,6 +109,19 @@ func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("FILE_UPLOAD_FAILED", err.Error()))
 	}
+	// send job to AI
+	job := worker.JobPayload{
+		JobID:      uuid.NewString(),
+		Type:       "document-validation",
+		Params:     map[string]any{"fileName": pathName, "base_policy_id": response.BasePolicyID},
+		MaxRetries: 100,
+		OneTime:    true,
+	}
+	scheduler, ok := bph.workerManager.GetSchedulerByPolicyID(*worker.AIWorkerPoolUUID)
+	if !ok {
+		slog.Error("error get AI scheduler", "error", "scheduler doesn't exist")
+	}
+	scheduler.AddJob(job)
 
 	return c.Status(http.StatusCreated).JSON(utils.CreateSuccessResponse(response))
 }

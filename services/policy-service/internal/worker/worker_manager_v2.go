@@ -383,7 +383,7 @@ func (m *WorkerManagerV2) CreateAIWorkerInfrastructure(ctx context.Context) (*uu
 	pool := NewWorkingPool(
 		3,
 		poolName,
-		30*time.Minute,
+		5*time.Minute,
 		goRedisClient,
 		0.083,
 		1,
@@ -402,14 +402,14 @@ func (m *WorkerManagerV2) CreateAIWorkerInfrastructure(ctx context.Context) (*uu
 	monitorInterval := time.Duration(5 * time.Minute)
 	scheduler := NewJobScheduler(schedulerName, monitorInterval, pool)
 
-	job := JobPayload{
-		JobID:      uuid.NewString(),
-		Type:       "document-validation",
-		Params:     map[string]any{},
-		MaxRetries: 100,
-		OneTime:    true,
-	}
-	scheduler.AddJob(job)
+	//job := JobPayload{
+	//	JobID:      uuid.NewString(),
+	//	Type:       "document-validation",
+	//	Params:     map[string]any{},
+	//	MaxRetries: 100,
+	//	OneTime:    true,
+	//}
+	//scheduler.AddJob(job)
 	aiUUID := uuid.New()
 	m.mu.Lock()
 	m.pools[aiUUID] = pool
