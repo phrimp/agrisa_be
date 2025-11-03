@@ -717,3 +717,16 @@ func (r *PolicyDetailFilterRequest) Validate() error {
 
 	return nil
 }
+
+type RegisterAPolicyAPIRequest struct {
+	RegisteredPolicy RegisteredPolicy `json:"registered_policy" validate:"required"`
+	Farm             Farm             `json:"farm"`
+	PolicyDocument   PolicyDocument   `json:"policy_document"`
+}
+
+type RegisterAPolicyRequest struct {
+	RegisteredPolicy RegisteredPolicy
+	Farm             Farm
+	FarmID           bool
+	IsNewFarm        bool
+}
