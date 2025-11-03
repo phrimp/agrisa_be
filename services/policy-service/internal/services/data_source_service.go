@@ -40,9 +40,6 @@ func (s *DataSourceService) CreateDataSource(dataSource *models.DataSource) erro
 	}
 
 	// Set default values
-	if dataSource.BaseCost == 0 {
-		dataSource.BaseCost = 0.0
-	}
 	dataSource.IsActive = true
 
 	return s.repo.CreateDataSource(dataSource)
@@ -67,9 +64,6 @@ func (s *DataSourceService) CreateDataSourcesBatch(dataSources []models.DataSour
 		}
 
 		// Set default values
-		if dataSources[i].BaseCost == 0 {
-			dataSources[i].BaseCost = 0.0
-		}
 		dataSources[i].IsActive = true
 	}
 
@@ -338,11 +332,11 @@ func (s *DataSourceService) matchesFilters(ds models.DataSource, filters DataSou
 
 // DataSourceFilters represents filtering criteria for data sources
 type DataSourceFilters struct {
-	TierID         *uuid.UUID              `json:"tier_id,omitempty"`
-	DataSourceType *models.DataSourceType  `json:"data_source_type,omitempty"`
-	ParameterName  *string                 `json:"parameter_name,omitempty"`
-	ActiveOnly     bool                    `json:"active_only"`
-	MinCost        *float64                `json:"min_cost,omitempty"`
-	MaxCost        *float64                `json:"max_cost,omitempty"`
-	MinAccuracy    *float64                `json:"min_accuracy,omitempty"`
+	TierID         *uuid.UUID             `json:"tier_id,omitempty"`
+	DataSourceType *models.DataSourceType `json:"data_source_type,omitempty"`
+	ParameterName  *string                `json:"parameter_name,omitempty"`
+	ActiveOnly     bool                   `json:"active_only"`
+	MinCost        *int64                 `json:"min_cost,omitempty"`
+	MaxCost        *int64                 `json:"max_cost,omitempty"`
+	MinAccuracy    *float64               `json:"min_accuracy,omitempty"`
 }

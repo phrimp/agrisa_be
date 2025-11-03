@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
 	"log/slog"
@@ -104,11 +105,29 @@ func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("CREATION_FAILED", err.Error()))
 	}
 
+	// Decode base64 PDF data before uploading
 	pathName := response.FilePath
-	err = bph.minioClient.UploadBytes(c, minio.Storage.PolicyDocuments, pathName, []byte(req.PolicyDocument.Data), "application/pdf")
+	pdfData, err := base64.StdEncoding.DecodeString(req.PolicyDocument.Data)
 	if err != nil {
+		slog.Error("Failed to decode base64 PDF data",
+			"base_policy_id", response.BasePolicyID,
+			"error", err)
+		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_PDF_DATA", "Failed to decode base64 PDF data"))
+	}
+
+	err = bph.minioClient.UploadBytes(c.Context(), minio.Storage.PolicyDocuments, pathName, pdfData, "application/pdf")
+	if err != nil {
+		slog.Error("Failed to upload PDF to MinIO",
+			"base_policy_id", response.BasePolicyID,
+			"path", pathName,
+			"error", err)
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("FILE_UPLOAD_FAILED", err.Error()))
 	}
+
+	slog.Info("Successfully uploaded policy document",
+		"base_policy_id", response.BasePolicyID,
+		"path", pathName,
+		"size_bytes", len(pdfData))
 	// send job to AI
 	job := worker.JobPayload{
 		JobID:      uuid.NewString(),

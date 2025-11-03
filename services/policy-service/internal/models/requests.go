@@ -196,7 +196,7 @@ type CompletePolicyCreationRequest struct {
 
 type PolicyDocument struct {
 	Name string `json:"name" validate:"required"`
-	Data string `json:"data" validate:"required"`
+	Data string `json:"data" validate:"required"` // This is base64
 }
 
 func (r CompletePolicyCreationRequest) Validate() error {
@@ -323,7 +323,7 @@ type CreateDataSourceRequest struct {
 	UpdateFrequency   *string        `json:"update_frequency,omitempty" validate:"omitempty,max=100"`
 	SpatialResolution *string        `json:"spatial_resolution,omitempty" validate:"omitempty,max=100"`
 	AccuracyRating    *float64       `json:"accuracy_rating,omitempty" validate:"omitempty,min=0,max=100"`
-	BaseCost          float64        `json:"base_cost" validate:"min=0"`
+	BaseCost          int64          `json:"base_cost" validate:"min=0"`
 	DataTierID        uuid.UUID      `json:"data_tier_id" validate:"required"`
 	DataProvider      *string        `json:"data_provider,omitempty" validate:"omitempty,max=200"`
 	APIEndpoint       *string        `json:"api_endpoint,omitempty" validate:"omitempty,max=500"`
@@ -414,7 +414,7 @@ type UpdateDataSourceRequest struct {
 	UpdateFrequency   *string         `json:"update_frequency,omitempty" validate:"omitempty,max=100"`
 	SpatialResolution *string         `json:"spatial_resolution,omitempty" validate:"omitempty,max=100"`
 	AccuracyRating    *float64        `json:"accuracy_rating,omitempty" validate:"omitempty,min=0,max=100"`
-	BaseCost          *float64        `json:"base_cost,omitempty" validate:"omitempty,min=0"`
+	BaseCost          *int64          `json:"base_cost,omitempty" validate:"omitempty,min=0"`
 	DataTierID        *uuid.UUID      `json:"data_tier_id,omitempty"`
 	DataProvider      *string         `json:"data_provider,omitempty" validate:"omitempty,max=200"`
 	APIEndpoint       *string         `json:"api_endpoint,omitempty" validate:"omitempty,max=500"`
@@ -515,8 +515,8 @@ type DataSourceFiltersRequest struct {
 	DataSourceType *DataSourceType `json:"data_source_type,omitempty"`
 	ParameterName  *string         `json:"parameter_name,omitempty"`
 	ActiveOnly     bool            `json:"active_only"`
-	MinCost        *float64        `json:"min_cost,omitempty" validate:"omitempty,min=0"`
-	MaxCost        *float64        `json:"max_cost,omitempty" validate:"omitempty,min=0"`
+	MinCost        *int64          `json:"min_cost,omitempty" validate:"omitempty,min=0"`
+	MaxCost        *int64          `json:"max_cost,omitempty" validate:"omitempty,min=0"`
 	MinAccuracy    *float64        `json:"min_accuracy,omitempty" validate:"omitempty,min=0,max=100"`
 }
 
