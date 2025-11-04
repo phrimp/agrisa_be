@@ -730,3 +730,5 @@ type RegisterAPolicyRequest struct {
 	FarmID           bool
 	IsNewFarm        bool
 }
+
+type RegisterAPolicyResponse struct{}
