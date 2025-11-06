@@ -15,6 +15,7 @@ import (
 type RegisteredPolicyService struct {
 	registeredPolicyRepo *repository.RegisteredPolicyRepository
 	basePolicyRepo       *repository.BasePolicyRepository
+	farmRepo             *repository.FarmRepository
 	workerManager        *worker.WorkerManagerV2
 }
 
@@ -238,16 +239,35 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 }
 
 // ============================================================================
+// Validation
+// ============================================================================
+
+func (s *RegisteredPolicyService) validateRegisteredPolicy(policy *models.RegisteredPolicy) error {
+	return nil
+}
+
+// ============================================================================
 // BUSINESS PROCESS
 // ============================================================================
 
-func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicyRequest) {
+func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicyRequest) (*models.RegisterAPolicyResponse, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("recover from panic", "panic", r)
 		}
 	}()
+	tx, err := s.registeredPolicyRepo.BeginTransaction()
+	if err != nil {
+		return nil, fmt.Errorf("error begining registered policy transaction: %w", err)
+	}
 
 	if request.IsNewFarm {
+		// create new farm
+		// err := s.farmRepo.ValidateFarm(request.Farm)
+		err := s.farmRepo.CreateTx(tx, &request.Farm)
+		if err != nil {
+			return nil, fmt.Errorf("error creating farm: %w", err)
+		}
 	}
+	return nil, nil
 }
