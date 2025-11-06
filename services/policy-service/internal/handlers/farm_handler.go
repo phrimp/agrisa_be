@@ -1,20 +1,21 @@
 package handlers
 
 import (
+	"log"
+	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"policy-service/internal/services"
 	"strings"
 
 	"github.com/gofiber/fiber/v3"
-	"github.com/minio/minio-go/v7"
 )
 
 type FarmHandler struct {
 	farmService *services.FarmService
-	minioClient *minio.Client
+	minioClient *minio.MinioClient
 }
 
-func NewFarmHandler(farmService *services.FarmService, minioClient *minio.Client) *FarmHandler {
+func NewFarmHandler(farmService *services.FarmService, minioClient *minio.MinioClient) *FarmHandler {
 	return &FarmHandler{
 		farmService: farmService,
 		minioClient: minioClient,
@@ -28,6 +29,7 @@ func (h *FarmHandler) RegisterRoutes(app *fiber.App) {
 	protectedGr.Post("/farms", h.CreateFarm)
 	protectedGr.Put("/farms/:id", h.UpdateFarm)
 	protectedGr.Put("/farms/:id", h.DeleteFarm)
+	protectedGr.Get("/farms", h.GetAllFarms)
 }
 
 func (h *FarmHandler) GetFarmByID(c fiber.Ctx) error {
@@ -45,7 +47,7 @@ func (h *FarmHandler) GetFarmByID(c fiber.Ctx) error {
 
 func (h *FarmHandler) CreateFarm(c fiber.Ctx) error {
 	var farm models.Farm
-	if err := c.JSON(&farm); err != nil {
+	if err := c.Bind().JSON(&farm); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
@@ -75,6 +77,7 @@ func (h *FarmHandler) CreateFarm(c fiber.Ctx) error {
 
 	// Create the farm
 	if err := h.farmService.CreateFarm(&farm, userID); err != nil {
+		log.Println("Error creating farm:", err)
 		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}
 
@@ -132,4 +135,12 @@ func (h *FarmHandler) DeleteFarm(c fiber.Ctx) error {
 	}
 
 	return c.Status(fiber.StatusNoContent).JSON(nil)
+}
+
+func (h *FarmHandler) GetAllFarms(c fiber.Ctx) error {
+	farms, err := h.farmService.GetAllFarms()
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+	}
+	return c.Status(fiber.StatusOK).JSON(farms)
 }

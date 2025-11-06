@@ -107,6 +107,7 @@ func main() {
 	basePolicyRepo := repository.NewBasePolicyRepository(db, redisClient.GetClient())
 	dataSourceRepo := repository.NewDataSourceRepository(db)
 	registeredPolicyRepo := repository.NewRegisteredPolicyRepository(db)
+	farmRepo := repository.NewFarmRepository(db)
 
 	// Initialize WorkerManagerV2
 	workerManager := worker.NewWorkerManagerV2(db, redisClient)
@@ -116,6 +117,7 @@ func main() {
 	dataSourceService := services.NewDataSourceService(dataSourceRepo)
 	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, geminiClient)
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, workerManager)
+	farmService := services.NewFarmService(farmRepo)
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
 
 	// Expiration Listener
@@ -151,11 +153,13 @@ func main() {
 	dataTierHandler := handlers.NewDataTierHandler(dataTierService)
 	dataSourceHandler := handlers.NewDataSourceHandler(dataSourceService)
 	basePolicyHandler := handlers.NewBasePolicyHandler(basePolicyService, minioClient, workerManager)
+	farmHandler := handlers.NewFarmHandler(farmService, minioClient)
 
 	// Register routes
 	dataTierHandler.Register(app)
 	dataSourceHandler.Register(app)
 	basePolicyHandler.Register(app)
+	farmHandler.RegisterRoutes(app)
 
 	shutdownChan := make(chan os.Signal, 1)
 	doneChan := make(chan bool, 1)

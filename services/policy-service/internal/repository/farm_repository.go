@@ -26,19 +26,34 @@ func (r *FarmRepository) Create(farm *models.Farm) error {
 	farm.CreatedAt = time.Now()
 	farm.UpdatedAt = time.Now()
 
+	// Query sử dụng PostGIS functions để convert WKT string
+	// ST_GeomFromText: convert WKT → GEOMETRY
+	// ST_GeogFromText: convert WKT → GEOGRAPHY
 	query := `
 		INSERT INTO farm (
-			id, owner_id, farm_name, farm_code, boundary, center_location, area_sqm,
-			province, district, commune, address, crop_type, planting_date, expected_harvest_date,
+			id, owner_id, farm_name, farm_code, 
+			boundary, 
+			center_location, 
+			area_sqm,
+			province, district, commune, address, 
+			crop_type, planting_date, expected_harvest_date,
 			crop_type_verified, crop_type_verified_at, crop_type_verified_by, crop_type_confidence,
-			land_certificate_number, land_certificate_url, land_ownership_verified, land_ownership_verified_at,
-			has_irrigation, irrigation_type, soil_type, status, created_at, updated_at
+			land_certificate_number, land_certificate_url, 
+			land_ownership_verified, land_ownership_verified_at,
+			has_irrigation, irrigation_type, soil_type, 
+			status, created_at, updated_at
 		) VALUES (
-			:id, :owner_id, :farm_name, :farm_code, :boundary, :center_location, :area_sqm,
-			:province, :district, :commune, :address, :crop_type, :planting_date, :expected_harvest_date,
+			:id, :owner_id, :farm_name, :farm_code, 
+			ST_GeomFromText(:boundary), 
+			ST_GeogFromText(:center_location), 
+			:area_sqm,
+			:province, :district, :commune, :address, 
+			:crop_type, :planting_date, :expected_harvest_date,
 			:crop_type_verified, :crop_type_verified_at, :crop_type_verified_by, :crop_type_confidence,
-			:land_certificate_number, :land_certificate_url, :land_ownership_verified, :land_ownership_verified_at,
-			:has_irrigation, :irrigation_type, :soil_type, :status, :created_at, :updated_at
+			:land_certificate_number, :land_certificate_url, 
+			:land_ownership_verified, :land_ownership_verified_at,
+			:has_irrigation, :irrigation_type, :soil_type, 
+			:status, :created_at, :updated_at
 		)`
 
 	_, err := r.db.NamedExec(query, farm)
@@ -129,6 +144,7 @@ func (r *FarmRepository) GetFarmByFarmCode(farmCode string) (*models.Farm, error
 	}
 	return &farm, nil
 }
+
 // ============================================================================
 // TRANSACTION SUPPORT
 // ============================================================================
