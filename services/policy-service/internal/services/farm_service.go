@@ -2,6 +2,7 @@ package services
 
 import (
 	utils "agrisa_utils"
+	"context"
 	"fmt"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
@@ -17,17 +18,20 @@ func NewFarmService(farmRepo *repository.FarmRepository) *FarmService {
 	return &FarmService{farmRepository: farmRepo}
 }
 
-func (s *FarmService) GetFarmByID(id string, userID string) (*models.Farm, error) {
-	farmID, err := uuid.Parse(id)
+func (s *FarmService) GetFarmByIDMe(ctx context.Context, id string, userID string, isMe bool) (*models.FarmResponse, error) {
+	_, err := uuid.Parse(id)
 	if err != nil {
 		return nil, err
 	}
-	farm, err := s.farmRepository.GetByID(farmID)
+
+	farm, err := s.farmRepository.GetFarmByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	if farm.OwnerID != userID {
-		return nil, fmt.Errorf("unauthorized")
+	if isMe {
+		if farm.OwnerID != userID {
+			return nil, fmt.Errorf("unauthorized")
+		}
 	}
 	return farm, nil
 }
@@ -39,20 +43,22 @@ func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
 	return s.farmRepository.Create(farm)
 }
 
-func (s *FarmService) GetAllFarms() ([]models.Farm, error) {
-	return s.farmRepository.GetAll()
+func (s *FarmService) GetAllFarms(ctx context.Context) ([]models.FarmResponse, error) {
+	return s.farmRepository.GetAll(ctx)
 }
 
 func (s *FarmService) GetByOwnerID(ownerID string) ([]models.Farm, error) {
 	return s.farmRepository.GetByOwnerID(ownerID)
 }
 
-func (s *FarmService) UpdateFarm(farm *models.Farm, updatedBy string) error {
+func (s *FarmService) UpdateFarm(ctx context.Context, farm *models.Farm, updatedBy string, farmID string) error {
 	// check if farm exists
-	_, err := s.farmRepository.GetByID(farm.ID)
+	_, err := s.farmRepository.GetFarmByID(ctx, farmID)
 	if err != nil {
 		return err
 	}
+
+	farm.ID, err = uuid.Parse(farmID)
 
 	// Validate required fields
 	if farm.CropType == "" {
@@ -61,11 +67,6 @@ func (s *FarmService) UpdateFarm(farm *models.Farm, updatedBy string) error {
 	if farm.AreaSqm <= 0 {
 		return fmt.Errorf("badrequest: area_sqm must be greater than 0")
 	}
-
-	if (updatedBy != "") && (farm.OwnerID != updatedBy) {
-		return fmt.Errorf("unauthorized to update farm")
-	}
-
 	// check if farm_code has already existed
 	if farm.FarmCode != nil {
 		existingFarm, err := s.farmRepository.GetFarmByFarmCode(*farm.FarmCode)
@@ -91,14 +92,14 @@ func (s *FarmService) UpdateFarm(farm *models.Farm, updatedBy string) error {
 	return s.farmRepository.Update(farm)
 }
 
-func (s *FarmService) DeleteFarm(id string, deletedBy string) error {
+func (s *FarmService) DeleteFarm(ctx context.Context, id string, deletedBy string) error {
 	// check if farm exists
 	farmID, err := uuid.Parse(id)
 	if err != nil {
 		return fmt.Errorf("invalid farm ID: %w", err)
 	}
 
-	existFarm, err := s.farmRepository.GetByID(farmID)
+	existFarm, err := s.farmRepository.GetFarmByID(ctx, id)
 	if err != nil {
 		return err
 	}
@@ -109,7 +110,7 @@ func (s *FarmService) DeleteFarm(id string, deletedBy string) error {
 
 	// check if user is authorized to delete farm
 	if deletedBy != "" {
-		farm, err := s.farmRepository.GetByID(farmID)
+		farm, err := s.farmRepository.GetFarmByID(ctx, id)
 		if err != nil {
 			return err
 		}

@@ -2,8 +2,11 @@ package models
 
 import (
 	"database/sql/driver"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
+	"strings"
 
 	"github.com/twpayne/go-geom"
 	"github.com/twpayne/go-geom/encoding/ewkb"
@@ -19,16 +22,12 @@ type GeoJSONPolygon struct {
 
 // Value implements the driver.Valuer interface for GeoJSONPolygon
 // Converts GeoJSON to WKT (Well-Known Text) format for PostGIS GEOMETRY(Polygon, 4326)
-//
-// Flow:
-// GeoJSON → geom.Polygon → WKT string
-// Example output: "SRID=4326;POLYGON((106.0 10.0, 106.1 10.0, 106.1 10.1, 106.0 10.1, 106.0 10.0))"
 func (g *GeoJSONPolygon) Value() (driver.Value, error) {
 	if g == nil || g.Type == "" {
 		return nil, nil
 	}
 
-	// [Bước 1] Convert GeoJSON to go-geom Polygon
+	// Convert GeoJSON to go-geom Polygon
 	geoJSONBytes, err := json.Marshal(g)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal GeoJSON: %w", err)
@@ -44,18 +43,16 @@ func (g *GeoJSONPolygon) Value() (driver.Value, error) {
 		return nil, fmt.Errorf("geometry is not a Polygon")
 	}
 
-	// [Bước 2] Set SRID to 4326 (WGS84)
+	// Set SRID to 4326 (WGS84)
 	polygon.SetSRID(4326)
 
-	// [Bước 3] Convert to WKT (Well-Known Text) format
-	// Output example: "POLYGON((106.0 10.0, 106.1 10.0, ...))"
+	// Convert to WKT format
 	wktString, err := wkt.Marshal(polygon)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal to WKT: %w", err)
 	}
 
-	// [Bước 4] Add SRID prefix for PostGIS
-	// Final output: "SRID=4326;POLYGON((106.0 10.0, ...))"
+	// Add SRID prefix
 	wktWithSRID := fmt.Sprintf("SRID=%d;%s", polygon.SRID(), wktString)
 
 	return wktWithSRID, nil
@@ -68,26 +65,67 @@ func (g *GeoJSONPolygon) Scan(value interface{}) error {
 		return nil
 	}
 
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("failed to scan GeoJSONPolygon: expected []byte, got %T", value)
+	var ewkbData []byte
+
+	switch v := value.(type) {
+	case []byte:
+		// Case 1: Already binary EWKB data
+		ewkbData = v
+		log.Printf("DEBUG Polygon: Received []byte, length=%d", len(v))
+
+	case string:
+		// Case 2: HEX-encoded string from PostgreSQL
+		log.Printf("DEBUG Polygon: Received string, length=%d", len(v))
+
+		hexStr := v
+
+		// Strip \x prefix if exists (some drivers add this)
+		if strings.HasPrefix(v, "\\x") {
+			hexStr = v[2:]
+			log.Printf("DEBUG Polygon: Stripped \\x prefix")
+		}
+
+		// Normalize to lowercase (hex.DecodeString accepts both but let's be consistent)
+		hexStr = strings.ToLower(hexStr)
+
+		// Validate it looks like hex
+		if len(hexStr)%2 != 0 {
+			return fmt.Errorf("invalid hex string length: %d (must be even)", len(hexStr))
+		}
+
+		// Decode HEX string to binary
+		decoded, err := hex.DecodeString(hexStr)
+		if err != nil {
+			log.Printf("ERROR Polygon: Failed to decode hex string")
+			log.Printf("ERROR Polygon: First 100 chars: %s", hexStr[:min(100, len(hexStr))])
+			return fmt.Errorf("failed to decode hex string for Polygon: %w", err)
+		}
+
+		ewkbData = decoded
+		log.Printf("DEBUG Polygon: Decoded to %d bytes, first byte: 0x%02x", len(decoded), decoded[0])
+
+	default:
+		return fmt.Errorf("unsupported type for Polygon scan: %T", value)
 	}
 
-	// Unmarshal EWKB to go-geom
-	geometry, err := ewkb.Unmarshal(bytes)
+	// Unmarshal EWKB binary to go-geom Polygon
+	geometry, err := ewkb.Unmarshal(ewkbData)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal EWKB: %w", err)
+		log.Printf("ERROR Polygon: EWKB unmarshal failed")
+		log.Printf("ERROR Polygon: Data length: %d bytes", len(ewkbData))
+		log.Printf("ERROR Polygon: First 20 bytes: %v", ewkbData[:min(20, len(ewkbData))])
+		return fmt.Errorf("failed to unmarshal EWKB for Polygon: %w", err)
 	}
 
 	polygon, ok := geometry.(*geom.Polygon)
 	if !ok {
-		return fmt.Errorf("scanned geometry is not a Polygon")
+		return fmt.Errorf("scanned geometry is not a Polygon, got %T", geometry)
 	}
 
 	// Convert to GeoJSON
 	geoJSONBytes, err := geojson.Marshal(polygon)
 	if err != nil {
-		return fmt.Errorf("failed to marshal to GeoJSON: %w", err)
+		return fmt.Errorf("failed to marshal Polygon to GeoJSON: %w", err)
 	}
 
 	return json.Unmarshal(geoJSONBytes, g)
@@ -101,16 +139,12 @@ type GeoJSONPoint struct {
 
 // Value implements the driver.Valuer interface for GeoJSONPoint
 // Converts GeoJSON to WKT (Well-Known Text) format for PostGIS GEOGRAPHY(Point, 4326)
-//
-// Flow:
-// GeoJSON → geom.Point → WKT string
-// Example output: "SRID=4326;POINT(106.6297 10.8231)"
 func (g *GeoJSONPoint) Value() (driver.Value, error) {
 	if g == nil || g.Type == "" {
 		return nil, nil
 	}
 
-	// [Bước 1] Convert GeoJSON to go-geom Point
+	// Convert GeoJSON to go-geom Point
 	geoJSONBytes, err := json.Marshal(g)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal GeoJSON: %w", err)
@@ -126,18 +160,16 @@ func (g *GeoJSONPoint) Value() (driver.Value, error) {
 		return nil, fmt.Errorf("geometry is not a Point")
 	}
 
-	// [Bước 2] Set SRID to 4326 (WGS84)
+	// Set SRID to 4326 (WGS84)
 	point.SetSRID(4326)
 
-	// [Bước 3] Convert to WKT (Well-Known Text) format
-	// Output example: "POINT(106.6297 10.8231)"
+	// Convert to WKT format
 	wktString, err := wkt.Marshal(point)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal to WKT: %w", err)
 	}
 
-	// [Bước 4] Add SRID prefix for PostGIS
-	// Final output: "SRID=4326;POINT(106.6297 10.8231)"
+	// Add SRID prefix
 	wktWithSRID := fmt.Sprintf("SRID=%d;%s", point.SRID(), wktString)
 
 	return wktWithSRID, nil
@@ -150,27 +182,76 @@ func (g *GeoJSONPoint) Scan(value interface{}) error {
 		return nil
 	}
 
-	bytes, ok := value.([]byte)
-	if !ok {
-		return fmt.Errorf("failed to scan GeoJSONPoint: expected []byte, got %T", value)
+	var ewkbData []byte
+
+	switch v := value.(type) {
+	case []byte:
+		// Case 1: Already binary EWKB data
+		ewkbData = v
+		log.Printf("DEBUG Point: Received []byte, length=%d", len(v))
+
+	case string:
+		// Case 2: HEX-encoded string from PostgreSQL
+		log.Printf("DEBUG Point: Received string, length=%d", len(v))
+
+		hexStr := v
+
+		// Strip \x prefix if exists
+		if strings.HasPrefix(v, "\\x") {
+			hexStr = v[2:]
+			log.Printf("DEBUG Point: Stripped \\x prefix")
+		}
+
+		// Normalize to lowercase
+		hexStr = strings.ToLower(hexStr)
+
+		// Validate hex format
+		if len(hexStr)%2 != 0 {
+			return fmt.Errorf("invalid hex string length: %d (must be even)", len(hexStr))
+		}
+
+		// Decode HEX string to binary
+		decoded, err := hex.DecodeString(hexStr)
+		if err != nil {
+			log.Printf("ERROR Point: Failed to decode hex string")
+			log.Printf("ERROR Point: First 100 chars: %s", hexStr[:min(100, len(hexStr))])
+			return fmt.Errorf("failed to decode hex string for Point: %w", err)
+		}
+
+		ewkbData = decoded
+		log.Printf("DEBUG Point: Decoded to %d bytes, first byte: 0x%02x", len(decoded), decoded[0])
+
+	default:
+		return fmt.Errorf("unsupported type for Point scan: %T", value)
 	}
 
-	// Unmarshal EWKB to go-geom
-	geometry, err := ewkb.Unmarshal(bytes)
+	// Unmarshal EWKB binary to go-geom Point
+	geometry, err := ewkb.Unmarshal(ewkbData)
 	if err != nil {
-		return fmt.Errorf("failed to unmarshal EWKB: %w", err)
+		log.Printf("ERROR Point: EWKB unmarshal failed")
+		log.Printf("ERROR Point: Data length: %d bytes", len(ewkbData))
+		log.Printf("ERROR Point: First 20 bytes: %v", ewkbData[:min(20, len(ewkbData))])
+		return fmt.Errorf("failed to unmarshal EWKB for Point: %w", err)
 	}
 
 	point, ok := geometry.(*geom.Point)
 	if !ok {
-		return fmt.Errorf("scanned geometry is not a Point")
+		return fmt.Errorf("scanned geometry is not a Point, got %T", geometry)
 	}
 
 	// Convert to GeoJSON
 	geoJSONBytes, err := geojson.Marshal(point)
 	if err != nil {
-		return fmt.Errorf("failed to marshal to GeoJSON: %w", err)
+		return fmt.Errorf("failed to marshal Point to GeoJSON: %w", err)
 	}
 
 	return json.Unmarshal(geoJSONBytes, g)
+}
+
+// Helper function for safe min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

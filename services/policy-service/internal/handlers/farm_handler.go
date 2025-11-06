@@ -25,11 +25,25 @@ func NewFarmHandler(farmService *services.FarmService, minioClient *minio.MinioC
 func (h *FarmHandler) RegisterRoutes(app *fiber.App) {
 	protectedGr := app.Group("policy/protected/api/v2")
 
+	protectedGr.Get("/farms/me/:id", h.GetFarmByIDMe)
 	protectedGr.Get("/farms/:id", h.GetFarmByID)
 	protectedGr.Post("/farms", h.CreateFarm)
 	protectedGr.Put("/farms/:id", h.UpdateFarm)
-	protectedGr.Put("/farms/:id", h.DeleteFarm)
+	protectedGr.Post("/farms/:id", h.DeleteFarm)
 	protectedGr.Get("/farms", h.GetAllFarms)
+}
+
+func (h *FarmHandler) GetFarmByIDMe(c fiber.Ctx) error {
+	// get farm id from params
+	farmID := c.Params("id")
+	userID := c.Get("X-User-ID")
+
+	farm, err := h.farmService.GetFarmByIDMe(c.Context(), farmID, userID, true)
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
+	}
+	c.JSON(farm)
+	return nil
 }
 
 func (h *FarmHandler) GetFarmByID(c fiber.Ctx) error {
@@ -37,7 +51,7 @@ func (h *FarmHandler) GetFarmByID(c fiber.Ctx) error {
 	farmID := c.Params("id")
 	userID := c.Get("X-User-ID")
 
-	farm, err := h.farmService.GetFarmByID(farmID, userID)
+	farm, err := h.farmService.GetFarmByIDMe(c.Context(), farmID, userID, false)
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}
@@ -86,7 +100,7 @@ func (h *FarmHandler) CreateFarm(c fiber.Ctx) error {
 
 func (h *FarmHandler) UpdateFarm(c fiber.Ctx) error {
 	var farm models.Farm
-	if err := c.JSON(&farm); err != nil {
+	if err := c.Bind().JSON(&farm); err != nil {
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
@@ -95,6 +109,9 @@ func (h *FarmHandler) UpdateFarm(c fiber.Ctx) error {
 	if userID == "" {
 		return fiber.NewError(fiber.StatusUnauthorized, "User ID is required")
 	}
+
+	//Get farm ID from params
+	farmID := c.Params("id")
 
 	// Validate harvest date if provided
 	if farm.ExpectedHarvestDate != nil {
@@ -107,7 +124,7 @@ func (h *FarmHandler) UpdateFarm(c fiber.Ctx) error {
 	}
 
 	// Update the farm
-	if err := h.farmService.UpdateFarm(&farm, userID); err != nil {
+	if err := h.farmService.UpdateFarm(c.Context(), &farm, userID, farmID); err != nil {
 		if strings.Contains(err.Error(), "badrequest") {
 			return fiber.NewError(fiber.StatusBadRequest, err.Error())
 		}
@@ -124,7 +141,7 @@ func (h *FarmHandler) DeleteFarm(c fiber.Ctx) error {
 	farmID := c.Params("id")
 	userID := c.Get("X-User-ID")
 
-	if err := h.farmService.DeleteFarm(farmID, userID); err != nil {
+	if err := h.farmService.DeleteFarm(c.Context(), farmID, userID); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			return fiber.NewError(fiber.StatusNotFound, err.Error())
 		}
@@ -138,7 +155,7 @@ func (h *FarmHandler) DeleteFarm(c fiber.Ctx) error {
 }
 
 func (h *FarmHandler) GetAllFarms(c fiber.Ctx) error {
-	farms, err := h.farmService.GetAllFarms()
+	farms, err := h.farmService.GetAllFarms(c.Context())
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, err.Error())
 	}

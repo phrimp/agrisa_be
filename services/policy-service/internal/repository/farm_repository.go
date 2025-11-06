@@ -2,13 +2,18 @@ package repository
 
 import (
 	utils "agrisa_utils"
+	"context"
+	"database/sql"
 	"fmt"
+	"log"
 	"log/slog"
 	"policy-service/internal/models"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/paulmach/orb"
+	"github.com/paulmach/orb/encoding/wkb"
 )
 
 type FarmRepository struct {
@@ -17,6 +22,12 @@ type FarmRepository struct {
 
 func NewFarmRepository(db *sqlx.DB) *FarmRepository {
 	return &FarmRepository{db: db}
+}
+
+type farmRow struct {
+	models.FarmResponse
+	BoundaryWKB []byte `db:"boundary_wkb"`
+	CenterWKB   []byte `db:"center_wkb"`
 }
 
 func (r *FarmRepository) Create(farm *models.Farm) error {
@@ -64,25 +75,77 @@ func (r *FarmRepository) Create(farm *models.Farm) error {
 	return nil
 }
 
-func (r *FarmRepository) GetByID(id uuid.UUID) (*models.Farm, error) {
-	var farm models.Farm
-	query := `SELECT * FROM farm WHERE id = $1`
+func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.FarmResponse, error) {
+	query := `
+		SELECT 
+			id, owner_id, farm_name, farm_code,
+			area_sqm, province, district, commune, address,
+			crop_type, planting_date, expected_harvest_date,
+			crop_type_verified, crop_type_verified_at,
+			crop_type_verified_by, crop_type_confidence,
+			land_certificate_number, land_certificate_url,
+			land_ownership_verified, land_ownership_verified_at,
+			has_irrigation, irrigation_type, soil_type,
+			status, created_at, updated_at,
+			ST_AsBinary(boundary) as boundary_wkb,
+			ST_AsBinary(center_location) as center_wkb
+		FROM farm
+		WHERE id = $1
+	`
 
-	err := r.db.Get(&farm, query, id)
+	var row farmRow
+	err := r.db.GetContext(ctx, &row, query, id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get farm: %w", err)
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("farm not found: %s", id)
+		}
+		return nil, fmt.Errorf("query failed: %w", err)
+	}
+
+	farm := row.FarmResponse
+
+	if err := r.unmarshalGeometry(&row, &farm); err != nil {
+		log.Println("Error unmarshaling geometry:", err)
+		return nil, err
 	}
 
 	return &farm, nil
 }
 
-func (r *FarmRepository) GetAll() ([]models.Farm, error) {
-	var farms []models.Farm
-	query := `SELECT * FROM farm ORDER BY created_at DESC`
+func (r *FarmRepository) GetAll(ctx context.Context) ([]models.FarmResponse, error) {
+	query := `
+		SELECT 
+			id, owner_id, farm_name, farm_code,
+			area_sqm, province, district, commune, address,
+			crop_type, planting_date, expected_harvest_date,
+			crop_type_verified, crop_type_verified_at,
+			crop_type_verified_by, crop_type_confidence,
+			land_certificate_number, land_certificate_url,
+			land_ownership_verified, land_ownership_verified_at,
+			has_irrigation, irrigation_type, soil_type,
+			status, created_at, updated_at,
+			ST_AsBinary(boundary) as boundary_wkb,
+			ST_AsBinary(center_location) as center_wkb
+		FROM farm 
+		ORDER BY created_at DESC
+	`
 
-	err := r.db.Select(&farms, query)
+	var rows []farmRow
+	err := r.db.SelectContext(ctx, &rows, query)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get farms: %w", err)
+	}
+
+	// Convert sang FarmResponse và unmarshal geometry
+	farms := make([]models.FarmResponse, 0, len(rows))
+	for _, row := range rows {
+		farm := row.FarmResponse
+		if err := r.unmarshalGeometry(&row, &farm); err != nil {
+			log.Println("Error unmarshaling geometry:", err)
+			return nil, err
+		}
+
+		farms = append(farms, farm)
 	}
 
 	return farms, nil
@@ -105,8 +168,8 @@ func (r *FarmRepository) Update(farm *models.Farm) error {
 
 	query := `
 		UPDATE farm SET
-			farm_name = :farm_name, farm_code = :farm_code, boundary = :boundary,
-			center_location = :center_location, area_sqm = :area_sqm, province = :province,
+			farm_name = :farm_name, farm_code = :farm_code, boundary = ST_GeomFromText(:boundary),
+			center_location = ST_GeomFromText(:center_location), area_sqm = :area_sqm, province = :province,
 			district = :district, commune = :commune, address = :address, crop_type = :crop_type,
 			planting_date = :planting_date, expected_harvest_date = :expected_harvest_date,
 			crop_type_verified = :crop_type_verified, crop_type_verified_at = :crop_type_verified_at,
@@ -176,7 +239,7 @@ func (r *FarmRepository) CreateTx(tx *sqlx.Tx, farm *models.Farm) error {
 			land_certificate_number, land_certificate_url, land_ownership_verified, land_ownership_verified_at,
 			has_irrigation, irrigation_type, soil_type, status, created_at, updated_at
 		) VALUES (
-			:id, :owner_id, :farm_name, :farm_code, :boundary, :center_location, :area_sqm,
+			:id, :owner_id, :farm_name, :farm_code, ST_GeomFromText(:boundary), ST_GeomFromText(:center_location), :area_sqm,
 			:province, :district, :commune, :address, :crop_type, :planting_date, :expected_harvest_date,
 			:crop_type_verified, :crop_type_verified_at, :crop_type_verified_by, :crop_type_confidence,
 			:land_certificate_number, :land_certificate_url, :land_ownership_verified, :land_ownership_verified_at,
@@ -197,8 +260,8 @@ func (r *FarmRepository) UpdateTx(tx *sqlx.Tx, farm *models.Farm) error {
 
 	query := `
 		UPDATE farm SET
-			farm_name = :farm_name, farm_code = :farm_code, boundary = :boundary,
-			center_location = :center_location, area_sqm = :area_sqm, province = :province,
+			farm_name = :farm_name, farm_code = :farm_code, boundary = ST_GeomFromText(:boundary),
+			center_location = ST_GeomFromText(:center_location), area_sqm = :area_sqm, province = :province,
 			district = :district, commune = :commune, address = :address, crop_type = :crop_type,
 			planting_date = :planting_date, expected_harvest_date = :expected_harvest_date,
 			crop_type_verified = :crop_type_verified, crop_type_verified_at = :crop_type_verified_at,
@@ -253,4 +316,28 @@ func (r *FarmRepository) GetByOwnerIDTx(tx *sqlx.Tx, ownerID string) ([]models.F
 	}
 
 	return farms, nil
+}
+
+func (r *FarmRepository) unmarshalGeometry(row *farmRow, farm *models.FarmResponse) error {
+	if len(row.BoundaryWKB) > 0 {
+		geom, err := wkb.Unmarshal(row.BoundaryWKB)
+		if err != nil {
+			return fmt.Errorf("unmarshal boundary: %w", err)
+		}
+		if poly, ok := geom.(orb.Polygon); ok {
+			farm.Boundary = &poly
+		}
+	}
+
+	if len(row.CenterWKB) > 0 {
+		geom, err := wkb.Unmarshal(row.CenterWKB)
+		if err != nil {
+			return fmt.Errorf("unmarshal center: %w", err)
+		}
+		if pt, ok := geom.(orb.Point); ok {
+			farm.CenterLocation = &pt
+		}
+	}
+
+	return nil
 }

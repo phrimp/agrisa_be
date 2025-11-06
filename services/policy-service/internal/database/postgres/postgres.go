@@ -135,7 +135,8 @@ func ConnectAndCreateDB(cfg config.PostgresConfig) (*sqlx.DB, error) {
 	}
 
 	DB_Status = true
-
+	sqlx.BindDriver("postgres", sqlx.DOLLAR)
+	sqlx.NameMapper = func(s string) string { return s }
 	return db, nil
 }
 
