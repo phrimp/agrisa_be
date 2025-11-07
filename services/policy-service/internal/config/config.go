@@ -4,6 +4,7 @@ import "os"
 
 type PolicyServiceConfig struct {
 	Port         string
+	APIKey       string
 	PostgresCfg  PostgresConfig
 	RabbitMQCfg  RabbitMQConfig
 	RedisCfg     RedisConfig
@@ -49,7 +50,8 @@ type GeminiAPIConfig struct {
 
 func New() *PolicyServiceConfig {
 	return &PolicyServiceConfig{
-		Port: getEnvOrDefault("PORT", "8083"),
+		Port:   getEnvOrDefault("PORT", "8083"),
+		APIKey: getEnvOrDefault("API_KEY", ""),
 		PostgresCfg: PostgresConfig{
 			DBname:   getEnvOrDefault("POSTGRES_DB", "agrisa"),
 			Username: getEnvOrDefault("POSTGRES_USER", "postgres"),

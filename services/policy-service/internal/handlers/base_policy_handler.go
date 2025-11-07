@@ -183,7 +183,7 @@ func (bph *BasePolicyHandler) GetDraftPoliciesWithFilter(c fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("RETRIEVAL_FAILED", err.Error()))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"policies":       policies,
 		"count":          len(policies),
 		"provider_id":    providerID,
@@ -202,6 +202,9 @@ func (bph *BasePolicyHandler) ValidatePolicy(c fiber.Ctx) error {
 	if err := req.Validate(); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("VALIDATION_FAILED", err.Error()))
 	}
+
+	validateBy := c.Get("X-User-ID")
+	req.ValidatedBy = validateBy
 
 	validation, err := bph.basePolicyService.ValidatePolicy(c.Context(), &req)
 	if err != nil {

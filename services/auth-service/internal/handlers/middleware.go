@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"auth-service/internal/config"
 	"auth-service/internal/services"
 	"auth-service/utils"
 	"log"
@@ -14,12 +15,14 @@ import (
 type Middleware struct {
 	jwtService     *services.JWTService
 	sessionService *services.SessionService
+	config         *config.AuthConfig
 }
 
-func NewMiddleware(jwtService *services.JWTService, sessionService *services.SessionService) *Middleware {
+func NewMiddleware(jwtService *services.JWTService, sessionService *services.SessionService, config *config.AuthConfig) *Middleware {
 	return &Middleware{
 		jwtService:     jwtService,
 		sessionService: sessionService,
+		config:         config,
 	}
 }
 
@@ -29,6 +32,18 @@ func (m *Middleware) RegisterRoutes(routes *gin.Engine) {
 
 func (m *Middleware) ValidateToken(c *gin.Context) {
 	log.Printf("ValidateToken called - Method: %s, Path: %s", c.Request.Method, c.Request.URL.Path)
+
+	apiKey := c.GetHeader("API-KEY")
+	if apiKey != "" && apiKey == m.config.APIKey {
+		// Return success status for ForwardAuth middleware
+		c.JSON(http.StatusOK, utils.SuccessResponse{
+			Success: true,
+			Data:    nil,
+			Meta: &utils.Meta{
+				Timestamp: time.Now(),
+			},
+		})
+	}
 
 	// Check for Authorization header
 	authHeader := c.GetHeader("Authorization")

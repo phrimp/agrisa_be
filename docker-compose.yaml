@@ -208,6 +208,7 @@ services:
       - FPT_FACE_LIVENESS_URL=${FPT_FACE_LIVENESS_URL}
       - JWT_SECRET=${JWT_SECRET}
       - ADMIN_PWD=${ADMIN_PWD}
+      - API_KEY=${API_KEY}
 
     volumes:
       - ./logs/auth-service:/agrisa/log/auth_service
@@ -466,6 +467,7 @@ services:
       - GEMINI_KEY=${GEMINI_KEY}
       - GEMINI_FLASH_MODEL=${GEMINI_FLASH_MODEL}
       - GEMINI_PRO_MODEL=${GEMINI_PRO_MODEL}
+      - API_KEY=${API_KEY}
 
     volumes:
       - ./logs/policy_service:/agrisa/log/policy_service

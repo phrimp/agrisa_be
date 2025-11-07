@@ -115,7 +115,7 @@ func main() {
 	// handlers
 	userHandler := handlers.NewUserHandler(userService)
 	authHandler := handlers.NewAuthHandler(userService, roleService)
-	middlewareHandler := handlers.NewMiddleware(jwtService, sessionService)
+	middlewareHandler := handlers.NewMiddleware(jwtService, sessionService, &cfg.AuthCfg)
 	roleHandler := handlers.NewRoleHandler(roleService)
 
 	// Setup Gin router
