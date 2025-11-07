@@ -172,7 +172,7 @@ func (h *FarmHandler) DeleteFarm(c fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", err.Error()))
 	}
 
-	return c.Status(http.StatusNoContent).JSON(nil)
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(nil))
 }
 
 func (h *FarmHandler) GetAllFarms(c fiber.Ctx) error {
