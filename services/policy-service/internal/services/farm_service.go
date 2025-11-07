@@ -33,13 +33,13 @@ func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
 	farm.OwnerID = ownerID
 	farmcode := utils.GenerateRandomStringWithLength(10)
 	farm.FarmCode = &farmcode
-	// Check if farmer has already owned a farm
-	existingFarm, err := s.farmRepository.GetByOwnerID(context.Background(), ownerID)
-	if err != nil && strings.Contains(err.Error(), "no rows in result set") {
-		// no existing farm, proceed to create
-	} else if existingFarm != nil {
-		return fmt.Errorf("badrequest: farmer has already owned a farm")
-	}
+	// // Check if farmer has already owned a farm
+	// existingFarm, err := s.farmRepository.GetByOwnerID(context.Background(), ownerID)
+	// if err != nil && strings.Contains(err.Error(), "no rows in result set") {
+	// 	// no existing farm, proceed to create
+	// } else if existingFarm != nil {
+	// 	return fmt.Errorf("badrequest: farmer has already owned a farm")
+	// }
 
 	return s.farmRepository.Create(farm)
 }

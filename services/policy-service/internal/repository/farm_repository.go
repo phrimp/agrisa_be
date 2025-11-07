@@ -215,7 +215,7 @@ func (r *FarmRepository) Update(farm *models.Farm) error {
 func (r *FarmRepository) Delete(id uuid.UUID) error {
 	query := `UPDATE farm SET status = $1, updated_at = $2 WHERE id = $3`
 
-	err := utils.ExecWithCheck(r.db, query, utils.ExecUpdate, "deleted", time.Now(), id)
+	err := utils.ExecWithCheck(r.db, query, utils.ExecUpdate, "inactive", time.Now(), id)
 	if err != nil {
 		return fmt.Errorf("failed to delete farm: %w", err)
 	}
