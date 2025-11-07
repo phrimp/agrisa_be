@@ -430,29 +430,17 @@ func (r *BasePolicyRepository) CreateBasePolicyTrigger(trigger *models.BasePolic
 	trigger.CreatedAt = time.Now()
 	trigger.UpdatedAt = time.Now()
 
-	// Serialize JSONB field to []byte before database insertion
-	var blackoutPeriodsBytes []byte
-	var err error
-
-	if trigger.BlackoutPeriods != nil {
-		blackoutPeriodsBytes, err = utils.SerializeMapToBytes(trigger.BlackoutPeriods)
-		if err != nil {
-			return fmt.Errorf("failed to serialize blackout_periods: %w", err)
-		}
-	}
-
 	query := `
 		INSERT INTO base_policy_trigger (
-			id, base_policy_id, logical_operator, growth_stage, 
+			id, base_policy_id, logical_operator, growth_stage,
 			monitor_interval, monitor_frequency_unit, blackout_periods,
 			created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9
 		)`
-
-	_, err = r.db.Exec(query,
+	_, err := r.db.Exec(query,
 		trigger.ID, trigger.BasePolicyID, trigger.LogicalOperator, trigger.GrowthStage,
-		trigger.MonitorInterval, trigger.MonitorFrequencyUnit, blackoutPeriodsBytes,
+		trigger.MonitorInterval, trigger.MonitorFrequencyUnit, trigger.BlackoutPeriods,
 		trigger.CreatedAt, trigger.UpdatedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create base policy trigger: %w", err)
@@ -880,15 +868,6 @@ func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.Ba
 	policy.UpdatedAt = time.Now()
 
 	// Serialize JSONB field to []byte before database insertion
-	var documentTagsBytes []byte
-	var err error
-
-	if policy.DocumentTags != nil {
-		documentTagsBytes, err = utils.SerializeMapToBytes(policy.DocumentTags)
-		if err != nil {
-			return fmt.Errorf("failed to serialize document_tags: %w", err)
-		}
-	}
 
 	query := `
 		INSERT INTO base_policy (
@@ -904,14 +883,14 @@ func (r *BasePolicyRepository) CreateBasePolicyTx(tx *sqlx.Tx, policy *models.Ba
 			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33
 		)`
 
-	_, err = tx.Exec(query,
+	_, err := tx.Exec(query,
 		policy.ID, policy.InsuranceProviderID, policy.ProductName, policy.ProductCode, policy.ProductDescription,
 		policy.CropType, policy.CoverageCurrency, policy.CoverageDurationDays, policy.FixPremiumAmount,
 		policy.IsPerHectare, policy.PremiumBaseRate, policy.MaxPremiumPaymentProlong, policy.FixPayoutAmount, policy.IsPayoutPerHectare,
 		policy.OverThresholdMultiplier, policy.PayoutBaseRate, policy.PayoutCap, policy.EnrollmentStartDay,
 		policy.EnrollmentEndDay, policy.AutoRenewal, policy.RenewalDiscountRate, policy.BasePolicyInvalidDate,
 		policy.InsuranceValidFromDay, policy.InsuranceValidToDay, policy.Status, policy.TemplateDocumentURL,
-		policy.DocumentValidationStatus, policy.DocumentValidationScore, documentTagsBytes, policy.ImportantAdditionalInformation,
+		policy.DocumentValidationStatus, policy.DocumentValidationScore, policy.DocumentTags, policy.ImportantAdditionalInformation,
 		policy.CreatedAt, policy.UpdatedAt, policy.CreatedBy)
 	return err
 }
@@ -924,29 +903,17 @@ func (r *BasePolicyRepository) CreateBasePolicyTriggerTx(tx *sqlx.Tx, trigger *m
 	trigger.CreatedAt = time.Now()
 	trigger.UpdatedAt = time.Now()
 
-	// Serialize JSONB field to []byte before database insertion
-	var blackoutPeriodsBytes []byte
-	var err error
-
-	if trigger.BlackoutPeriods != nil {
-		blackoutPeriodsBytes, err = utils.SerializeMapToBytes(trigger.BlackoutPeriods)
-		if err != nil {
-			return fmt.Errorf("failed to serialize blackout_periods: %w", err)
-		}
-	}
-
 	query := `
 		INSERT INTO base_policy_trigger (
-			id, base_policy_id, logical_operator, growth_stage, 
+			id, base_policy_id, logical_operator, growth_stage,
 			monitor_interval, monitor_frequency_unit, blackout_periods,
 			created_at, updated_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9
 		)`
-
-	_, err = tx.Exec(query,
+	_, err := tx.Exec(query,
 		trigger.ID, trigger.BasePolicyID, trigger.LogicalOperator, trigger.GrowthStage,
-		trigger.MonitorInterval, trigger.MonitorFrequencyUnit, blackoutPeriodsBytes,
+		trigger.MonitorInterval, trigger.MonitorFrequencyUnit, trigger.BlackoutPeriods,
 		trigger.CreatedAt, trigger.UpdatedAt)
 	return err
 }
@@ -1170,38 +1137,6 @@ func (r *BasePolicyRepository) UpdateBasePolicyDocumentValidation(validation *mo
 		"base_policy_id", validation.BasePolicyID,
 		"validation_status", validation.ValidationStatus)
 
-	// Serialize JSONB fields to []byte before database update
-	var mismatchesBytes, warningsBytes, recommendationsBytes, extractedParamsBytes []byte
-	var err error
-
-	if validation.Mismatches != nil {
-		mismatchesBytes, err = utils.SerializeMapToBytes(validation.Mismatches)
-		if err != nil {
-			return fmt.Errorf("failed to serialize mismatches: %w", err)
-		}
-	}
-
-	if validation.Warnings != nil {
-		warningsBytes, err = utils.SerializeMapToBytes(validation.Warnings)
-		if err != nil {
-			return fmt.Errorf("failed to serialize warnings: %w", err)
-		}
-	}
-
-	if validation.Recommendations != nil {
-		recommendationsBytes, err = utils.SerializeMapToBytes(validation.Recommendations)
-		if err != nil {
-			return fmt.Errorf("failed to serialize recommendations: %w", err)
-		}
-	}
-
-	if validation.ExtractedParameters != nil {
-		extractedParamsBytes, err = utils.SerializeMapToBytes(validation.ExtractedParameters)
-		if err != nil {
-			return fmt.Errorf("failed to serialize extracted_parameters: %w", err)
-		}
-	}
-
 	query := `
 		UPDATE base_policy_document_validation SET
 			validation_timestamp = $1,
@@ -1222,8 +1157,8 @@ func (r *BasePolicyRepository) UpdateBasePolicyDocumentValidation(validation *mo
 	result, err := r.db.Exec(query,
 		validation.ValidationTimestamp, validation.ValidationStatus, validation.OverallScore,
 		validation.TotalChecks, validation.PassedChecks, validation.FailedChecks,
-		validation.WarningCount, mismatchesBytes, warningsBytes, recommendationsBytes,
-		extractedParamsBytes, validation.ValidatedBy, validation.ValidationNotes,
+		validation.WarningCount, validation.Mismatches, validation.Warnings, validation.Recommendations,
+		validation.ExtractedParameters, validation.ValidatedBy, validation.ValidationNotes,
 		validation.ID)
 	if err != nil {
 		slog.Error("Failed to update base policy document validation",
