@@ -19,21 +19,17 @@ func NewFarmService(farmRepo *repository.FarmRepository) *FarmService {
 	return &FarmService{farmRepository: farmRepo}
 }
 
-func (s *FarmService) GetFarmByIDMe(ctx context.Context, id string, userID string, isMe bool) (*models.FarmResponse, error) {
-	_, err := uuid.Parse(id)
+func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) (*models.FarmResponse, error) {
+	_, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	farm, err := s.farmRepository.GetFarmByID(ctx, id)
+	farm, err := s.farmRepository.GetByOwnerID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if isMe {
-		if farm.OwnerID != userID {
-			return nil, fmt.Errorf("unauthorized")
-		}
-	}
+
 	return farm, nil
 }
 
@@ -41,6 +37,14 @@ func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
 	farm.OwnerID = ownerID
 	farmcode := utils.GenerateRandomStringWithLength(10)
 	farm.FarmCode = &farmcode
+	// Check if farmer has already owned a farm
+	existingFarm, err := s.farmRepository.GetByOwnerID(context.Background(), ownerID)
+	if err != nil && strings.Contains(err.Error(), "no rows in result set") {
+		// no existing farm, proceed to create
+	} else if existingFarm != nil {
+		return fmt.Errorf("badrequest: farmer has already owned a farm")
+	}
+
 	return s.farmRepository.Create(farm)
 }
 
@@ -48,8 +52,8 @@ func (s *FarmService) GetAllFarms(ctx context.Context) ([]models.FarmResponse, e
 	return s.farmRepository.GetAll(ctx)
 }
 
-func (s *FarmService) GetByOwnerID(ownerID string) ([]models.Farm, error) {
-	return s.farmRepository.GetByOwnerID(ownerID)
+func (s *FarmService) GetByFarmID(ctx context.Context, farmID string) (*models.FarmResponse, error) {
+	return s.farmRepository.GetFarmByID(ctx, farmID)
 }
 
 func (s *FarmService) UpdateFarm(ctx context.Context, farm *models.Farm, updatedBy string, farmID string) error {

@@ -151,16 +151,40 @@ func (r *FarmRepository) GetAll(ctx context.Context) ([]models.FarmResponse, err
 	return farms, nil
 }
 
-func (r *FarmRepository) GetByOwnerID(ownerID string) ([]models.Farm, error) {
-	var farms []models.Farm
-	query := `SELECT * FROM farm WHERE owner_id = $1 ORDER BY created_at DESC`
+func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) (*models.FarmResponse, error) {
+	query := `
+		SELECT 
+			id, owner_id, farm_name, farm_code,
+			area_sqm, province, district, commune, address,
+			crop_type, planting_date, expected_harvest_date,
+			crop_type_verified, crop_type_verified_at,
+			crop_type_verified_by, crop_type_confidence,
+			land_certificate_number, land_certificate_url,
+			land_ownership_verified, land_ownership_verified_at,
+			has_irrigation, irrigation_type, soil_type,
+			status, created_at, updated_at,
+			ST_AsBinary(boundary) as boundary_wkb,
+			ST_AsBinary(center_location) as center_wkb
+		FROM farm
+		WHERE owner_id = $1
+	`
 
-	err := r.db.Select(&farms, query, ownerID)
+	var row farmRow
+	err := r.db.GetContext(ctx, &row, query, ownerID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get farms by owner: %w", err)
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("farm not found: %s", ownerID)
+		}
+		return nil, fmt.Errorf("query failed: %w", err)
 	}
 
-	return farms, nil
+	farm := row.FarmResponse
+
+	if err := r.unmarshalGeometry(&row, &farm); err != nil {
+		log.Println("Error unmarshaling geometry:", err)
+		return nil, err
+	}
+	return &farm, nil
 }
 
 func (r *FarmRepository) Update(farm *models.Farm) error {
