@@ -20,10 +20,6 @@ func NewFarmService(farmRepo *repository.FarmRepository) *FarmService {
 }
 
 func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) (*models.FarmResponse, error) {
-	_, err := uuid.Parse(userID)
-	if err != nil {
-		return nil, err
-	}
 
 	farm, err := s.farmRepository.GetByOwnerID(ctx, userID)
 	if err != nil {
