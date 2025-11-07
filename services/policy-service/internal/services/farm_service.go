@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -67,16 +68,21 @@ func (s *FarmService) UpdateFarm(ctx context.Context, farm *models.Farm, updated
 	if farm.AreaSqm <= 0 {
 		return fmt.Errorf("badrequest: area_sqm must be greater than 0")
 	}
+	isDuplicateFarmCode := false
 	// check if farm_code has already existed
 	if farm.FarmCode != nil {
 		existingFarm, err := s.farmRepository.GetFarmByFarmCode(*farm.FarmCode)
-		if err != nil {
-			return err
+		if err != nil && strings.Contains(err.Error(), "no rows in result set") {
+			isDuplicateFarmCode = false
 		}
 
 		if existingFarm != nil && existingFarm.ID != farm.ID {
-			return fmt.Errorf("badrequest: farm_code already exists")
+			isDuplicateFarmCode = true
 		}
+	}
+
+	if isDuplicateFarmCode {
+		return fmt.Errorf("badrequest: farm_code already exists")
 	}
 
 	// Validate expected_harvest_date is after or equal to planting_date if provided
