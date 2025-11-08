@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -267,10 +268,6 @@ func (r ValidatePolicyRequest) Validate() error {
 		return errors.New("base_policy_id is required")
 	}
 
-	if err := trimAndValidateString(r.ValidatedBy, "validated_by", 1, 100); err != nil {
-		return err
-	}
-
 	// Validate validation status
 	validStatuses := []ValidationStatus{
 		ValidationPending,
@@ -278,13 +275,7 @@ func (r ValidatePolicyRequest) Validate() error {
 		ValidationFailed,
 		ValidationWarning,
 	}
-	isValidStatus := false
-	for _, status := range validStatuses {
-		if r.ValidationStatus == status {
-			isValidStatus = true
-			break
-		}
-	}
+	isValidStatus := slices.Contains(validStatuses, r.ValidationStatus)
 	if !isValidStatus {
 		return fmt.Errorf("validation_status must be one of: %s, %s, %s, %s",
 			ValidationPending, ValidationPassed, ValidationFailed, ValidationWarning)
@@ -727,7 +718,7 @@ type RegisterAPolicyAPIRequest struct {
 type RegisterAPolicyRequest struct {
 	RegisteredPolicy RegisteredPolicy
 	Farm             Farm
-	FarmID           bool
+	FarmID           string
 	IsNewFarm        bool
 }
 

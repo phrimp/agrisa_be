@@ -47,6 +47,7 @@ type AuthConfig struct {
 	FptOcrUrl          string
 	FptFaceLivenessUrl string
 	AdminPWD           string
+	APIKey             string
 }
 
 func New() *AuthServiceConfig {
@@ -70,6 +71,7 @@ func New() *AuthServiceConfig {
 			FptOcrUrl:          getEnvOrDefault("FPT_OCR_URL", ""),
 			FptFaceLivenessUrl: getEnvOrDefault("FPT_FACE_LIVENESS_URL", ""),
 			AdminPWD:           getEnvOrDefault("ADMIN_PWD", "12345678"),
+			APIKey:             getEnvOrDefault("API_KEY", ""),
 		},
 		RedisCfg: RedisConfig{
 			Host:     getEnvOrDefault("REDIS_HOST", "localhost"),

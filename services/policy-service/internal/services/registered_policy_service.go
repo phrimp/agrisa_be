@@ -15,7 +15,7 @@ import (
 type RegisteredPolicyService struct {
 	registeredPolicyRepo *repository.RegisteredPolicyRepository
 	basePolicyRepo       *repository.BasePolicyRepository
-	farmRepo             *repository.FarmRepository
+	farmService          *FarmService
 	workerManager        *worker.WorkerManagerV2
 }
 
@@ -250,24 +250,29 @@ func (s *RegisteredPolicyService) validateRegisteredPolicy(policy *models.Regist
 // BUSINESS PROCESS
 // ============================================================================
 
-func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicyRequest) (*models.RegisterAPolicyResponse, error) {
+func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicyRequest, ctx context.Context) (*models.RegisterAPolicyResponse, error) {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("recover from panic", "panic", r)
 		}
 	}()
-	tx, err := s.registeredPolicyRepo.BeginTransaction()
-	if err != nil {
-		return nil, fmt.Errorf("error begining registered policy transaction: %w", err)
-	}
+	//	tx, err := s.registeredPolicyRepo.BeginTransaction()
+	//	if err != nil {
+	//		return nil, fmt.Errorf("error begining registered policy transaction: %w", err)
+	//	}
+	//
+	//	var farm models.Farm
 
 	if request.IsNewFarm {
 		// create new farm
 		// err := s.farmRepo.ValidateFarm(request.Farm)
-		err := s.farmRepo.CreateTx(tx, &request.Farm)
-		if err != nil {
-			return nil, fmt.Errorf("error creating farm: %w", err)
-		}
+		//	err := s.farmRepo.CreateTx(tx, &request.Farm)
+		//	if err != nil {
+		//		return nil, fmt.Errorf("error creating farm: %w", err)
+		//	}
+	} else {
+		// farm, err = s.farmService.GetByFarmID(ctx, request.FarmID)
 	}
-	return nil, nil
+
+	return nil, fmt.Errorf("undeveloped feature, please come back later")
 }
