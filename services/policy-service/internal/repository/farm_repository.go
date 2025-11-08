@@ -28,6 +28,7 @@ type farmRow struct {
 	models.FarmResponse
 	BoundaryWKB []byte `db:"boundary_wkb"`
 	CenterWKB   []byte `db:"center_wkb"`
+	
 }
 
 func (r *FarmRepository) Create(farm *models.Farm) error {
@@ -154,7 +155,7 @@ func (r *FarmRepository) GetAll(ctx context.Context) ([]models.FarmResponse, err
 func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) (*models.FarmResponse, error) {
 	query := `
 		SELECT 
-			id, owner_id, farm_name, farm_code,
+			f.id, owner_id, farm_name, farm_code,
 			area_sqm, province, district, commune, address,
 			crop_type, planting_date, expected_harvest_date,
 			crop_type_verified, crop_type_verified_at,
@@ -162,11 +163,15 @@ func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) (*mod
 			land_certificate_number, land_certificate_url,
 			land_ownership_verified, land_ownership_verified_at,
 			has_irrigation, irrigation_type, soil_type,
-			status, created_at, updated_at,
+			status, f.created_at, f.updated_at,
 			ST_AsBinary(boundary) as boundary_wkb,
-			ST_AsBinary(center_location) as center_wkb
-		FROM farm
-		WHERE owner_id = $1
+			ST_AsBinary(center_location) as center_wkb,
+			farm_id,
+			photo_url,
+			photo_type,
+			taken_at
+		FROM farm f inner join farm_photo fp on f.id = fp.farm_id 
+		WHERE f.owner_id = $1
 	`
 
 	var row farmRow

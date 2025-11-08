@@ -80,4 +80,5 @@ type FarmResponse struct {
 	Status                  FarmStatus   `db:"status"`
 	CreatedAt               time.Time    `db:"created_at"`
 	UpdatedAt               time.Time    `db:"updated_at"`
+	FarmPhotos              []FarmPhoto  `json:"farm_photos"`
 }
