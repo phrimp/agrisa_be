@@ -39,7 +39,7 @@ func (h *FarmHandler) GetFarmByOwner(c fiber.Ctx) error {
 	// get farm id from params
 	userID := c.Get("X-User-ID")
 
-	farm, err := h.farmService.GetFarmByOwnerID(c.Context(), userID)
+	farms, err := h.farmService.GetFarmByOwnerID(c.Context(), userID)
 	if err != nil {
 		if strings.Contains(err.Error(), "unauthorized") {
 			return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("UNAUTHORIZED", err.Error()))
@@ -52,7 +52,7 @@ func (h *FarmHandler) GetFarmByOwner(c fiber.Ctx) error {
 		}
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", err.Error()))
 	}
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(farm))
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(farms))
 }
 
 func (h *FarmHandler) GetFarmByID(c fiber.Ctx) error {
@@ -70,6 +70,7 @@ func (h *FarmHandler) GetFarmByID(c fiber.Ctx) error {
 		if strings.Contains(err.Error(), "invalid") {
 			return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", err.Error()))
 		}
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", err.Error()))
 	}
 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(farm))
 }

@@ -19,14 +19,14 @@ func NewFarmService(farmRepo *repository.FarmRepository) *FarmService {
 	return &FarmService{farmRepository: farmRepo}
 }
 
-func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) (*models.FarmResponse, error) {
+func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) ([]models.FarmResponse, error) {
 
-	farm, err := s.farmRepository.GetByOwnerID(ctx, userID)
+	farms, err := s.farmRepository.GetByOwnerID(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
 
-	return farm, nil
+	return farms, nil
 }
 
 func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {

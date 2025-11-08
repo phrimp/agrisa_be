@@ -26,9 +26,13 @@ func NewFarmRepository(db *sqlx.DB) *FarmRepository {
 
 type farmRow struct {
 	models.FarmResponse
-	BoundaryWKB []byte `db:"boundary_wkb"`
-	CenterWKB   []byte `db:"center_wkb"`
-	
+	BoundaryWKB []byte     `db:"boundary_wkb"`
+	CenterWKB   []byte     `db:"center_wkb"`
+	FarmPhotoID *uuid.UUID `db:"farm_photo_id"`
+	FarmID      *uuid.UUID `db:"farm_id"`
+	PhotoURL    *string    `db:"photo_url"`
+	PhotoType   *string    `db:"photo_type"`
+	TakenAt     *int64     `db:"taken_at"`
 }
 
 func (r *FarmRepository) Create(farm *models.Farm) error {
@@ -79,7 +83,7 @@ func (r *FarmRepository) Create(farm *models.Farm) error {
 func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.FarmResponse, error) {
 	query := `
 		SELECT 
-			id, owner_id, farm_name, farm_code,
+			f.id, owner_id, farm_name, farm_code,
 			area_sqm, province, district, commune, address,
 			crop_type, planting_date, expected_harvest_date,
 			crop_type_verified, crop_type_verified_at,
@@ -87,15 +91,20 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 			land_certificate_number, land_certificate_url,
 			land_ownership_verified, land_ownership_verified_at,
 			has_irrigation, irrigation_type, soil_type,
-			status, created_at, updated_at,
+			status, f.created_at, f.updated_at,
 			ST_AsBinary(boundary) as boundary_wkb,
-			ST_AsBinary(center_location) as center_wkb
-		FROM farm
-		WHERE id = $1
+			ST_AsBinary(center_location) as center_wkb,
+			fp.id as farm_photo_id,
+			farm_id,
+			photo_url,
+			photo_type,
+			taken_at
+		FROM farm f left join farm_photo fp on f.id = fp.farm_id 
+		WHERE f.id = $1
 	`
 
-	var row farmRow
-	err := r.db.GetContext(ctx, &row, query, id)
+	var rows []farmRow
+	err := r.db.SelectContext(ctx, &rows, query, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("farm not found: %s", id)
@@ -103,14 +112,54 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
 
-	farm := row.FarmResponse
+	farmResponse := models.FarmResponse{
+		ID:                      rows[0].ID,
+		OwnerID:                 rows[0].OwnerID,
+		FarmName:                rows[0].FarmName,
+		FarmCode:                rows[0].FarmCode,
+		AreaSQM:                 rows[0].AreaSQM,
+		Province:                rows[0].Province,
+		District:                rows[0].District,
+		Commune:                 rows[0].Commune,
+		Address:                 rows[0].Address,
+		CropType:                rows[0].CropType,
+		PlantingDate:            rows[0].PlantingDate,
+		ExpectedHarvestDate:     rows[0].ExpectedHarvestDate,
+		CropTypeVerified:        rows[0].CropTypeVerified,
+		CropTypeVerifiedAt:      rows[0].CropTypeVerifiedAt,
+		CropTypeVerifiedBy:      rows[0].CropTypeVerifiedBy,
+		CropTypeConfidence:      rows[0].CropTypeConfidence,
+		LandCertificateNumber:   rows[0].LandCertificateNumber,
+		LandCertificateURL:      rows[0].LandCertificateURL,
+		LandOwnershipVerified:   rows[0].LandOwnershipVerified,
+		LandOwnershipVerifiedAt: rows[0].LandOwnershipVerifiedAt,
+		HasIrrigation:           rows[0].HasIrrigation,
+		IrrigationType:          rows[0].IrrigationType,
+		SoilType:                rows[0].SoilType,
+		Status:                  rows[0].Status,
+		CreatedAt:               rows[0].CreatedAt,
+		UpdatedAt:               rows[0].UpdatedAt,
+	}
 
-	if err := r.unmarshalGeometry(&row, &farm); err != nil {
+	if err := r.unmarshalGeometry(&rows[0], &farmResponse); err != nil {
 		log.Println("Error unmarshaling geometry:", err)
 		return nil, err
 	}
 
-	return &farm, nil
+	for _, row := range rows {
+		if row.FarmPhotoID != nil {
+			farmResponse.FarmPhotos = append(farmResponse.FarmPhotos, models.FarmPhoto{
+				ID:        *row.FarmPhotoID,
+				FarmID:    *row.FarmID,
+				PhotoURL:  *row.PhotoURL,
+				PhotoType: models.PhotoType(*row.PhotoType),
+				TakenAt:   row.TakenAt,
+			})
+		}
+
+	}
+
+	return &farmResponse, nil
 }
 
 func (r *FarmRepository) GetAll(ctx context.Context) ([]models.FarmResponse, error) {
@@ -152,7 +201,8 @@ func (r *FarmRepository) GetAll(ctx context.Context) ([]models.FarmResponse, err
 	return farms, nil
 }
 
-func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) (*models.FarmResponse, error) {
+func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]models.FarmResponse, error) {
+	var rows []farmRow
 	query := `
 		SELECT 
 			f.id, owner_id, farm_name, farm_code,
@@ -166,16 +216,16 @@ func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) (*mod
 			status, f.created_at, f.updated_at,
 			ST_AsBinary(boundary) as boundary_wkb,
 			ST_AsBinary(center_location) as center_wkb,
+			fp.id as farm_photo_id,
 			farm_id,
 			photo_url,
 			photo_type,
 			taken_at
-		FROM farm f inner join farm_photo fp on f.id = fp.farm_id 
+		FROM farm f left join farm_photo fp on f.id = fp.farm_id 
 		WHERE f.owner_id = $1
 	`
 
-	var row farmRow
-	err := r.db.GetContext(ctx, &row, query, ownerID)
+	err := r.db.Select(&rows, query, ownerID)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("farm not found: %s", ownerID)
@@ -183,13 +233,65 @@ func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) (*mod
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
 
-	farm := row.FarmResponse
+	var results []models.FarmResponse
+	farmMap := make(map[string]*models.FarmResponse)
 
-	if err := r.unmarshalGeometry(&row, &farm); err != nil {
-		log.Println("Error unmarshaling geometry:", err)
-		return nil, err
+	for _, row := range rows {
+		farmRespone, exists := farmMap[row.ID]
+		if !exists {
+			farmRespone = &models.FarmResponse{
+				ID:                      row.ID,
+				OwnerID:                 row.OwnerID,
+				FarmName:                row.FarmName,
+				FarmCode:                row.FarmCode,
+				AreaSQM:                 row.AreaSQM,
+				Province:                row.Province,
+				District:                row.District,
+				Commune:                 row.Commune,
+				Address:                 row.Address,
+				CropType:                row.CropType,
+				PlantingDate:            row.PlantingDate,
+				ExpectedHarvestDate:     row.ExpectedHarvestDate,
+				CropTypeVerified:        row.CropTypeVerified,
+				CropTypeVerifiedAt:      row.CropTypeVerifiedAt,
+				CropTypeVerifiedBy:      row.CropTypeVerifiedBy,
+				CropTypeConfidence:      row.CropTypeConfidence,
+				LandCertificateNumber:   row.LandCertificateNumber,
+				LandCertificateURL:      row.LandCertificateURL,
+				LandOwnershipVerified:   row.LandOwnershipVerified,
+				LandOwnershipVerifiedAt: row.LandOwnershipVerifiedAt,
+				HasIrrigation:           row.HasIrrigation,
+				IrrigationType:          row.IrrigationType,
+				SoilType:                row.SoilType,
+				Status:                  row.Status,
+				CreatedAt:               row.CreatedAt,
+				UpdatedAt:               row.UpdatedAt,
+			}
+
+			if err := r.unmarshalGeometry(&row, farmRespone); err != nil {
+				log.Println("Error unmarshaling geometry:", err)
+				return nil, err
+			}
+			farmMap[row.ID] = farmRespone
+		}
+
+		if row.FarmPhotoID != nil {
+			photo := models.FarmPhoto{
+				ID:        *row.FarmPhotoID,
+				FarmID:    *row.FarmID,
+				PhotoURL:  *row.PhotoURL,
+				PhotoType: models.PhotoType(*row.PhotoType),
+				TakenAt:   row.TakenAt,
+			}
+			farmRespone.FarmPhotos = append(farmRespone.FarmPhotos, photo)
+		}
+
 	}
-	return &farm, nil
+
+	for _, farmRespone := range farmMap {
+		results = append(results, *farmRespone)
+	}
+	return results, nil
 }
 
 func (r *FarmRepository) Update(farm *models.Farm) error {
