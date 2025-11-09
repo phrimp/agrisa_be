@@ -228,12 +228,12 @@ services:
       - "traefik.http.routers.auth-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/public`)"
       - "traefik.http.routers.auth-public.entrypoints=web"
       - "traefik.http.routers.auth-public.service=auth-service"
-      - "traefik.http.routers.auth-public.middlewares=cors"
+      - "traefik.http.routers.auth-public.middlewares=cors,api-limit"
 
       - "traefik.http.routers.auth-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/protected`)"
       - "traefik.http.routers.auth-protected.entrypoints=web"
       - "traefik.http.routers.auth-protected.service=auth-service"
-      - "traefik.http.routers.auth-protected.middlewares=cors,auth-middleware"
+      - "traefik.http.routers.auth-protected.middlewares=cors,auth-middleware, api-limit"
 
       - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
       - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
@@ -280,11 +280,11 @@ services:
       - "traefik.http.routers.satellite-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/satellite/public`)"
       - "traefik.http.routers.satellite-public.entrypoints=web"
       - "traefik.http.routers.satellite-public.service=satellite-data-service"
-      - "traefik.http.routers.satellite-public.middlewares=cors"
+      - "traefik.http.routers.satellite-public.middlewares=cors, api-limit"
       - "traefik.http.routers.satellite-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/satellite/protected`)"
       - "traefik.http.routers.satellite-protected.entrypoints=web"
       - "traefik.http.routers.satellite-protected.service=satellite-data-service"
-      - "traefik.http.routers.satellite-protected.middlewares=cors,auth-middleware"
+      - "traefik.http.routers.satellite-protected.middlewares=cors,auth-middleware, api-limit"
 
   # Payment Service
   payment-service:
@@ -322,11 +322,11 @@ services:
       - "traefik.http.routers.payment-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/payment/public`)"
       - "traefik.http.routers.payment-public.entrypoints=web"
       - "traefik.http.routers.payment-public.service=payment-service"
-      - "traefik.http.routers.payment-public.middlewares=cors"
+      - "traefik.http.routers.payment-public.middlewares=cors, api-limit"
       - "traefik.http.routers.payment-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/payment/protected`)"
       - "traefik.http.routers.payment-protected.entrypoints=web"
       - "traefik.http.routers.payment-protected.service=payment-service"
-      - "traefik.http.routers.payment-protected.middlewares=cors,auth-middleware"
+      - "traefik.http.routers.payment-protected.middlewares=cors,auth-middleware, api-limit"
 
   # Weather Service
   weather-service:
@@ -356,11 +356,11 @@ services:
       - "traefik.http.routers.weather-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/public`)"
       - "traefik.http.routers.weather-public.entrypoints=web"
       - "traefik.http.routers.weather-public.service=weather-service"
-      - "traefik.http.routers.weather-public.middlewares=cors"
+      - "traefik.http.routers.weather-public.middlewares=cors, api-limit"
       - "traefik.http.routers.weather-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/protected`)"
       - "traefik.http.routers.weather-protected.entrypoints=web"
       - "traefik.http.routers.weather-protected.service=weather-service"
-      - "traefik.http.routers.weather-protected.middlewares=cors,auth-middleware"
+      - "traefik.http.routers.weather-protected.middlewares=cors,auth-middleware, api-limit"
 
   notification-service:
     build:
@@ -391,12 +391,12 @@ services:
       - "traefik.http.routers.notification-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/public`)"
       - "traefik.http.routers.notification-public.entrypoints=web"
       - "traefik.http.routers.notification-public.service=notification-service"
-      - "traefik.http.routers.notification-public.middlewares=cors"
+      - "traefik.http.routers.notification-public.middlewares=cors, api-limit"
 
       - "traefik.http.routers.notification-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/protected`)"
       - "traefik.http.routers.notification-protected.entrypoints=web"
       - "traefik.http.routers.notification-protected.service=notification-service"
-      - "traefik.http.routers.notification-protected.middlewares=cors,auth-middleware"
+      - "traefik.http.routers.notification-protected.middlewares=cors,auth-middleware, api-limit"
 
   # Profile Service
   profile-service:
@@ -434,12 +434,12 @@ services:
       - "traefik.http.routers.profile-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/profile/public`)"
       - "traefik.http.routers.profile-public.entrypoints=web"
       - "traefik.http.routers.profile-public.service=profile-service"
-      - "traefik.http.routers.profile-public.middlewares=cors"
+      - "traefik.http.routers.profile-public.middlewares=cors, api-limit"
 
       - "traefik.http.routers.profile-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/profile/protected`)"
       - "traefik.http.routers.profile-protected.entrypoints=web"
       - "traefik.http.routers.profile-protected.service=profile-service"
-      - "traefik.http.routers.profile-protected.middlewares=cors,auth-middleware"
+      - "traefik.http.routers.profile-protected.middlewares=cors,auth-middleware, api-limit"
 
   policy-service:
     build:
@@ -487,12 +487,12 @@ services:
       - "traefik.http.routers.policy-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/policy/public`)"
       - "traefik.http.routers.policy-public.entrypoints=web"
       - "traefik.http.routers.policy-public.service=policy-service"
-      - "traefik.http.routers.policy-public.middlewares=cors"
+      - "traefik.http.routers.policy-public.middlewares=cors, api-limit"
 
       - "traefik.http.routers.policy-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/policy/protected`)"
       - "traefik.http.routers.policy-protected.entrypoints=web"
       - "traefik.http.routers.policy-protected.service=policy-service"
-      - "traefik.http.routers.policy-protected.middlewares=cors,auth-middleware"
+      - "traefik.http.routers.policy-protected.middlewares=cors,auth-middleware, api-limit"
 
 networks:
   traefik-net:

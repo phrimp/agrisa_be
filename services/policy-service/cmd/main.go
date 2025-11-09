@@ -80,7 +80,9 @@ func main() {
 		go postgres.RetryConnectOnFailed(30*time.Second, &db, cfg.PostgresCfg)
 	}
 
-	app := fiber.New()
+	app := fiber.New(fiber.Config{
+		BodyLimit: 50 * 1024 * 1024,
+	})
 	app.Get("/checkhealth", func(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).SendString("Policy service is healthy")
 	})
