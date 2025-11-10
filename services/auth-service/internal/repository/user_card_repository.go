@@ -8,6 +8,7 @@ import (
 
 type IUserCardRepository interface {
 	CreateUserCard(userCard *models.UserCard) (*models.UserCard, error)
+	GetUserCardByUserID(userID string) (*models.UserCard, error)
 }
 
 type UserCardRepository struct {
@@ -26,4 +27,13 @@ func (u *UserCardRepository) CreateUserCard(userCard *models.UserCard) (*models.
 		return nil, err
 	}
 	return userCard, nil
+}
+
+func (u *UserCardRepository) GetUserCardByUserID(userID string) (*models.UserCard, error) {
+	var userCard models.UserCard
+	err := u.db.Get(&userCard, "SELECT * FROM user_card WHERE user_id=$1", userID)
+	if err != nil {
+		return nil, err
+	}
+	return &userCard, nil
 }

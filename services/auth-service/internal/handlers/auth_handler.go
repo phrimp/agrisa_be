@@ -43,6 +43,8 @@ func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
 	sessionGr.GET("/me", a.GetMySession)
 	// Admin manage all sessions
 	sessionGr.GET("/all", a.GetAllSessions)
+	sessionGr.POST("/verify-national-id", a.VerifyNationalID)
+
 }
 
 func (a *AuthHandler) InitDefaultUser(cfg config.AuthServiceConfig) error {
@@ -383,4 +385,48 @@ func (a *AuthHandler) GetAllSessions(c *gin.Context) {
 			Message: "Get all sessions endpoint not yet implemented",
 		},
 	})
+}
+
+func (a *AuthHandler) VerifyNationalID(c *gin.Context) {
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		log.Printf("Missing X-User-ID header in VerifyNationalID request")
+		errorResponse := utils.CreateErrorResponse("UNAUTHORIZED", "Invalid session")
+		c.JSON(http.StatusUnauthorized, errorResponse)
+		return
+	}
+
+	var requestBody map[string]interface{}
+	if err := c.ShouldBindJSON(&requestBody); err != nil {
+		log.Printf("Error binding JSON for VerifyNationalID: %s", err.Error())
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
+		c.JSON(http.StatusBadRequest, errorResponse)
+		return
+	}
+
+	natinonalIDInput, ok := requestBody["national_id"].(string)
+	if !ok || natinonalIDInput == "" {
+		log.Printf("national_id is missing or invalid in the request body")
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "missing information")
+		c.JSON(http.StatusBadRequest, errorResponse)
+		return
+	}
+
+	isMatched, err := a.userService.VerifyNationalID(userID, natinonalIDInput)
+	if err != nil {
+		log.Printf("National ID verification failed for user %s: %v", userID, err)
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse{
+			Success: false,
+			Error: utils.APIError{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to verify national ID",
+			},
+		})
+		return
+	}
+
+	response := utils.CreateSuccessResponse(map[string]bool{
+		"is_matched": isMatched,
+	})
+	c.JSON(http.StatusOK, response)
 }

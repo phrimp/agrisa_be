@@ -12,8 +12,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
-	"github.com/paulmach/orb"
-	"github.com/paulmach/orb/encoding/wkb"
+	"github.com/twpayne/go-geom"
+	"github.com/twpayne/go-geom/encoding/wkb"
 )
 
 type FarmRepository struct {
@@ -25,7 +25,7 @@ func NewFarmRepository(db *sqlx.DB) *FarmRepository {
 }
 
 type farmRow struct {
-	models.FarmResponse
+	models.Farm
 	BoundaryWKB []byte     `db:"boundary_wkb"`
 	CenterWKB   []byte     `db:"center_wkb"`
 	FarmPhotoID *uuid.UUID `db:"farm_photo_id"`
@@ -80,7 +80,7 @@ func (r *FarmRepository) Create(farm *models.Farm) error {
 	return nil
 }
 
-func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.FarmResponse, error) {
+func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Farm, error) {
 	query := `
 		SELECT 
 			f.id, owner_id, farm_name, farm_code,
@@ -112,12 +112,12 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
 
-	farmResponse := models.FarmResponse{
+	farm := models.Farm{
 		ID:                      rows[0].ID,
 		OwnerID:                 rows[0].OwnerID,
 		FarmName:                rows[0].FarmName,
 		FarmCode:                rows[0].FarmCode,
-		AreaSQM:                 rows[0].AreaSQM,
+		AreaSqm:                 rows[0].AreaSqm,
 		Province:                rows[0].Province,
 		District:                rows[0].District,
 		Commune:                 rows[0].Commune,
@@ -141,14 +141,14 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 		UpdatedAt:               rows[0].UpdatedAt,
 	}
 
-	if err := r.unmarshalGeometry(&rows[0], &farmResponse); err != nil {
+	if err := r.unmarshalGeometry(&rows[0], &farm); err != nil {
 		log.Println("Error unmarshaling geometry:", err)
 		return nil, err
 	}
 
 	for _, row := range rows {
 		if row.FarmPhotoID != nil {
-			farmResponse.FarmPhotos = append(farmResponse.FarmPhotos, models.FarmPhoto{
+			farm.FarmPhotos = append(farm.FarmPhotos, models.FarmPhoto{
 				ID:        *row.FarmPhotoID,
 				FarmID:    *row.FarmID,
 				PhotoURL:  *row.PhotoURL,
@@ -159,10 +159,10 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 
 	}
 
-	return &farmResponse, nil
+	return &farm, nil
 }
 
-func (r *FarmRepository) GetAll(ctx context.Context) ([]models.FarmResponse, error) {
+func (r *FarmRepository) GetAll(ctx context.Context) ([]models.Farm, error) {
 	query := `
 		SELECT 
 			id, owner_id, farm_name, farm_code,
@@ -187,9 +187,9 @@ func (r *FarmRepository) GetAll(ctx context.Context) ([]models.FarmResponse, err
 	}
 
 	// Convert sang FarmResponse và unmarshal geometry
-	farms := make([]models.FarmResponse, 0, len(rows))
+	farms := make([]models.Farm, 0, len(rows))
 	for _, row := range rows {
-		farm := row.FarmResponse
+		farm := row.Farm
 		if err := r.unmarshalGeometry(&row, &farm); err != nil {
 			log.Println("Error unmarshaling geometry:", err)
 			return nil, err
@@ -201,7 +201,7 @@ func (r *FarmRepository) GetAll(ctx context.Context) ([]models.FarmResponse, err
 	return farms, nil
 }
 
-func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]models.FarmResponse, error) {
+func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]models.Farm, error) {
 	var rows []farmRow
 	query := `
 		SELECT 
@@ -233,18 +233,18 @@ func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]mo
 		return nil, fmt.Errorf("query failed: %w", err)
 	}
 
-	var results []models.FarmResponse
-	farmMap := make(map[string]*models.FarmResponse)
+	var results []models.Farm
+	farmMap := make(map[string]*models.Farm)
 
 	for _, row := range rows {
-		farmRespone, exists := farmMap[row.ID]
+		farm, exists := farmMap[row.ID.String()]
 		if !exists {
-			farmRespone = &models.FarmResponse{
+			farm = &models.Farm{
 				ID:                      row.ID,
 				OwnerID:                 row.OwnerID,
 				FarmName:                row.FarmName,
 				FarmCode:                row.FarmCode,
-				AreaSQM:                 row.AreaSQM,
+				AreaSqm:                 row.AreaSqm,
 				Province:                row.Province,
 				District:                row.District,
 				Commune:                 row.Commune,
@@ -268,11 +268,11 @@ func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]mo
 				UpdatedAt:               row.UpdatedAt,
 			}
 
-			if err := r.unmarshalGeometry(&row, farmRespone); err != nil {
+			if err := r.unmarshalGeometry(&row, farm); err != nil {
 				log.Println("Error unmarshaling geometry:", err)
 				return nil, err
 			}
-			farmMap[row.ID] = farmRespone
+			farmMap[row.ID.String()] = farm
 		}
 
 		if row.FarmPhotoID != nil {
@@ -283,13 +283,13 @@ func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]mo
 				PhotoType: models.PhotoType(*row.PhotoType),
 				TakenAt:   row.TakenAt,
 			}
-			farmRespone.FarmPhotos = append(farmRespone.FarmPhotos, photo)
+			farm.FarmPhotos = append(farm.FarmPhotos, photo)
 		}
 
 	}
 
-	for _, farmRespone := range farmMap {
-		results = append(results, *farmRespone)
+	for _, farm := range farmMap {
+		results = append(results, *farm)
 	}
 	return results, nil
 }
@@ -449,25 +449,53 @@ func (r *FarmRepository) GetByOwnerIDTx(tx *sqlx.Tx, ownerID string) ([]models.F
 	return farms, nil
 }
 
-func (r *FarmRepository) unmarshalGeometry(row *farmRow, farm *models.FarmResponse) error {
+func (r *FarmRepository) unmarshalGeometry(row *farmRow, farm *models.Farm) error {
 	if len(row.BoundaryWKB) > 0 {
-		geom, err := wkb.Unmarshal(row.BoundaryWKB)
+		boundaryGeom, err := wkb.Unmarshal(row.BoundaryWKB)
 		if err != nil {
 			return fmt.Errorf("unmarshal boundary: %w", err)
 		}
-		if poly, ok := geom.(orb.Polygon); ok {
-			farm.Boundary = &poly
+		poly, ok := boundaryGeom.(*geom.Polygon)
+		if !ok {
+			log.Printf("error boundary is not a Polygon: %+v", boundaryGeom)
+			return fmt.Errorf("boundary is not a Polygon")
+		}
+
+		coords := make([][][]float64, poly.NumLinearRings())
+		for i := 0; i < poly.NumLinearRings(); i++ {
+			ring := poly.LinearRing(i)
+			ringCoords := make([][]float64, ring.NumCoords())
+			for j := 0; j < ring.NumCoords(); j++ {
+				coord := ring.Coord(j)
+				ringCoords[j] = []float64{coord.X(), coord.Y()}
+			}
+			coords[i] = ringCoords
+		}
+
+		farm.Boundary = &models.GeoJSONPolygon{
+			Type:        "Polygon",
+			Coordinates: coords,
 		}
 	}
 
 	if len(row.CenterWKB) > 0 {
-		geom, err := wkb.Unmarshal(row.CenterWKB)
+		centerGeom, err := wkb.Unmarshal(row.CenterWKB)
 		if err != nil {
+			log.Printf("Error decoding center WKB: %v", err)
 			return fmt.Errorf("unmarshal center: %w", err)
 		}
-		if pt, ok := geom.(orb.Point); ok {
-			farm.CenterLocation = &pt
+		point, ok := centerGeom.(*geom.Point)
+		if !ok {
+			log.Printf("Error asserting center to Point")
+			return fmt.Errorf("center is not a Point")
 		}
+
+		pointCoords := point.Coords()
+		geoJSONPoint := models.GeoJSONPoint{
+			Type:        "Point",
+			Coordinates: []float64{pointCoords.X(), pointCoords.Y()},
+		}
+		farm.CenterLocation = &geoJSONPoint
 	}
 
 	return nil

@@ -19,7 +19,7 @@ func NewFarmService(farmRepo *repository.FarmRepository) *FarmService {
 	return &FarmService{farmRepository: farmRepo}
 }
 
-func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) ([]models.FarmResponse, error) {
+func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) ([]models.Farm, error) {
 
 	farms, err := s.farmRepository.GetByOwnerID(ctx, userID)
 	if err != nil {
@@ -44,11 +44,11 @@ func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
 	return s.farmRepository.Create(farm)
 }
 
-func (s *FarmService) GetAllFarms(ctx context.Context) ([]models.FarmResponse, error) {
+func (s *FarmService) GetAllFarms(ctx context.Context) ([]models.Farm, error) {
 	return s.farmRepository.GetAll(ctx)
 }
 
-func (s *FarmService) GetByFarmID(ctx context.Context, farmID string) (*models.FarmResponse, error) {
+func (s *FarmService) GetByFarmID(ctx context.Context, farmID string) (*models.Farm, error) {
 	return s.farmRepository.GetFarmByID(ctx, farmID)
 }
 

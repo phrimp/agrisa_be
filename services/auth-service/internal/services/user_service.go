@@ -38,6 +38,7 @@ type IUserService interface {
 	ProcessAndUploadFiles(files map[string][]*multipart.FileHeader, serviceName string, allowedExts []string, maxMB int64) ([]utils.FileInfo, error)
 	OCRNationalIDCard(form *multipart.Form) (interface{}, error)
 	VerifyFaceLiveness(form *multipart.Form) (interface{}, error)
+	VerifyNationalID(userID string, NationalIDInput string) (result bool, err error)
 }
 
 type UserService struct {
@@ -1190,4 +1191,18 @@ func (s *UserService) UnbanUser(userID string) error {
 
 	log.Printf("User %s has been unbanned and reactivated", userID)
 	return nil
+}
+
+func (s *UserService) VerifyNationalID(userID string, NationalIDInput string) (result bool, err error) {
+	userCard, err := s.userCardRepo.GetUserCardByUserID(userID)
+	if err != nil {
+		log.Printf("Failed to get user card: %v", err)
+		return false, fmt.Errorf(err.Error())
+	}
+
+	if userCard.NationalID != NationalIDInput {
+		return false, nil
+	}
+
+	return true, nil
 }

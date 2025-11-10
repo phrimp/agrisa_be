@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/paulmach/orb"
 )
 
 // ============================================================================
@@ -40,6 +39,7 @@ type Farm struct {
 	Status                  FarmStatus      `json:"status" db:"status"`
 	CreatedAt               time.Time       `json:"created_at" db:"created_at"`
 	UpdatedAt               time.Time       `json:"updated_at" db:"updated_at"`
+	FarmPhotos              []FarmPhoto     `json:"farm_photos"`
 }
 
 type FarmPhoto struct {
@@ -49,36 +49,4 @@ type FarmPhoto struct {
 	PhotoType PhotoType `json:"photo_type" db:"photo_type"`
 	TakenAt   *int64    `json:"taken_at,omitempty" db:"taken_at"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
-}
-
-type FarmResponse struct {
-	ID                      string       `db:"id"`
-	OwnerID                 string       `db:"owner_id"`
-	FarmName                *string      `db:"farm_name"`
-	FarmCode                *string      `db:"farm_code"`
-	Boundary                *orb.Polygon `db:"boundary"`        // PostGIS POLYGON
-	CenterLocation          *orb.Point   `db:"center_location"` // PostGIS POINT
-	AreaSQM                 float64      `db:"area_sqm"`
-	Province                *string      `db:"province"`
-	District                *string      `db:"district"`
-	Commune                 *string      `db:"commune"`
-	Address                 *string      `db:"address"`
-	CropType                *string      `db:"crop_type"`
-	PlantingDate            *int64       `db:"planting_date"`
-	ExpectedHarvestDate     *int64       `db:"expected_harvest_date"`
-	CropTypeVerified        bool         `db:"crop_type_verified"`
-	CropTypeVerifiedAt      *int64       `db:"crop_type_verified_at"`
-	CropTypeVerifiedBy      *string      `db:"crop_type_verified_by"`
-	CropTypeConfidence      *float64     `db:"crop_type_confidence"`
-	LandCertificateNumber   *string      `db:"land_certificate_number"`
-	LandCertificateURL      *string      `db:"land_certificate_url"`
-	LandOwnershipVerified   bool         `db:"land_ownership_verified"`
-	LandOwnershipVerifiedAt *int64       `db:"land_ownership_verified_at"`
-	HasIrrigation           bool         `db:"has_irrigation"`
-	IrrigationType          *string      `db:"irrigation_type"`
-	SoilType                *string      `db:"soil_type"`
-	Status                  FarmStatus   `db:"status"`
-	CreatedAt               time.Time    `db:"created_at"`
-	UpdatedAt               time.Time    `db:"updated_at"`
-	FarmPhotos              []FarmPhoto  `json:"farm_photos"`
 }
