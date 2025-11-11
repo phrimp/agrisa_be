@@ -18,6 +18,7 @@ type GoogleConfig struct {
 	MailUsername        string
 	MailPassword        string
 	FirebaseCredentials string
+	FirebaseProjectID   string
 }
 
 func New() *NotificationService {
@@ -32,6 +33,7 @@ func New() *NotificationService {
 			MailUsername:        getEnvOrDefault("GOOGLE_USERNAME", ""),
 			MailPassword:        getEnvOrDefault("GOOGLE_PASSWORD", "password"),
 			FirebaseCredentials: getEnvOrDefault("FIREBASE_SERVICE_ACCOUNT_KEY", ""),
+			FirebaseProjectID:   getEnvOrDefault("FIREBASE_PROJECT_ID", ""),
 		},
 	}
 }
