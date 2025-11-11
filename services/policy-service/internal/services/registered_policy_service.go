@@ -1,12 +1,14 @@
 package services
 
 import (
+	utils "agrisa_utils"
 	"context"
 	"fmt"
 	"log/slog"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -15,19 +17,25 @@ import (
 type RegisteredPolicyService struct {
 	registeredPolicyRepo *repository.RegisteredPolicyRepository
 	basePolicyRepo       *repository.BasePolicyRepository
+	basePolicyService    *BasePolicyService
 	farmService          *FarmService
 	workerManager        *worker.WorkerManagerV2
+	pdfDocumentService   *PDFService
 }
 
 // NewRegisteredPolicyService creates a new registered policy service
 func NewRegisteredPolicyService(
 	registeredPolicyRepo *repository.RegisteredPolicyRepository,
 	basePolicyRepo *repository.BasePolicyRepository,
+	basePolicyService *BasePolicyService,
+	farmService *FarmService,
 	workerManager *worker.WorkerManagerV2,
 ) *RegisteredPolicyService {
 	return &RegisteredPolicyService{
 		registeredPolicyRepo: registeredPolicyRepo,
 		basePolicyRepo:       basePolicyRepo,
+		basePolicyService:    basePolicyService,
+		farmService:          farmService,
 		workerManager:        workerManager,
 	}
 }
@@ -242,7 +250,35 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 // Validation
 // ============================================================================
 
-func (s *RegisteredPolicyService) validateRegisteredPolicy(policy *models.RegisteredPolicy) error {
+func (s *RegisteredPolicyService) validateRegisteredPolicy(policy *models.RegisteredPolicy, actualDatacost float64) error {
+	if policy.CoverageStartDate != 0 {
+		return fmt.Errorf("can not init start day this way")
+	}
+	if policy.TotalDataCost != actualDatacost {
+		return fmt.Errorf("total data cost invalid")
+	}
+	if policy.TotalFarmerPremium != s.calculateFarmerPremium() {
+		return fmt.Errorf("total premium cost invalid")
+	}
+	return nil
+}
+
+func (s *RegisteredPolicyService) validateEnrollmentDate(startDay, endDate, enrolldate int64) error {
+	if startDay > enrolldate {
+		return fmt.Errorf("policy have not started yet")
+	}
+	if enrolldate > endDate {
+		return fmt.Errorf("policy enrollment date is over")
+	}
+	return nil
+}
+
+func (s *RegisteredPolicyService) validatePolicyTags(tags map[string]string, requiredTags []string) error {
+	for _, tag := range requiredTags {
+		if _, exists := tags[tag]; !exists {
+			return fmt.Errorf("missing required tag: %s", tag)
+		}
+	}
 	return nil
 }
 
@@ -256,23 +292,109 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 			slog.Error("recover from panic", "panic", r)
 		}
 	}()
-	//	tx, err := s.registeredPolicyRepo.BeginTransaction()
-	//	if err != nil {
-	//		return nil, fmt.Errorf("error begining registered policy transaction: %w", err)
-	//	}
-	//
-	//	var farm models.Farm
+	tx, err := s.registeredPolicyRepo.BeginTransaction()
+	if err != nil {
+		return nil, fmt.Errorf("error begining registered policy transaction: %w", err)
+	}
+
+	var farm *models.Farm
 
 	if request.IsNewFarm {
 		// create new farm
-		// err := s.farmRepo.ValidateFarm(request.Farm)
-		//	err := s.farmRepo.CreateTx(tx, &request.Farm)
-		//	if err != nil {
-		//		return nil, fmt.Errorf("error creating farm: %w", err)
-		//	}
+		farm = &request.Farm
+		slog.Info("new farm creation request for a new registered policy", "farm", farm)
+		err := s.farmService.CreateFarmTx(farm, request.RegisteredPolicy.FarmerID, tx)
+		if err != nil {
+			slog.Error("error creating new farm", "error", err)
+			return nil, fmt.Errorf("error creating farm: %w", err)
+		}
 	} else {
-		// farm, err = s.farmService.GetByFarmID(ctx, request.FarmID)
+		farm, err = s.farmService.GetByFarmID(ctx, request.FarmID)
+		if err != nil {
+			slog.Error("error getting farm by id", "id", request.FarmID, "error", err)
+			return nil, fmt.Errorf("error getting farm by ID: %w", err)
+		}
+		// verify ownership
+	}
+	// log current farm
+	slog.Info("farm processing completed", "farm", farm)
+	// processing base policy
+	completeBasePolicy, err := s.basePolicyService.GetCompletePolicyDetail(ctx, models.PolicyDetailFilterRequest{ID: &request.RegisteredPolicy.BasePolicyID, IncludePDF: true})
+	if err != nil {
+		slog.Error("error processing base policy for registered policy", "error", err)
+		return nil, fmt.Errorf("error processing base policy for registered policy: %w", err)
+	}
+	err = s.validateEnrollmentDate(int64(*completeBasePolicy.BasePolicy.EnrollmentStartDay), int64(*completeBasePolicy.BasePolicy.EnrollmentEndDay), time.Now().Unix())
+	if err != nil {
+		return nil, fmt.Errorf("enrollment date validation failed: %w", err)
+	}
+	// processing register policy
+	request.RegisteredPolicy.ID = uuid.New()
+	request.RegisteredPolicy.FarmID = farm.ID
+	request.RegisteredPolicy.PolicyNumber = "AGP" + utils.GenerateRandomStringWithLength(9)
+	request.RegisteredPolicy.UnderwritingStatus = models.UnderwritingPending
+
+	request.RegisteredPolicy.CoverageStartDate = 0
+	request.RegisteredPolicy.CoverageEndDate = int64(*completeBasePolicy.BasePolicy.InsuranceValidToDay)
+	request.RegisteredPolicy.PremiumPaidByFarmer = false
+
+	// validate register policy
+	err = s.validateRegisteredPolicy(&request.RegisteredPolicy, completeBasePolicy.Metadata.TotalDataCost)
+	if err != nil {
+		slog.Error("error validating registered policy", "policy", request.RegisteredPolicy, "error", err)
+		return nil, fmt.Errorf("error validating registered policy: %w", err)
+	}
+
+	// validate tags
+	documentRequiredTags := completeBasePolicy.BasePolicy.DocumentTags.KeySlice()
+	err = s.validatePolicyTags(request.PolicyTags, documentRequiredTags)
+	if err != nil {
+		return nil, fmt.Errorf("error validating document tags: %w", err)
+	}
+
+	// populate base policy pdf document
+	documentLocation := completeBasePolicy.Document.DocumentURL
+	signedDocumentLocation, err := s.pdfDocumentService.FillFromStorageAndUpload(ctx, *documentLocation, request.PolicyTags)
+	if err != nil {
+		return nil, fmt.Errorf("error generate signed document: %w", err)
+	}
+	request.RegisteredPolicy.SignedPolicyDocumentURL = &signedDocumentLocation
+
+	// create new register policy
+	err = s.registeredPolicyRepo.CreateTx(tx, &request.RegisteredPolicy)
+	if err != nil {
+		slog.Error("error creating new registered policy", "policy", request.RegisteredPolicy, "error", err)
+		return nil, fmt.Errorf("error creating new registered policy: %w", err)
+	}
+	basePolicyTrigger, err := s.basePolicyRepo.GetBasePolicyTriggersByPolicyID(request.RegisteredPolicy.BasePolicyID)
+	if err != nil {
+		slog.Error("error getting base policy trigger", "error", err)
+		return nil, fmt.Errorf("error getting base policy trigger: %w", err)
+	}
+
+	// start create worker infrastructure and data jobs
+	err = s.workerManager.CreatePolicyWorkerInfrastructure(ctx, &request.RegisteredPolicy, &completeBasePolicy.BasePolicy,
+		&basePolicyTrigger[0],
+		completeBasePolicy.Triggers[0].Conditions)
+	if err != nil {
+		slog.Error("error creating worker infrastructure for policy", "policy", request.RegisteredPolicy, "error", err)
+		return nil, fmt.Errorf("error creating worker infrastructure for policy %s : %w", request.RegisteredPolicy.ID, err)
+	}
+	err = s.workerManager.StartPolicyWorkerInfrastructure(ctx, request.RegisteredPolicy.ID)
+	if err != nil {
+		slog.Error("error starting worker infrastructure for policy", "policy", request.RegisteredPolicy, "error", err)
+		return nil, fmt.Errorf("error starting worker infrastructure for policy %s : %w", request.RegisteredPolicy.ID, err)
+	}
+
+	// commit
+	if err := tx.Commit(); err != nil {
+		slog.Error("error commiting registered policy transaction", "error", err)
+		return nil, fmt.Errorf("error commiting registered policy transaction: %w", err)
 	}
 
 	return nil, fmt.Errorf("undeveloped feature, please come back later")
+}
+
+func (s *RegisteredPolicyService) calculateFarmerPremium() float64 {
+	return 0
 }

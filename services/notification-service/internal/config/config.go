@@ -15,8 +15,9 @@ type RabbitMQConfig struct {
 }
 
 type GoogleConfig struct {
-	MailUsername string
-	MailPassword string
+	MailUsername        string
+	MailPassword        string
+	FirebaseCredentials string
 }
 
 func New() *NotificationService {
@@ -28,8 +29,9 @@ func New() *NotificationService {
 			Port:     getEnvOrDefault("RABBITMQ_PORT", "5672"),
 		},
 		GoogleConfig: GoogleConfig{
-			MailUsername: getEnvOrDefault("GOOGLE_USERNAME", ""),
-			MailPassword: getEnvOrDefault("GOOGLE_PASSWORD", "password"),
+			MailUsername:        getEnvOrDefault("GOOGLE_USERNAME", ""),
+			MailPassword:        getEnvOrDefault("GOOGLE_PASSWORD", "password"),
+			FirebaseCredentials: getEnvOrDefault("FIREBASE_SERVICE_ACCOUNT_KEY", ""),
 		},
 	}
 }

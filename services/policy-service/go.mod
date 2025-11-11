@@ -4,6 +4,7 @@ go 1.25.1
 
 require (
 	agrisa_utils v0.0.0
+	github.com/cridenour/go-postgis v1.0.1
 	github.com/gofiber/fiber/v3 v3.0.0-rc.2
 	github.com/google/generative-ai-go v0.20.1
 	github.com/google/uuid v1.6.0
@@ -64,7 +65,6 @@ require (
 	github.com/minio/md5-simd v1.1.2 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421 // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
-	github.com/paulmach/orb v0.12.0
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

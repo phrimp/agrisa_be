@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 )
 
 type FarmService struct {
@@ -20,7 +21,6 @@ func NewFarmService(farmRepo *repository.FarmRepository) *FarmService {
 }
 
 func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) ([]models.Farm, error) {
-
 	farms, err := s.farmRepository.GetByOwnerID(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -42,6 +42,21 @@ func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
 	// }
 
 	return s.farmRepository.Create(farm)
+}
+
+func (s *FarmService) CreateFarmTx(farm *models.Farm, ownerID string, tx *sqlx.Tx) error {
+	farm.OwnerID = ownerID
+	farmcode := utils.GenerateRandomStringWithLength(10)
+	farm.FarmCode = &farmcode
+	// // Check if farmer has already owned a farm
+	// existingFarm, err := s.farmRepository.GetByOwnerID(context.Background(), ownerID)
+	// if err != nil && strings.Contains(err.Error(), "no rows in result set") {
+	// 	// no existing farm, proceed to create
+	// } else if existingFarm != nil {
+	// 	return fmt.Errorf("badrequest: farmer has already owned a farm")
+	// }
+
+	return s.farmRepository.CreateTx(tx, farm)
 }
 
 func (s *FarmService) GetAllFarms(ctx context.Context) ([]models.Farm, error) {
@@ -126,4 +141,10 @@ func (s *FarmService) DeleteFarm(ctx context.Context, id string, deletedBy strin
 	}
 
 	return s.farmRepository.Delete(farmID)
+}
+
+func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
+	// call farm photo api
+	// save to db
+	return nil
 }

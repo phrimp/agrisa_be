@@ -28,3 +28,11 @@ func (j *JSONMap) Scan(value any) error {
 
 	return json.Unmarshal(b, j)
 }
+
+func (j *JSONMap) KeySlice() []string {
+	res := []string{}
+	for k := range *j {
+		res = append(res, k)
+	}
+	return res
+}
