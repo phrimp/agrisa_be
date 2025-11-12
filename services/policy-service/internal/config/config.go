@@ -11,6 +11,7 @@ type PolicyServiceConfig struct {
 	MinioCfg            MinioConfig
 	GeminiAPICfg        GeminiAPIConfig
 	VerifyNationalIDURL string
+	VerifyLandCertificateHostAPI string
 }
 
 type MinioConfig struct {
@@ -85,6 +86,7 @@ func New() *PolicyServiceConfig {
 			ProName:   getEnvOrDefault("GEMINI_PRO_MODEL", "gemini-2.5-pro"),
 		},
 		VerifyNationalIDURL: getEnvOrDefault("VERIFY_NATIONAL_ID_URL", "key"),
+		VerifyLandCertificateHostAPI: getEnvOrDefault("VERIFY_LAND_CERTIFICATE_HOST_API", "key"),
 	}
 }
 

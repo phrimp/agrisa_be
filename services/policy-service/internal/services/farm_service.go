@@ -174,7 +174,7 @@ func (s *FarmService) VerifyLandCertificateAPI(nationalIDInput string, token str
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	req.Host = "localhost"
+	req.Host = s.config.VerifyLandCertificateHostAPI
 	// log api url
 	log.Printf("Sending request to Verify National ID API: %s", apiURl)
 	// log host

@@ -472,6 +472,7 @@ services:
       - GEMINI_PRO_MODEL=${GEMINI_PRO_MODEL}
       - API_KEY=${API_KEY}
       - VERIFY_NATIONAL_ID_URL=${VERIFY_NATIONAL_ID_URL}
+      - VERIFY_LAND_CERTIFICATE_HOST_API=${VERIFY_LAND_CERTIFICATE_HOST_API}
 
     volumes:
       - ./logs/policy_service:/agrisa/log/policy_service
