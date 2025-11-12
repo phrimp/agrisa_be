@@ -27,9 +27,9 @@ type MinioClient struct {
 }
 
 type FileUpload struct {
-	FieldName string `json:"fieldName"`
-	FileName  string `json:"fileName"`
-	Data      string `json:"Data"`
+	FieldName string `json:"field_name"`
+	FileName  string `json:"file_name"`
+	Data      string `json:"data"`
 }
 
 type FileUploadRequest []FileUpload
@@ -202,7 +202,8 @@ func (mc *MinioClient) UploadBytes(ctx context.Context, bucketName, objectName s
 	_, err := mc.client.PutObject(ctx, bucketName, objectName, reader, int64(len(data)),
 		minio.PutObjectOptions{ContentType: contentType})
 	if err != nil {
-		return fmt.Errorf("failed to upload bytes to %s in bucket %s: %w", objectName, bucketName, err)
+		log.Printf("failed to upload bytes to %s in bucket %s: %v", objectName, bucketName, err)
+		return fmt.Errorf("internal_error: failed to upload bytes to %s in bucket %s: %w", objectName, bucketName, err)
 	}
 
 	log.Printf("Successfully uploaded %d bytes to: %s in bucket: %s", len(data), objectName, bucketName)
@@ -342,7 +343,7 @@ func GetContentType(objectName string) string {
 func FileSize(unit string, f *FileUpload) (float64, error) {
 	data, err := base64.StdEncoding.DecodeString(f.Data)
 	if err != nil {
-		return 0, fmt.Errorf("decode base64 error: %w", err)
+		return 0, err
 	}
 	sizeInBytes := float64(len(data))
 	unit = strings.ToLower(unit)
@@ -356,18 +357,21 @@ func FileSize(unit string, f *FileUpload) (float64, error) {
 	case "gb":
 		return sizeInBytes / (1024 * 1024 * 1024), nil
 	default:
-		return 0, fmt.Errorf("invalid unit '%s', must be one of: b, kb, mb, gb", unit)
+		log.Printf("invalid unit '%s', must be one of: b, kb, mb, gb", unit)
+		return 0, fmt.Errorf("bad_request: invalid unit '%s', must be one of: b, kb, mb, gb", unit)
 	}
 }
 
-func ValidateFiles(files FileUploadRequest, allowedExts []string, maxMB int64) *FileUploadValidationErr {
+func ValidateFiles(files FileUploadRequest, allowedExts []string, maxMB int64, unit string) *FileUploadValidationErr {
 	for _, f := range files {
 		if f.FileName == "" {
-			return &FileUploadValidationErr{
+			fileUploadValidationError := FileUploadValidationErr{
 				FieldName: "data",
 				FileName:  "",
-				Message:   "A file has an invalid name — please check it.",
+				Message:   "bad_request: A file has an invalid name — please check it.",
 			}
+			log.Printf("bad request - invalid file name: %+v", fileUploadValidationError)
+			return &fileUploadValidationError
 		}
 
 		ext := strings.ToLower(filepath.Ext(f.FileName))
@@ -384,28 +388,32 @@ func ValidateFiles(files FileUploadRequest, allowedExts []string, maxMB int64) *
 			}
 		}
 		if !found {
-			return &FileUploadValidationErr{
+			fileUploadValidationError := FileUploadValidationErr{
 				FieldName: "data",
 				FileName:  f.FileName,
-				Message:   "The file extension is invalid.",
+				Message:   "bad_request: The file extension is invalid.",
 			}
+			log.Printf("bad request - invalid file extension: %+v", fileUploadValidationError)
+			return &fileUploadValidationError
 		}
 
 		if maxMB != -1 {
-			uploadFileSize, err := FileSize("mb", &f)
+			uploadFileSize, err := FileSize(unit, &f)
 			if err != nil {
 				return &FileUploadValidationErr{
 					FieldName: "data",
 					FileName:  f.FileName,
-					Message:   "Invalid base64 data.",
+					Message:   err.Error(),
 				}
 			}
 			if uploadFileSize > float64(maxMB) {
-				return &FileUploadValidationErr{
+				fileUploadValidationError := FileUploadValidationErr{
 					FieldName: "data",
 					FileName:  f.FileName,
-					Message:   "There is a file that exceeds the maximum allowed size.",
+					Message:   "bad_request: There is a file that exceeds the maximum allowed size.",
 				}
+				log.Printf("bad request - file size exceeds limit: %+v", fileUploadValidationError)
+				return &fileUploadValidationError
 			}
 		}
 
@@ -427,7 +435,8 @@ func CreateErrorFromValidation(validationErr FileUploadValidationErr) error {
 func Base64ToBytes(base64String string) ([]byte, error) {
 	bytes, err := base64.StdEncoding.DecodeString(base64String)
 	if err != nil {
-		return nil, err
+		log.Printf("bad_request: decode base64 error: %v", err)
+		return nil, fmt.Errorf("bad_request: decode base64 error: %w", err)
 	}
 	return bytes, nil
 }
@@ -449,7 +458,6 @@ func (mc *MinioClient) UploadFilesToMinio(
 	for _, fu := range filesUpload {
 		bytes, err := Base64ToBytes(fu.Data)
 		if err != nil {
-			fmt.Println("Lỗi:", err)
 			return nil, err
 		}
 
@@ -458,7 +466,6 @@ func (mc *MinioClient) UploadFilesToMinio(
 
 		err = mc.UploadBytes(ctx, bucketName, safeFileName, bytes, contentType)
 		if err != nil {
-			log.Fatalf("Internal error - upload %s: %v", safeFileName, err)
 			return nil, err
 		}
 
@@ -475,18 +482,14 @@ func (mc *MinioClient) UploadFilesToMinio(
 	return fileUploadedInfos, nil
 }
 
-func (mc *MinioClient) FileProcessing(files FileUploadRequest, ctx context.Context, allowedExts []string, maxFileSizeMB int64) ([]FileUploadedInfo, error) {
+func (mc *MinioClient) FileProcessing(files FileUploadRequest, ctx context.Context, allowedExts []string, maxFileSizeMB int64, unit string) ([]FileUploadedInfo, error) {
 	// check if files are empty or not
 	if len(files) == 0 {
-		return nil, CreateErrorFromValidation(FileUploadValidationErr{
-			FieldName: "data",
-			FileName:  "",
-			Message:   "No files were uploaded.",
-		})
+		return nil, fmt.Errorf("bad_request: no files to upload")
 	}
 
 	// validate files
-	validationErr := ValidateFiles(files, allowedExts, maxFileSizeMB)
+	validationErr := ValidateFiles(files, allowedExts, maxFileSizeMB, unit)
 	if validationErr != nil {
 		return nil, CreateErrorFromValidation(*validationErr)
 	}
@@ -494,8 +497,21 @@ func (mc *MinioClient) FileProcessing(files FileUploadRequest, ctx context.Conte
 	// Upload files to MinIO
 	fileUploadedInfos, err := mc.UploadFilesToMinio(files, ctx, Storage.PolicyDocuments)
 	if err != nil {
-		return nil, fmt.Errorf("failed to upload files to MinIO: %w", err)
+		return nil, err
 	}
 
 	return fileUploadedInfos, nil
+}
+
+func JoinResourceURLs(files []FileUploadedInfo) string {
+	if len(files) == 0 {
+		return ""
+	}
+
+	urls := make([]string, 0, len(files))
+	for _, file := range files {
+		urls = append(urls, file.ResourceURL)
+	}
+
+	return strings.Join(urls, "|")
 }

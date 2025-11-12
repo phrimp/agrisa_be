@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"policy-service/internal/database/minio"
 	"slices"
 	"strings"
 	"time"
@@ -723,3 +724,32 @@ type RegisterAPolicyRequest struct {
 }
 
 type RegisterAPolicyResponse struct{}
+
+type VerifyNationalIDRequest struct {
+	NationalID string `json:"national_id"`
+}
+
+type VerifyNationalIDResponse struct {
+	Success bool `json:"success"`
+	Data    struct {
+		IsValid bool `json:"is_valid"`
+	} `json:"data"`
+	Meta struct {
+		Timestamp string `json:"timestamp"`
+	} `json:"meta"`
+}
+
+// VerifyNationalIDErrorResponse represents the error response body from API A
+type VerifyNationalIDErrorResponse struct {
+	Success bool `json:"success"`
+	Error   struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
+}
+
+type VerifyLandCertificateRequest struct {
+	OwnerNationalID       string
+	Token                 string
+	LandCertificatePhotos []minio.FileUpload
+}

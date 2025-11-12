@@ -43,7 +43,7 @@ func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
 	sessionGr.GET("/me", a.GetMySession)
 	// Admin manage all sessions
 	sessionGr.GET("/all", a.GetAllSessions)
-	sessionGr.POST("/verify-national-id", a.VerifyNationalID)
+	sessionGr.POST("/verify-land-certificate", a.VerifyLandCertificate)
 
 }
 
@@ -387,10 +387,10 @@ func (a *AuthHandler) GetAllSessions(c *gin.Context) {
 	})
 }
 
-func (a *AuthHandler) VerifyNationalID(c *gin.Context) {
+func (a *AuthHandler) VerifyLandCertificate(c *gin.Context) {
 	userID := c.GetHeader("X-User-ID")
 	if userID == "" {
-		log.Printf("Missing X-User-ID header in VerifyNationalID request")
+		log.Printf("Missing X-User-ID header in VerifyLandCertificate request")
 		errorResponse := utils.CreateErrorResponse("UNAUTHORIZED", "Invalid session")
 		c.JSON(http.StatusUnauthorized, errorResponse)
 		return
@@ -398,7 +398,7 @@ func (a *AuthHandler) VerifyNationalID(c *gin.Context) {
 
 	var requestBody map[string]interface{}
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
-		log.Printf("Error binding JSON for VerifyNationalID: %s", err.Error())
+		log.Printf("Error binding JSON for VerifyLandCertificate: %s", err.Error())
 		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
 		c.JSON(http.StatusBadRequest, errorResponse)
 		return
@@ -412,9 +412,20 @@ func (a *AuthHandler) VerifyNationalID(c *gin.Context) {
 		return
 	}
 
-	isMatched, err := a.userService.VerifyNationalID(userID, natinonalIDInput)
+	isValid, err := a.userService.VerifyLandCertificate(userID, natinonalIDInput)
 	if err != nil {
-		log.Printf("National ID verification failed for user %s: %v", userID, err)
+		log.Printf("Land certificate verification failed for user %s: %v", userID, err)
+		if strings.Contains(err.Error(), "no rows in result set") {
+			c.JSON(http.StatusNotFound, utils.CreateErrorResponse("NOT_FOUND", "User has no associated national ID card"))
+		}
+		if strings.Contains(err.Error(), "bad_request") {
+			c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("NATIONAL_ID_MISMATCH", err.Error()))
+			return
+		}
+		if strings.Contains(err.Error(), "forbidden") {
+			c.JSON(http.StatusForbidden, utils.CreateErrorResponse("EKYC_NOT_COMPLETED", err.Error()))
+			return
+		}
 		c.JSON(http.StatusInternalServerError, utils.ErrorResponse{
 			Success: false,
 			Error: utils.APIError{
@@ -426,7 +437,7 @@ func (a *AuthHandler) VerifyNationalID(c *gin.Context) {
 	}
 
 	response := utils.CreateSuccessResponse(map[string]bool{
-		"is_matched": isMatched,
+		"is_valid": isValid,
 	})
 	c.JSON(http.StatusOK, response)
 }

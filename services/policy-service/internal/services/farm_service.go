@@ -2,21 +2,32 @@ package services
 
 import (
 	utils "agrisa_utils"
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"strings"
+	"time"
+
+	"policy-service/internal/config"
 
 	"github.com/google/uuid"
 )
 
 type FarmService struct {
 	farmRepository *repository.FarmRepository
+	config         *config.PolicyServiceConfig
+	minioClient    *minio.MinioClient
 }
 
-func NewFarmService(farmRepo *repository.FarmRepository) *FarmService {
-	return &FarmService{farmRepository: farmRepo}
+func NewFarmService(farmRepo *repository.FarmRepository, cfg *config.PolicyServiceConfig, minioClient *minio.MinioClient) *FarmService {
+	return &FarmService{farmRepository: farmRepo, config: cfg, minioClient: minioClient}
 }
 
 func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) ([]models.Farm, error) {
@@ -126,4 +137,96 @@ func (s *FarmService) DeleteFarm(ctx context.Context, id string, deletedBy strin
 	}
 
 	return s.farmRepository.Delete(farmID)
+}
+
+func (s *FarmService) VerifyLandCertificateAPI(nationalIDInput string, token string) (bool, error) {
+	apiURl := s.config.VerifyNationalIDURL
+	requestBody := models.VerifyNationalIDRequest{
+		NationalID: nationalIDInput,
+	}
+
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		log.Printf("failed to marshal request body: %v", err)
+		return false, fmt.Errorf("badrequest: failed to marshal request body: %w", err)
+	}
+
+	req, err := http.NewRequest("POST", apiURl, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		log.Printf("failed to create HTTP request: %v", err)
+		return false, fmt.Errorf("internal_error: failed to create HTTP request")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	req.Host = "localhost"
+	// log api url
+	log.Printf("Sending request to Verify National ID API: %s", apiURl)
+	// log host
+	log.Printf("Host: %s", req.Host)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("failed to send HTTP request: %v", err)
+		return false, fmt.Errorf("internal_error: failed to send HTTP request")
+	}
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("failed to read response body: %v", err)
+		return false, fmt.Errorf("internal_error: failed to read response body")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		var errorResp models.VerifyNationalIDErrorResponse
+		if err := json.Unmarshal(body, &errorResp); err != nil {
+			log.Printf("Failed to unmarshal error response of API Verify nationalID: %v", err)
+			log.Printf("Response body of API Verify nationalID: %s", string(body))
+			return false, fmt.Errorf("internal_error")
+		}
+		return false, fmt.Errorf("API Verify nationalID error: code=%s, message=%s", errorResp.Error.Code, errorResp.Error.Message)
+	}
+
+	var successResp models.VerifyNationalIDResponse
+	if err := json.Unmarshal(body, &successResp); err != nil {
+		return false, fmt.Errorf("internal_error: failed to unmarshal success response: %w", err)
+	}
+
+	return successResp.Data.IsValid, nil
+}
+
+func (s *FarmService) VerifyLandCertificate(verifyRequest models.VerifyLandCertificateRequest, farm *models.Farm) (err error) {
+	isLandCertificateVerify, err := s.VerifyLandCertificateAPI(verifyRequest.OwnerNationalID, verifyRequest.Token)
+	if err != nil {
+		return err
+	}
+	if !isLandCertificateVerify {
+		return fmt.Errorf("unauthorized: land certificate verification failed")
+	}
+
+	farm.LandOwnershipVerified = true
+	secondnow := time.Now().Unix()
+	farm.LandOwnershipVerifiedAt = &secondnow
+
+	// upload land certificate image to MinIO
+	fileuploadRquest := []minio.FileUpload{}
+	for _, photo := range verifyRequest.LandCertificatePhotos {
+		fileUpload := minio.FileUpload{
+			FileName:  photo.FileName,
+			FieldName: photo.FieldName,
+			Data:      photo.Data,
+		}
+		fileuploadRquest = append(fileuploadRquest, fileUpload)
+	}
+
+	fileUploadedInfos, err := s.minioClient.FileProcessing(fileuploadRquest, context.Background(), []string{".jpg", ".png", ".jpeg", ".webp"}, 5, "mb")
+	if err != nil {
+		return err
+	}
+
+	landCertificateURLs := minio.JoinResourceURLs(fileUploadedInfos)
+	farm.LandCertificateURL = &landCertificateURLs
+	return nil
 }

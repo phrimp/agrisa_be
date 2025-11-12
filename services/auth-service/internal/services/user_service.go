@@ -28,7 +28,7 @@ import (
 type IUserService interface {
 	RegisterNewUser(phone, email, password, nationalID string, phoneVerificationStatus, isDefault bool) (*models.User, error)
 	Login(email, phone, password string, deviceInfo, ipAddress *string) (*models.User, *models.UserSession, error)
-
+	GetUserByID(userID string) (*models.User, error)
 	BanUser(userID string, until int64) error
 	UnbanUser(userID string) error
 
@@ -38,7 +38,7 @@ type IUserService interface {
 	ProcessAndUploadFiles(files map[string][]*multipart.FileHeader, serviceName string, allowedExts []string, maxMB int64) ([]utils.FileInfo, error)
 	OCRNationalIDCard(form *multipart.Form) (interface{}, error)
 	VerifyFaceLiveness(form *multipart.Form) (interface{}, error)
-	VerifyNationalID(userID string, NationalIDInput string) (result bool, err error)
+	VerifyLandCertificate(userID string, NationalIDInput string) (result bool, err error)
 }
 
 type UserService struct {
@@ -103,6 +103,10 @@ func (s *UserService) UploadToMinIO(c *gin.Context, file io.Reader, header *mult
 
 	ctx := c.Request.Context()
 	return s.minioClient.UploadFile(ctx, fileName, contentType, file, fileSize, serviceName)
+}
+
+func (s *UserService) GetUserByID(userID string) (*models.User, error) {
+	return s.userRepo.GetUserByID(userID)
 }
 
 func (s *UserService) ProcessAndUploadFiles(files map[string][]*multipart.FileHeader,
@@ -1193,16 +1197,31 @@ func (s *UserService) UnbanUser(userID string) error {
 	return nil
 }
 
-func (s *UserService) VerifyNationalID(userID string, NationalIDInput string) (result bool, err error) {
+func (s *UserService) VerifyLandCertificate(userID string, NationalIDInput string) (bool, error) {
+	var result bool = false
+	var isNationalIDMatch bool = true
 	userCard, err := s.userCardRepo.GetUserCardByUserID(userID)
 	if err != nil {
 		log.Printf("Failed to get user card: %v", err)
 		return false, fmt.Errorf(err.Error())
 	}
 
-	if userCard.NationalID != NationalIDInput {
-		return false, nil
+	user, err := s.userRepo.GetUserByID(userID)
+	if err != nil {
+		log.Printf("Failed to get user: %v", err)
+		return false, err
 	}
 
-	return true, nil
+	if userCard.NationalID != NationalIDInput {
+		isNationalIDMatch = false
+		return result, fmt.Errorf("bad_request: National ID does not match")
+	}
+
+	if user.KYCVerified && isNationalIDMatch {
+		result = true
+	} else {
+		return result, fmt.Errorf("forbidden: User has not completed KYC verification")
+	}
+
+	return result, nil
 }

@@ -119,7 +119,7 @@ func main() {
 	dataSourceService := services.NewDataSourceService(dataSourceRepo)
 	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, geminiClient)
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, workerManager)
-	farmService := services.NewFarmService(farmRepo)
+	farmService := services.NewFarmService(farmRepo, cfg, minioClient)
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
 
 	// Expiration Listener

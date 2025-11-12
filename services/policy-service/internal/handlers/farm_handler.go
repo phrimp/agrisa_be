@@ -2,6 +2,7 @@ package handlers
 
 import (
 	utils "agrisa_utils"
+	"errors"
 	"log"
 	"net/http"
 	"policy-service/internal/database/minio"
@@ -85,6 +86,29 @@ func (h *FarmHandler) CreateFarm(c fiber.Ctx) error {
 	userID := c.Get("X-User-ID")
 	if userID == "" {
 		return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	token, err := extractBearerToken(c)
+	if err != nil {
+		return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", err.Error()))
+	}
+
+	verifyLandCerRequest := models.VerifyLandCertificateRequest{
+		OwnerNationalID:       *farm.OwnerNationalID,
+		Token:                 token,
+		LandCertificatePhotos: farm.LandCertificatePhotos,
+	}
+
+	if err := h.farmService.VerifyLandCertificate(verifyLandCerRequest, &farm); err != nil {
+		if strings.Contains(err.Error(), "bad_request") {
+			log.Printf("Error logginggg: %s", err.Error())
+			return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("VALIDATION_FAILED", err.Error()))
+		}
+		if strings.Contains(err.Error(), "unauthorized") {
+			return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", err.Error()))
+		}
+		log.Printf("Error logginggg: %s", err.Error())
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", err.Error()))
 	}
 
 	// Validate required fields
@@ -182,4 +206,28 @@ func (h *FarmHandler) GetAllFarms(c fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", err.Error()))
 	}
 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(farms))
+}
+
+func extractBearerToken(c fiber.Ctx) (string, error) {
+	authHeader := c.Get("Authorization")
+
+	if authHeader == "" {
+		log.Printf("authorization header is missing")
+		return "", errors.New("authorization header is missing")
+	}
+
+	// Kiểm tra format "Bearer <token>"
+	parts := strings.Split(authHeader, " ")
+	if len(parts) != 2 || parts[0] != "Bearer" {
+		log.Printf("invalid authorization format")
+		return "", errors.New("invalid authorization format")
+	}
+
+	token := parts[1]
+	if token == "" {
+		log.Printf("empty token")
+		return "", errors.New("empty token")
+	}
+
+	return token, nil
 }
