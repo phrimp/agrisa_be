@@ -711,9 +711,10 @@ func (r *PolicyDetailFilterRequest) Validate() error {
 }
 
 type RegisterAPolicyAPIRequest struct {
-	RegisteredPolicy RegisteredPolicy `json:"registered_policy" validate:"required"`
-	Farm             Farm             `json:"farm"`
-	PolicyDocument   PolicyDocument   `json:"policy_document"`
+	RegisteredPolicy RegisteredPolicy  `json:"registered_policy" validate:"required"`
+	Farm             Farm              `json:"farm"`
+	PolicyDocument   PolicyDocument    `json:"policy_document"`
+	PolicyTags       map[string]string `json:"policy_tags"`
 }
 
 type RegisterAPolicyRequest struct {
@@ -721,9 +722,8 @@ type RegisterAPolicyRequest struct {
 	Farm             Farm
 	FarmID           string
 	IsNewFarm        bool
+	PolicyTags       map[string]string `json:"policy_tags"`
 }
-
-type RegisterAPolicyResponse struct{}
 
 type VerifyNationalIDRequest struct {
 	NationalID string `json:"national_id"`
@@ -752,4 +752,8 @@ type VerifyLandCertificateRequest struct {
 	OwnerNationalID       string
 	Token                 string
 	LandCertificatePhotos []minio.FileUpload
+}
+type RegisterAPolicyResponse struct {
+	RegisterPolicyID   string
+	BasePolicyDocument []byte
 }

@@ -1,16 +1,19 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
-	"notification-service/internal/config"
-	"notification-service/internal/google"
-	"notification-service/internal/handlers"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"notification-service/internal/config"
+	"notification-service/internal/event"
+	"notification-service/internal/google"
+	"notification-service/internal/handlers"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -64,8 +67,6 @@ func main() {
 	}
 	defer logFile.Close()
 	cfg := config.New()
-	fmt.Printf("%s", cfg)
-
 	app := fiber.New()
 	app.Get("/checkhealth", func(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).SendString("Policy service is healthy")
@@ -76,6 +77,43 @@ func main() {
 	emailHandler := handlers.NewEmailHandler(emailService)
 
 	emailHandler.Register(app)
+
+	firebaseConfig := &google.FirebaseConfig{
+		CredentialsPath: cfg.GoogleConfig.FirebaseCredentials,
+		ProjectID:       cfg.GoogleConfig.FirebaseProjectID,
+		BatchSize:       500,
+	}
+
+	firebaseService, err := google.NewFirebaseService(firebaseConfig)
+	if err != nil {
+		log.Fatalf("Failed to initialize Firebase: %v", err)
+	}
+
+	// Setup queue consumer
+	consumerConfig := &event.ConsumerConfig{
+		RabbitMQURL: fmt.Sprintf("amqp://%s:%s@rabbitmq:%s/",
+			cfg.RabbitMQCfg.Username,
+			cfg.RabbitMQCfg.Password,
+			cfg.RabbitMQCfg.Port),
+		QueueName:       "notifications",
+		DeadLetterQueue: "notifications.dlq",
+		PrefetchCount:   10,
+	}
+
+	consumer, err := event.NewQueueConsumer(consumerConfig, firebaseService, emailService)
+	if err != nil {
+		log.Fatalf("Failed to setup queue consumer: %v", err)
+	}
+
+	// Start consuming in goroutine
+	go func() {
+		if err := consumer.StartConsuming(context.Background()); err != nil {
+			log.Printf("Consumer error: %v", err)
+		}
+	}()
+
+	// Add cleanup on shutdown
+	defer consumer.Close()
 
 	shutdownChan := make(chan os.Signal, 1)
 	doneChan := make(chan bool, 1)

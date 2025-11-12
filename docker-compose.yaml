@@ -374,9 +374,11 @@ services:
       - NOTIFICATION_SERVICE_PORT=8088
       - GOOGLE_USERNAME=${GOOGLE_USERNAME}
       - GOOGLE_PASSWORD=${GOOGLE_PASSWORD}
+      - FIREBASE_SERVICE_ACCOUNT_KEY=/app/secrets/agrisa-firebase.json
 
     volumes:
       - ./logs/notification_service:/agrisa/log/notification_service
+      - ./${FIREBASE_SERVICE_ACCOUNT_KEY_LOCATION}:/app/secrets/agrisa-firebase.json
     networks:
       - traefik-net
     depends_on:
