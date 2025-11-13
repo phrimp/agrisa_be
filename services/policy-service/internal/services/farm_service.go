@@ -438,3 +438,39 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 
 	return nil
 }
+
+func (s *FarmService) CreateFarmValidate(farm *models.Farm, token string) error {
+	// Validate required fields
+	if farm.CropType == "" {
+		return fmt.Errorf("bad_request: crop_type is required")
+	}
+	if farm.AreaSqm <= 0 {
+		return fmt.Errorf("bad_request: area_sqm must be greater than 0")
+	}
+
+	// Validate harvest date if provided
+	if farm.ExpectedHarvestDate != nil {
+		if farm.PlantingDate == nil {
+			return fmt.Errorf("bad_request: planting_date is required when expected_harvest_date is provided")
+		}
+		if *farm.ExpectedHarvestDate < *farm.PlantingDate {
+			return fmt.Errorf("bad_request: expected_harvest_date must be greater than or equal to planting_date")
+		}
+	}
+
+	if farm.OwnerNationalID == nil {
+		return fmt.Errorf("bad_request: owner_national_id is required")
+	}
+
+	verifyLandCerRequest := models.VerifyLandCertificateRequest{
+		OwnerNationalID:       *farm.OwnerNationalID,
+		Token:                 token,
+		LandCertificatePhotos: farm.LandCertificatePhotos,
+	}
+
+	if err := s.VerifyLandCertificate(verifyLandCerRequest, farm); err != nil {
+		return err
+	}
+	return nil
+
+}
