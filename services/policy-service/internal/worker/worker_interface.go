@@ -19,6 +19,7 @@ type JobPayload struct {
 	MaxRetries int            `json:"max_retries"`
 	RetryCount int            `json:"retry_count"`
 	OneTime    bool           `json:"one_time"`
+	RunNow     bool           `json:"run_now"`
 }
 
 type Pool interface {

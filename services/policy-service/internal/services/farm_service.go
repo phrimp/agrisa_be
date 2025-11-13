@@ -8,11 +8,13 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"net/http"
 	"policy-service/internal/config"
 	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
+	"policy-service/internal/worker"
 	"strings"
 	"time"
 
@@ -24,10 +26,11 @@ type FarmService struct {
 	farmRepository *repository.FarmRepository
 	config         *config.PolicyServiceConfig
 	minioClient    *minio.MinioClient
+	workerManager  *worker.WorkerManagerV2
 }
 
-func NewFarmService(farmRepo *repository.FarmRepository, cfg *config.PolicyServiceConfig, minioClient *minio.MinioClient) *FarmService {
-	return &FarmService{farmRepository: farmRepo, config: cfg, minioClient: minioClient}
+func NewFarmService(farmRepo *repository.FarmRepository, cfg *config.PolicyServiceConfig, minioClient *minio.MinioClient, workerManager *worker.WorkerManagerV2) *FarmService {
+	return &FarmService{farmRepository: farmRepo, config: cfg, minioClient: minioClient, workerManager: workerManager}
 }
 
 func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) ([]models.Farm, error) {
@@ -40,6 +43,9 @@ func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) ([]mo
 }
 
 func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
+	if farm.ID == uuid.Nil {
+		farm.ID = uuid.New()
+	}
 	farm.OwnerID = ownerID
 	farmcode := utils.GenerateRandomStringWithLength(10)
 	farm.FarmCode = &farmcode
@@ -51,10 +57,49 @@ func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
 	// 	return fmt.Errorf("badrequest: farmer has already owned a farm")
 	// }
 
+	poolId, err := s.workerManager.CreateFarmImageryWorkerInfrastructure(context.Background(), farm.ID)
+	if err != nil {
+		return fmt.Errorf("error creating imagery worker infra: %w", err)
+	}
+	err = s.workerManager.StartFarmImageryWorkerInfrastructure(context.Background(), *poolId)
+	if err != nil {
+		return fmt.Errorf("error starting imagery worker infra: %w", err)
+	}
+
+	currentTime := time.Now()
+	previousYearTime := currentTime.AddDate(-1, 0, 0)
+	formattedTime := currentTime.Format("2006-01-02")
+	previousYearFormattedTime := previousYearTime.Format("2006-01-02")
+
+	// send job
+	fullYearJob := worker.JobPayload{
+		JobID:      uuid.NewString(),
+		Type:       "farm-imagery",
+		Params:     map[string]any{"farm_id": farm.ID, "start_date": previousYearFormattedTime, "end_date": formattedTime},
+		MaxRetries: 100,
+		OneTime:    true,
+		RunNow:     true,
+	}
+	everydayJob := worker.JobPayload{
+		JobID:      uuid.NewString(),
+		Type:       "farm-imagery",
+		Params:     map[string]any{"farm_id": farm.ID, "start_date": "", "end_date": "now"},
+		MaxRetries: 100,
+		OneTime:    false,
+	}
+	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(*worker.AIWorkerPoolUUID)
+	if !ok {
+		slog.Error("error get AI scheduler", "error", "scheduler doesn't exist")
+	}
+	scheduler.AddJob(fullYearJob)
+	scheduler.AddJob(everydayJob)
 	return s.farmRepository.Create(farm)
 }
 
 func (s *FarmService) CreateFarmTx(farm *models.Farm, ownerID string, tx *sqlx.Tx) error {
+	if farm.ID == uuid.Nil {
+		farm.ID = uuid.New()
+	}
 	farm.OwnerID = ownerID
 	farmcode := utils.GenerateRandomStringWithLength(10)
 	farm.FarmCode = &farmcode
@@ -66,6 +111,42 @@ func (s *FarmService) CreateFarmTx(farm *models.Farm, ownerID string, tx *sqlx.T
 	// 	return fmt.Errorf("badrequest: farmer has already owned a farm")
 	// }
 
+	poolId, err := s.workerManager.CreateFarmImageryWorkerInfrastructure(context.Background(), farm.ID)
+	if err != nil {
+		return fmt.Errorf("error creating imagery worker infra: %w", err)
+	}
+	err = s.workerManager.StartFarmImageryWorkerInfrastructure(context.Background(), *poolId)
+	if err != nil {
+		return fmt.Errorf("error starting imagery worker infra: %w", err)
+	}
+
+	currentTime := time.Now()
+	previousYearTime := currentTime.AddDate(-1, 0, 0)
+	formattedTime := currentTime.Format("2006-01-02")
+	previousYearFormattedTime := previousYearTime.Format("2006-01-02")
+
+	// send job
+	fullYearJob := worker.JobPayload{
+		JobID:      uuid.NewString(),
+		Type:       "farm-imagery",
+		Params:     map[string]any{"farm_id": farm.ID, "start_date": previousYearFormattedTime, "end_date": formattedTime},
+		MaxRetries: 100,
+		OneTime:    true,
+		RunNow:     true,
+	}
+	everydayJob := worker.JobPayload{
+		JobID:      uuid.NewString(),
+		Type:       "farm-imagery",
+		Params:     map[string]any{"farm_id": farm.ID, "start_date": "", "end_date": "now"},
+		MaxRetries: 100,
+		OneTime:    false,
+	}
+	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(*worker.AIWorkerPoolUUID)
+	if !ok {
+		slog.Error("error get AI scheduler", "error", "scheduler doesn't exist")
+	}
+	scheduler.AddJob(fullYearJob)
+	scheduler.AddJob(everydayJob)
 	return s.farmRepository.CreateTx(tx, farm)
 }
 
@@ -342,6 +423,13 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 		return fmt.Errorf("missing or invalid end_date parameter")
 	}
 
+	if endDate == "now" {
+		currentTime := time.Now()
+		lastDay := currentTime.Add(24 * time.Hour)
+		endDate = currentTime.Format("2006-01-02")
+		startDate = lastDay.Format("2006-01-02")
+	}
+
 	// Add query parameters
 	q := req.URL.Query()
 	q.Add("coordinates", string(coordsJSON))
@@ -472,5 +560,16 @@ func (s *FarmService) CreateFarmValidate(farm *models.Farm, token string) error 
 		return err
 	}
 	return nil
+}
 
+func (s *FarmService) CheckFarmOwner(ownerID string, farmID string) (bool, error) {
+	farm, err := s.farmRepository.GetFarmByID(context.Background(), farmID)
+	if err != nil {
+		return false, err
+	}
+	if farm.OwnerID != ownerID {
+		log.Printf("Owner ID mismatch: expected %s, got %s", farm.OwnerID, ownerID)
+		return false, fmt.Errorf("unauthorize: ower id mismatch")
+	}
+	return true, nil
 }

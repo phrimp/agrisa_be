@@ -125,103 +125,65 @@ func (m *WorkerManagerV2) CreatePolicyWorkerInfrastructure(
 		return fmt.Errorf("unsupported monitor frequency unit: %s", basePolicyTrigger.MonitorFrequencyUnit)
 	}
 
-	// Create pool and scheduler in transaction
-	err := m.persistor.WithTransaction(ctx, func(ctx context.Context, txPersistor WorkerPersistor) error {
-		// 1. Create pool
-		poolName := fmt.Sprintf("policy-%s-pool", registeredPolicy.ID)
-		queueNameBase := fmt.Sprintf("policy-%s", registeredPolicy.ID)
+	// 1. Create pool
+	poolName := fmt.Sprintf("policy-%s-pool", registeredPolicy.ID)
 
-		var goRedisClient *goredis.Client
-		if m.redisClient != nil {
-			goRedisClient = m.redisClient.GetClient()
-		}
-
-		pool := NewWorkingPool(
-			len(basePolicyCondition),
-			poolName,
-			30*time.Minute,
-			goRedisClient,
-			100,
-			len(basePolicyCondition),
-			-1,
-		)
-
-		// Register job handler for farm monitoring data fetch
-		handler, exists := m.GetJobHandler("fetch-farm-monitoring-data")
-		if !exists {
-			return fmt.Errorf("job handler not registered: fetch-farm-monitoring-data")
-		}
-		pool.RegisterJob("fetch-farm-monitoring-data", handler)
-
-		poolState := &WorkerPoolState{
-			PolicyID:      registeredPolicy.ID,
-			PoolName:      poolName,
-			QueueNameBase: queueNameBase,
-			NumWorkers:    5,
-			JobTimeout:    30 * time.Minute,
-			PoolStatus:    PoolStatusCreated,
-			CreatedAt:     time.Now(),
-			Metadata:      map[string]any{"base_policy_id": basePolicy.ID.String()},
-		}
-
-		if err := txPersistor.CreatePoolState(ctx, poolState); err != nil {
-			return fmt.Errorf("failed to create pool state: %w", err)
-		}
-
-		// 2. Create scheduler
-		schedulerName := fmt.Sprintf("policy-%s-scheduler", registeredPolicy.ID)
-
-		scheduler := NewJobScheduler(schedulerName, monitorInterval, pool)
-
-		// TODO: Add jobs for each data source endpoint
-		// This requires loading trigger conditions which reference data sources
-		// For now, we'll create a placeholder job that can be populated later
-		//job := JobPayload{
-		//	JobID: uuid.NewString(),
-		//	Type:  "fetch-farm-monitoring-data",
-		//	Params: map[string]any{
-		//		"policy_id":      registeredPolicy.ID.String(),
-		//		"base_policy_id": basePolicy.ID.String(),
-		//		"farm_id":        registeredPolicy.FarmID.String(),
-		//		"trigger_id":     basePolicyTrigger.ID.String(),
-		//	},
-		//	MaxRetries: 3,
-		//}
-		//scheduler.AddJob(job)
-
-		schedulerState := &WorkerSchedulerState{
-			PolicyID:             registeredPolicy.ID,
-			SchedulerName:        schedulerName,
-			MonitorInterval:      monitorInterval,
-			MonitorFrequencyUnit: string(basePolicyTrigger.MonitorFrequencyUnit),
-			SchedulerStatus:      SchedulerStatusCreated,
-			CreatedAt:            time.Now(),
-			Metadata:             map[string]any{"base_policy_id": basePolicy.ID.String()},
-		}
-
-		if err := txPersistor.CreateSchedulerState(ctx, schedulerState); err != nil {
-			return fmt.Errorf("failed to create scheduler state: %w", err)
-		}
-
-		// 3. Store in memory
-		m.mu.Lock()
-		m.pools[registeredPolicy.ID] = pool
-		m.poolsByName[poolName] = pool
-		m.schedulers[registeredPolicy.ID] = scheduler
-		m.schedulersByName[schedulerName] = scheduler
-		m.mu.Unlock()
-
-		slog.Info("Worker infrastructure created successfully",
-			"policy_id", registeredPolicy.ID,
-			"pool_name", poolName,
-			"scheduler_name", schedulerName,
-			"monitor_interval", monitorInterval)
-
-		return nil
-	})
-	if err != nil {
-		return fmt.Errorf("failed to create worker infrastructure: %w", err)
+	var goRedisClient *goredis.Client
+	if m.redisClient != nil {
+		goRedisClient = m.redisClient.GetClient()
 	}
+
+	pool := NewWorkingPool(
+		len(basePolicyCondition),
+		poolName,
+		30*time.Minute,
+		goRedisClient,
+		100,
+		len(basePolicyCondition),
+		-1,
+	)
+
+	// Register job handler for farm monitoring data fetch
+	handler, exists := m.GetJobHandler("fetch-farm-monitoring-data")
+	if !exists {
+		return fmt.Errorf("job handler not registered: fetch-farm-monitoring-data")
+	}
+	pool.RegisterJob("fetch-farm-monitoring-data", handler)
+
+	// 2. Create scheduler
+	schedulerName := fmt.Sprintf("policy-%s-scheduler", registeredPolicy.ID)
+
+	scheduler := NewJobScheduler(schedulerName, monitorInterval, pool)
+
+	// TODO: Add jobs for each data source endpoint
+	// This requires loading trigger conditions which reference data sources
+	// For now, we'll create a placeholder job that can be populated later
+	//job := JobPayload{
+	//	JobID: uuid.NewString(),
+	//	Type:  "fetch-farm-monitoring-data",
+	//	Params: map[string]any{
+	//		"policy_id":      registeredPolicy.ID.String(),
+	//		"base_policy_id": basePolicy.ID.String(),
+	//		"farm_id":        registeredPolicy.FarmID.String(),
+	//		"trigger_id":     basePolicyTrigger.ID.String(),
+	//	},
+	//	MaxRetries: 3,
+	//}
+	//scheduler.AddJob(job)
+
+	// 3. Store in memory
+	m.mu.Lock()
+	m.pools[registeredPolicy.ID] = pool
+	m.poolsByName[poolName] = pool
+	m.schedulers[registeredPolicy.ID] = scheduler
+	m.schedulersByName[schedulerName] = scheduler
+	m.mu.Unlock()
+
+	slog.Info("Worker infrastructure created successfully",
+		"policy_id", registeredPolicy.ID,
+		"pool_name", poolName,
+		"scheduler_name", schedulerName,
+		"monitor_interval", monitorInterval)
 
 	return nil
 }
@@ -274,30 +236,30 @@ func (m *WorkerManagerV2) StartPolicyWorkerInfrastructure(ctx context.Context, p
 }
 
 // StopWorkerInfrastructure stops pool + scheduler for a policy
-func (m *WorkerManagerV2) StopWorkerInfrastructure(ctx context.Context, policyID uuid.UUID) error {
+func (m *WorkerManagerV2) StopWorkerInfrastructure(ctx context.Context, poolID uuid.UUID) error {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("panic recovered", "panic", r)
 		}
 	}()
 
-	slog.Info("Stopping worker infrastructure", "policy_id", policyID)
+	slog.Info("Stopping worker infrastructure", "poolID", poolID)
 
 	m.mu.RLock()
-	_, poolExists := m.pools[policyID]
-	scheduler, schedulerExists := m.schedulers[policyID]
-	poolCancel, cancelExists := m.poolCancels[policyID]
+	_, poolExists := m.pools[poolID]
+	scheduler, schedulerExists := m.schedulers[poolID]
+	poolCancel, cancelExists := m.poolCancels[poolID]
 	m.mu.RUnlock()
 
 	if !poolExists || !schedulerExists {
-		return fmt.Errorf("worker infrastructure not found for policy %s", policyID)
+		return fmt.Errorf("worker infrastructure not found for policy %s", poolID)
 	}
 
 	// Stop pool by canceling its context
 	if cancelExists {
 		poolCancel()
 		m.mu.Lock()
-		delete(m.poolCancels, policyID)
+		delete(m.poolCancels, poolID)
 		m.mu.Unlock()
 	}
 
@@ -306,16 +268,16 @@ func (m *WorkerManagerV2) StopWorkerInfrastructure(ctx context.Context, policyID
 
 	// Update statuses in transaction
 	err := m.persistor.WithTransaction(ctx, func(ctx context.Context, txPersistor WorkerPersistor) error {
-		if err := txPersistor.SetPoolStatus(ctx, policyID, PoolStatusStopped); err != nil {
+		if err := txPersistor.SetPoolStatus(ctx, poolID, PoolStatusStopped); err != nil {
 			return err
 		}
-		return txPersistor.SetSchedulerStatus(ctx, policyID, SchedulerStatusStopped)
+		return txPersistor.SetSchedulerStatus(ctx, poolID, SchedulerStatusStopped)
 	})
 	if err != nil {
 		return fmt.Errorf("failed to update worker infrastructure status: %w", err)
 	}
 
-	slog.Info("Worker infrastructure stopped successfully", "policy_id", policyID)
+	slog.Info("Worker infrastructure stopped successfully", "policy_id", poolID)
 
 	return nil
 }
@@ -485,7 +447,7 @@ func (m *WorkerManagerV2) CreateFarmImageryWorkerInfrastructure(ctx context.Cont
 
 	schedulerName := fmt.Sprintf("farm-imagery-%s", farmID)
 
-	monitorInterval := time.Duration(5 * time.Minute)
+	monitorInterval := time.Duration(24 * time.Hour)
 	scheduler := NewJobScheduler(schedulerName, monitorInterval, pool)
 
 	//job := JobPayload{
@@ -504,6 +466,39 @@ func (m *WorkerManagerV2) CreateFarmImageryWorkerInfrastructure(ctx context.Cont
 	m.mu.Unlock()
 
 	return &farmID, nil
+}
+
+func (m *WorkerManagerV2) StartFarmImageryWorkerInfrastructure(ctx context.Context, farmID uuid.UUID) error {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("Job panic recovered", "panic", r)
+		}
+	}()
+	slog.Info("Starting worker infrastructure", "farmID", farmID)
+
+	m.mu.RLock()
+	pool, poolExists := m.pools[farmID]
+	scheduler, schedulerExists := m.schedulers[farmID]
+	m.mu.RUnlock()
+
+	if !poolExists || !schedulerExists {
+		return fmt.Errorf("pool or scheduler not exist")
+	}
+
+	poolCtx, poolCancel := context.WithCancel(m.managerCtx)
+	m.mu.Lock()
+	m.poolCancels[farmID] = poolCancel
+	m.mu.Unlock()
+
+	m.wg.Add(1)
+	go pool.Start(poolCtx, m.wg)
+
+	// Start scheduler
+	go scheduler.Run(m.managerCtx)
+
+	slog.Info("Worker infrastructure started successfully", "farmID", farmID)
+
+	return nil
 }
 
 // RecoverWorkerInfrastructure recovers all active worker infrastructure after restart

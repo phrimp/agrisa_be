@@ -31,6 +31,23 @@ func (s *JobScheduler) AddJob(job JobPayload) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.Jobs = append(s.Jobs, job)
+
+	if job.RunNow {
+		submitCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := s.Pool.SubmitJob(submitCtx, job); err != nil {
+			slog.Error("Failed to submit job to pool",
+				"scheduler_name", s.Name,
+				"job_id", job.JobID,
+				"job_type", job.Type,
+				"error", err)
+		} else {
+			slog.Info("Job submitted successfully",
+				"scheduler_name", s.Name,
+				"job_id", job.JobID,
+				"job_type", job.Type)
+		}
+		cancel()
+	}
 }
 
 func (s *JobScheduler) Run(ctx context.Context) {

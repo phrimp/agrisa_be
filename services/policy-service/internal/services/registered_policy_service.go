@@ -308,12 +308,9 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 
 	var farm *models.Farm
 
-	if request.IsNewFarm { // this will stay until farm creation service is completed
-		return nil, fmt.Errorf("feature unimplemented, comeback later")
-	}
-
 	if request.IsNewFarm {
 		// create new farm
+		return nil, fmt.Errorf("feature unimplemented, comeback later") // TODO: delete later
 		farm = &request.Farm
 		slog.Info("new farm creation request for a new registered policy", "farm", farm)
 		err := s.farmService.CreateFarmTx(farm, request.RegisteredPolicy.FarmerID, tx)
