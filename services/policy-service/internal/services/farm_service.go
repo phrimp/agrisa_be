@@ -251,7 +251,7 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 	return nil
 }
 
-func (s *FarmService) CreateFarmValidate(farm *models.Farm, verifyFarmCertificateReq models.VerifyLandCertificateRequest) error {
+func (s *FarmService) CreateFarmValidate(farm *models.Farm, token string) error {
 	// Validate required fields
 	if farm.CropType == "" {
 		return fmt.Errorf("bad_request: crop_type is required")
@@ -270,7 +270,17 @@ func (s *FarmService) CreateFarmValidate(farm *models.Farm, verifyFarmCertificat
 		}
 	}
 
-	if err := s.VerifyLandCertificate(verifyFarmCertificateReq, farm); err != nil {
+	if farm.OwnerNationalID == nil {
+		return fmt.Errorf("bad_request: owner_national_id is required")
+	}
+
+	verifyLandCerRequest := models.VerifyLandCertificateRequest{
+		OwnerNationalID:       *farm.OwnerNationalID,
+		Token:                 token,
+		LandCertificatePhotos: farm.LandCertificatePhotos,
+	}
+
+	if err := s.VerifyLandCertificate(verifyLandCerRequest, farm); err != nil {
 		return err
 	}
 	return nil

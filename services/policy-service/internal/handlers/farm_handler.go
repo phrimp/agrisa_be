@@ -93,13 +93,7 @@ func (h *FarmHandler) CreateFarm(c fiber.Ctx) error {
 		return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", err.Error()))
 	}
 
-	verifyLandCerRequest := models.VerifyLandCertificateRequest{
-		OwnerNationalID:       *farm.OwnerNationalID,
-		Token:                 token,
-		LandCertificatePhotos: farm.LandCertificatePhotos,
-	}
-
-	err = h.farmService.CreateFarmValidate(&farm, verifyLandCerRequest)
+	err = h.farmService.CreateFarmValidate(&farm, token)
 	if err != nil {
 		if strings.Contains(err.Error(), "bad_request") {
 			log.Printf("Error logginggg: %s", err.Error())
