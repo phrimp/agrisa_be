@@ -81,7 +81,7 @@ func main() {
 	}
 
 	app := fiber.New(fiber.Config{
-		BodyLimit: 50 * 1024 * 1024,
+		BodyLimit: 200 * 1024 * 1024,
 	})
 	app.Get("/checkhealth", func(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).SendString("Policy service is healthy")

@@ -120,7 +120,7 @@ func main() {
 
 	// Setup Gin router
 	r := gin.Default()
-	r.MaxMultipartMemory = 50 * 1024 * 1024
+	r.MaxMultipartMemory = 200 * 1024 * 1024
 
 	// Register routes
 	userHandler.RegisterRoutes(r, userHandler)

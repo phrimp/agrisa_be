@@ -23,7 +23,7 @@ services:
       - traefik-net
     labels:
       - "traefik.enable=true"
-      - "traefik.http.middlewares.api-limit.buffering.maxRequestBodyBytes=52428800"
+      - "traefik.http.middlewares.api-limit.buffering.maxRequestBodyBytes=209715200"
       # Define global CORS middleware that can be referenced by all services
       - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
       - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=*"
