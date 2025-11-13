@@ -5,6 +5,7 @@ import (
 	"auth-service/utils"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,17 +28,21 @@ func (h *UserHandler) PingHandler(c *gin.Context) {
 
 // RegisterRoutes registers all routes for the user handler
 func (u *UserHandler) RegisterRoutes(router *gin.Engine, userHandler *UserHandler) {
-	// Add the ping route
-	userAuthGrPub := router.Group("/auth/protected/api/v2/")
+	// public routes
+	userAuthGrPub := router.Group("/auth/public/api/v2/")
 	userAuthGrPub.GET("/ping", userHandler.PingHandler)
+	userAuthGrPub.GET("/users", userHandler.GetAllUsers)
+
+	// Add the ping route
+	userAuthGrPro := router.Group("/auth/protected/api/v2/")
 	// Add the session init route
-	userAuthGrPub.POST("/ocridcard", userHandler.OCRNationalIDCardHandler)
-	userAuthGrPub.GET("/ekyc-progress/:i", userHandler.GetUserEkycProgressByUserID)
-	userAuthGrPub.POST("/face-liveness", userHandler.VerifyFaceLiveness)
+	userAuthGrPro.POST("/ocridcard", userHandler.OCRNationalIDCardHandler)
+	userAuthGrPro.GET("/ekyc-progress/:i", userHandler.GetUserEkycProgressByUserID)
+	userAuthGrPro.POST("/face-liveness", userHandler.VerifyFaceLiveness)
 
 	// For testing API
-	userAuthGrPub.POST("/testing/upload", userHandler.UploadFileTestHandler)
-	userAuthGrPub.POST("/testing/upload-multiple", userHandler.UploadMultipleFilesTestHandler)
+	userAuthGrPro.POST("/testing/upload", userHandler.UploadFileTestHandler)
+	userAuthGrPro.POST("/testing/upload-multiple", userHandler.UploadMultipleFilesTestHandler)
 }
 
 type InitSessionRequest struct {
@@ -162,4 +167,28 @@ func (h *UserHandler) VerifyFaceLiveness(c *gin.Context) {
 
 		c.JSON(statusCode, response)
 	}
+}
+
+func (h *UserHandler) GetAllUsers(c *gin.Context) {
+	var limit int = 10
+	var offset int = 0
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if limitParse, err := strconv.Atoi(limitStr); err == nil && limit > 0 {
+			limit = limitParse
+		}
+	}
+
+	if offsetStr := c.Query("offset"); offsetStr != "" {
+		if offsetParse, err := strconv.Atoi(offsetStr); err == nil && offset >= 0 {
+			offset = offsetParse
+		}
+	}
+
+	result, err := h.userService.GetAllUsers(limit, offset)
+	if err != nil {
+		log.Println("internal error:", err)
+		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("INTERNAL_ERROR", "Internal server error"))
+		return
+	}
+	c.JSON(http.StatusOK, utils.CreateSuccessResponse(result))
 }

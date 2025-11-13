@@ -31,7 +31,7 @@ type IUserService interface {
 	GetUserByID(userID string) (*models.User, error)
 	BanUser(userID string, until int64) error
 	UnbanUser(userID string) error
-
+	GetAllUsers(limit, offset int) (*models.GetAllUsersResponse, error)
 	GetUserByEmail(email string) (*models.User, error)
 	GetUserEkycProgressByUserID(userID string) (*models.UserEkycProgress, error)
 	UploadToMinIO(c *gin.Context, file io.Reader, header *multipart.FileHeader, serviceName string) error
@@ -1224,4 +1224,19 @@ func (s *UserService) VerifyLandCertificate(userID string, NationalIDInput strin
 	}
 
 	return result, nil
+}
+
+func (s *UserService) GetAllUsers(limit, offset int) (*models.GetAllUsersResponse, error) {
+	users, err := s.userRepo.GetAllUsers(limit, offset)
+	if err != nil {
+		log.Printf("Failed to get all users: %v", err)
+		return nil, err
+	}
+
+	return &models.GetAllUsersResponse{
+		Users:  users,
+		Total:  len(users),
+		Limit:  limit,
+		Offset: offset,
+	}, nil
 }

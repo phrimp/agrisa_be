@@ -1,6 +1,8 @@
 package models
 
-import "time"
+import (
+	"time"
+)
 
 // Authentication DTOs
 type LoginRequest struct {
@@ -78,4 +80,12 @@ type PaginatedPermissionsResponse struct {
 type ErrorResponse struct {
 	Error   string `json:"error"`
 	Message string `json:"message,omitempty"`
+}
+
+// GetAllUsersResponse struct cho response
+type GetAllUsersResponse struct {
+	Users  []*User `json:"users"`
+	Total  int     `json:"total"`
+	Limit  int     `json:"limit"`
+	Offset int     `json:"offset"`
 }
