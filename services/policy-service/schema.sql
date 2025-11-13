@@ -24,7 +24,7 @@ CREATE TYPE claim_status AS ENUM ('generated', 'pending_partner_review', 'approv
 CREATE TYPE payout_status AS ENUM ('pending', 'processing', 'completed', 'failed');
 CREATE TYPE data_quality AS ENUM ('good', 'acceptable', 'poor');
 CREATE TYPE farm_status AS ENUM ('active', 'inactive', 'archived');
-CREATE TYPE photo_type AS ENUM ('crop', 'boundary', 'land_certificate', 'other');
+CREATE TYPE photo_type AS ENUM ('crop', 'boundary', 'land_certificate', 'other', 'satellite');
 CREATE TYPE monitor_frequency AS ENUM ('hour', 'day', 'week', 'month', 'year');
 CREATE TYPE cancel_request_type as ENUM ('contract_violation', 'other', 'non_payment', 'policyholder_request', 'regulatory_change');
 CREATE TYPE cancel_request_status as ENUM ('approved', 'litigation', 'denied', 'pending_review');

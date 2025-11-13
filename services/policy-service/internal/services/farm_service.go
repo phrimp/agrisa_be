@@ -490,7 +490,7 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 	slog.Info("GetFarmPhotoJob: retrieved images from satellite service", "farm_id", farmID, "image_count", len(satelliteResp.Data.Images))
 
 	savedCount := 0
-	for _, img := range satelliteResp.Data.Images {
+	for idx, img := range satelliteResp.Data.Images {
 		// Parse acquisition date to Unix timestamp
 		var takenAt *int64
 		if img.AcquisitionDate != "" {
@@ -503,16 +503,56 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 			}
 		}
 
+		// Download image from URL
+		imageURL := img.Visualization.NaturalColor.URL
+		slog.Info("GetFarmPhotoJob: downloading image", "farm_id", farmID, "image_index", idx, "url", imageURL)
+
+		resp, err := http.Get(imageURL)
+		if err != nil {
+			slog.Error("GetFarmPhotoJob: failed to download image", "farm_id", farmID, "url", imageURL, "error", err)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			resp.Body.Close()
+			slog.Error("GetFarmPhotoJob: image download returned error status", "farm_id", farmID, "url", imageURL, "status_code", resp.StatusCode)
+			continue
+		}
+
+		// Read image data
+		imageData, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			slog.Error("GetFarmPhotoJob: failed to read image data", "farm_id", farmID, "url", imageURL, "error", err)
+			continue
+		}
+
+		// Generate unique object name for MinIO
+		objectName := fmt.Sprintf("farms/%s/satellite/%s_%d.png", farmID, img.AcquisitionDate, idx)
+
+		// Upload to MinIO
+		bucketName := "policy-service"
+		contentType := "image/png"
+		err = s.minioClient.UploadBytes(context.Background(), bucketName, objectName, imageData, contentType)
+		if err != nil {
+			slog.Error("GetFarmPhotoJob: failed to upload to MinIO", "farm_id", farmID, "object_name", objectName, "error", err)
+			continue
+		}
+
+		// Generate MinIO URL
+		minioURL := fmt.Sprintf("%s/%s", bucketName, objectName)
+		slog.Info("GetFarmPhotoJob: uploaded to MinIO", "farm_id", farmID, "minio_url", minioURL)
+
 		photo := &models.FarmPhoto{
 			FarmID:    farmID,
-			PhotoURL:  img.Visualization.NaturalColor.URL,
+			PhotoURL:  minioURL,
 			PhotoType: models.PhotoSatellite,
 			TakenAt:   takenAt,
 		}
 
-		err := s.farmRepository.CreateFarmPhoto(photo)
+		err = s.farmRepository.CreateFarmPhoto(photo)
 		if err != nil {
-			slog.Error("GetFarmPhotoJob: failed to save photo", "farm_id", farmID, "url", img.Visualization.NaturalColor.URL, "error", err)
+			slog.Error("GetFarmPhotoJob: failed to save photo", "farm_id", farmID, "url", minioURL, "error", err)
 			// Continue with other photos even if one fails
 			continue
 		}

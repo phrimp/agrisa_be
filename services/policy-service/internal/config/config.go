@@ -88,7 +88,7 @@ func New() *PolicyServiceConfig {
 		},
 		VerifyNationalIDURL:          getEnvOrDefault("VERIFY_NATIONAL_ID_URL", "key"),
 		VerifyLandCertificateHostAPI: getEnvOrDefault("VERIFY_LAND_CERTIFICATE_HOST_API", "key"),
-		SatelliteDataServiceURL:      getEnvOrDefault("SATELLITE_DATA_SERVICE_URL", "http://localhost:8084"),
+		SatelliteDataServiceURL:      getEnvOrDefault("SATELLITE_DATA_SERVICE_URL", "http://satellite-data-service:8000"),
 	}
 }
 
