@@ -107,6 +107,12 @@ func (h *FarmHandler) CreateFarm(c fiber.Ctx) error {
 		if strings.Contains(err.Error(), "unauthorized") {
 			return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", err.Error()))
 		}
+		if strings.Contains(err.Error(), "forbidden") {
+			return c.Status(http.StatusForbidden).JSON(utils.CreateErrorResponse("FORBIDDEN", err.Error()))
+		}
+		if strings.Contains(err.Error(), "User has no associated national ID card") {
+			return c.Status(http.StatusNotFound).JSON(utils.CreateErrorResponse("NOT_FOUND", "User has no associated national ID card"))
+		}
 		log.Printf("Error logginggg: %s", err.Error())
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", err.Error()))
 	}

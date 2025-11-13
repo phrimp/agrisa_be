@@ -417,6 +417,7 @@ func (a *AuthHandler) VerifyLandCertificate(c *gin.Context) {
 		log.Printf("Land certificate verification failed for user %s: %v", userID, err)
 		if strings.Contains(err.Error(), "no rows in result set") {
 			c.JSON(http.StatusNotFound, utils.CreateErrorResponse("NOT_FOUND", "User has no associated national ID card"))
+			return
 		}
 		if strings.Contains(err.Error(), "bad_request") {
 			c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("NATIONAL_ID_MISMATCH", err.Error()))
