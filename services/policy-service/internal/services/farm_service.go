@@ -437,7 +437,7 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 	q.Add("coordinates", string(coordsJSON))
 	q.Add("start_date", startDate)
 	q.Add("end_date", endDate)
-	q.Add("max_cloud_cover", "0.0")
+	q.Add("max_cloud_cover", "100.0")
 	req.URL.RawQuery = q.Encode()
 
 	slog.Info("GetFarmPhotoJob: calling satellite service", "farm_id", farmID, "url", req.URL.String())
