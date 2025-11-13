@@ -66,7 +66,7 @@ func (s *JobScheduler) Run(ctx context.Context) {
 			s.mu.RLock()
 			jobCount := len(s.Jobs)
 			s.mu.RUnlock()
-			slog.Info("...", "job_count", jobCount)
+			slog.Info("submitting jobs", "job_count", jobCount)
 			s.submitJobs(ctx)
 
 		case <-ctx.Done():
