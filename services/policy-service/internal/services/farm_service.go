@@ -56,6 +56,10 @@ func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
 	// 	return fmt.Errorf("badrequest: farmer has already owned a farm")
 	// }
 
+	err := s.farmRepository.Create(farm)
+	if err != nil {
+		return fmt.Errorf("error creating farm: %w", err)
+	}
 	poolId, err := s.workerManager.CreateFarmImageryWorkerInfrastructure(context.Background(), farm.ID)
 	if err != nil {
 		return fmt.Errorf("error creating imagery worker infra: %w", err)
@@ -92,7 +96,7 @@ func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
 	}
 	scheduler.AddJob(fullYearJob)
 	scheduler.AddJob(everydayJob)
-	return s.farmRepository.Create(farm)
+	return nil
 }
 
 func (s *FarmService) CreateFarmTx(farm *models.Farm, ownerID string, tx *sqlx.Tx) error {
@@ -109,7 +113,10 @@ func (s *FarmService) CreateFarmTx(farm *models.Farm, ownerID string, tx *sqlx.T
 	// } else if existingFarm != nil {
 	// 	return fmt.Errorf("badrequest: farmer has already owned a farm")
 	// }
-
+	err := s.farmRepository.CreateTx(tx, farm)
+	if err != nil {
+		return fmt.Errorf("error creating farm: %w", err)
+	}
 	poolId, err := s.workerManager.CreateFarmImageryWorkerInfrastructure(context.Background(), farm.ID)
 	if err != nil {
 		return fmt.Errorf("error creating imagery worker infra: %w", err)
@@ -146,7 +153,7 @@ func (s *FarmService) CreateFarmTx(farm *models.Farm, ownerID string, tx *sqlx.T
 	}
 	scheduler.AddJob(fullYearJob)
 	scheduler.AddJob(everydayJob)
-	return s.farmRepository.CreateTx(tx, farm)
+	return nil
 }
 
 func (s *FarmService) GetAllFarms(ctx context.Context) ([]models.Farm, error) {
@@ -397,7 +404,7 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 		return fmt.Errorf("failed to marshal coordinates: %w", err)
 	}
 
-	SatelliteDataServiceURL := "satellite-data-service"
+	SatelliteDataServiceURL := "http://satellite-data-service:8000"
 
 	// 3. Build GET request with query parameters
 	apiURL := fmt.Sprintf("%s/satellite/public/boundary/imagery", SatelliteDataServiceURL)

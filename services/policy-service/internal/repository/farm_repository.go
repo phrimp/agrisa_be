@@ -114,6 +114,11 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 		return nil, fmt.Errorf("internal_error: query failed: %w", err)
 	}
 
+	if len(rows) == 0 {
+		slog.Warn("farm not found", "farm_id", id)
+		return nil, fmt.Errorf("not_found: farm not found: %s", id)
+	}
+
 	farm := models.Farm{
 		ID:                      rows[0].ID,
 		OwnerID:                 rows[0].OwnerID,
