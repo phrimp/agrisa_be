@@ -99,7 +99,8 @@ func (h *FarmHandler) CreateFarm(c fiber.Ctx) error {
 		LandCertificatePhotos: farm.LandCertificatePhotos,
 	}
 
-	if err := h.farmService.VerifyLandCertificate(verifyLandCerRequest, &farm); err != nil {
+	err = h.farmService.CreateFarmValidate(&farm, verifyLandCerRequest)
+	if err != nil {
 		if strings.Contains(err.Error(), "bad_request") {
 			log.Printf("Error logginggg: %s", err.Error())
 			return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("VALIDATION_FAILED", err.Error()))
@@ -115,24 +116,6 @@ func (h *FarmHandler) CreateFarm(c fiber.Ctx) error {
 		}
 		log.Printf("Error logginggg: %s", err.Error())
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", err.Error()))
-	}
-
-	// Validate required fields
-	if farm.CropType == "" {
-		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "crop_type is required"))
-	}
-	if farm.AreaSqm <= 0 {
-		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "area_sqm must be greater than 0"))
-	}
-
-	// Validate harvest date if provided
-	if farm.ExpectedHarvestDate != nil {
-		if farm.PlantingDate == nil {
-			return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "planting_date is required when expected_harvest_date is provided"))
-		}
-		if *farm.ExpectedHarvestDate < *farm.PlantingDate {
-			return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "expected_harvest_date must be greater than or equal to planting_date"))
-		}
 	}
 
 	// Create the farm
