@@ -6,16 +6,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
+	"policy-service/internal/config"
 	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"strings"
 	"time"
-
-	"policy-service/internal/config"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -188,7 +187,7 @@ func (s *FarmService) VerifyLandCertificateAPI(nationalIDInput string, token str
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Printf("failed to read response body: %v", err)
 		return false, fmt.Errorf("internal_error: failed to read response body")
@@ -251,5 +250,3 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 	// save to db
 	return nil
 }
-
-

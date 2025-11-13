@@ -162,7 +162,7 @@ func (h *FarmHandler) UpdateFarm(c fiber.Ctx) error {
 		return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
 	}
 
-	//Get farm ID from params
+	// Get farm ID from params
 	farmID := c.Params("id")
 
 	// Validate harvest date if provided
