@@ -134,6 +134,7 @@ const (
 	PhotoCrop            PhotoType = "crop"
 	PhotoBoundary        PhotoType = "boundary"
 	PhotoLandCertificate PhotoType = "land_certificate"
+	PhotoSatellite       PhotoType = "satellite"
 	PhotoOther           PhotoType = "other"
 )
 

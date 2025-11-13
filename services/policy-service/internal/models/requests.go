@@ -717,6 +717,88 @@ type RegisterAPolicyAPIRequest struct {
 	PolicyTags       map[string]string `json:"policy_tags"`
 }
 
+func (r RegisterAPolicyAPIRequest) Validate() error {
+	// Validate RegisteredPolicy required fields
+	if r.RegisteredPolicy.BasePolicyID == uuid.Nil {
+		return errors.New("base_policy_id is required")
+	}
+
+	if strings.TrimSpace(r.RegisteredPolicy.FarmerID) == "" {
+		return errors.New("farmer_id is required")
+	}
+
+	if strings.TrimSpace(r.RegisteredPolicy.InsuranceProviderID) == "" {
+		return errors.New("insurance_provider_id is required")
+	}
+
+	// Validate coverage amount
+	if r.RegisteredPolicy.CoverageAmount <= 0 {
+		return errors.New("coverage_amount must be greater than 0")
+	}
+
+	// Validate planting date (must be in the past or present)
+	if r.RegisteredPolicy.PlantingDate <= 0 {
+		return errors.New("planting_date is required and must be a valid Unix timestamp")
+	}
+	if r.RegisteredPolicy.PlantingDate > time.Now().Unix() {
+		return errors.New("planting_date cannot be in the future")
+	}
+
+	// Validate area multiplier
+	if r.RegisteredPolicy.AreaMultiplier < 0 {
+		return errors.New("area_multiplier cannot be negative")
+	}
+
+	// Validate premium amounts
+	if r.RegisteredPolicy.TotalFarmerPremium < 0 {
+		return errors.New("total_farmer_premium cannot be negative")
+	}
+
+	if r.RegisteredPolicy.TotalDataCost < 0 {
+		return errors.New("total_data_cost cannot be negative")
+	}
+
+	// Validate Farm - must have either ID (existing farm) or complete details (new farm)
+	hasExistingFarm := r.Farm.ID != uuid.Nil
+	hasNewFarmDetails := r.Farm.FarmName != nil && *r.Farm.FarmName != ""
+
+	if !hasExistingFarm && !hasNewFarmDetails {
+		return errors.New("either farm.id (for existing farm) or farm.farm_name (for new farm) must be provided")
+	}
+
+	// If new farm, validate required farm fields
+	if hasNewFarmDetails && !hasExistingFarm {
+		if r.Farm.AreaSqm <= 0 {
+			return errors.New("farm.area_sqm must be greater than 0 for new farm")
+		}
+
+		if strings.TrimSpace(r.Farm.CropType) == "" {
+			return errors.New("farm.crop_type is required for new farm")
+		}
+
+		if r.Farm.Boundary == nil {
+			return errors.New("farm.boundary is required for new farm")
+		}
+
+		if r.Farm.CenterLocation == nil {
+			return errors.New("farm.center_location is required for new farm")
+		}
+	}
+
+	// Validate PolicyTags - must not be nil
+	if r.PolicyTags == nil {
+		return errors.New("policy_tags cannot be nil")
+	}
+
+	// Additional business rule validations
+	// Ensure no conflicting farm identifiers
+	if hasExistingFarm && hasNewFarmDetails {
+		return errors.New("cannot provide both farm.id and new farm details - choose one approach")
+	}
+
+	return nil
+}
+
 type RegisterAPolicyRequest struct {
 	RegisteredPolicy RegisteredPolicy
 	Farm             Farm
@@ -754,6 +836,6 @@ type VerifyLandCertificateRequest struct {
 	LandCertificatePhotos []minio.FileUpload
 }
 type RegisterAPolicyResponse struct {
-	RegisterPolicyID   string
-	BasePolicyDocument []byte
+	RegisterPolicyID             string
+	SignedPolicyDocumentLocation string
 }

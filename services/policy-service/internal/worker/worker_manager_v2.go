@@ -364,8 +364,6 @@ func (m *WorkerManagerV2) ArchiveWorkerInfrastructure(ctx context.Context, polic
 	return nil
 }
 
-// TODO: Worker Infras for AI opperations
-
 func (m *WorkerManagerV2) CreateAIWorkerInfrastructure(ctx context.Context) (*uuid.UUID, error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -452,6 +450,60 @@ func (m *WorkerManagerV2) StartAIWorkerInfrastructure(ctx context.Context, poolI
 	slog.Info("Worker infrastructure started successfully", "pool_id", poolID)
 
 	return nil
+}
+
+func (m *WorkerManagerV2) CreateFarmImageryWorkerInfrastructure(ctx context.Context, farmID uuid.UUID) (*uuid.UUID, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered", "panic", r)
+		}
+	}()
+
+	poolName := "Farm-" + farmID.String()
+
+	var goRedisClient *goredis.Client
+	if m.redisClient != nil {
+		goRedisClient = m.redisClient.GetClient()
+	}
+
+	pool := NewWorkingPool(
+		2,
+		poolName,
+		5*time.Minute,
+		goRedisClient,
+		1,
+		1,
+		100,
+	)
+
+	// Register job handler for farm monitoring data fetch
+	handler, exists := m.GetJobHandler("farm-imagery")
+	if !exists {
+		return nil, fmt.Errorf("job handler not registered: document-validation")
+	}
+	pool.RegisterJob("farm-imagery", handler)
+
+	schedulerName := fmt.Sprintf("farm-imagery-%s", farmID)
+
+	monitorInterval := time.Duration(5 * time.Minute)
+	scheduler := NewJobScheduler(schedulerName, monitorInterval, pool)
+
+	//job := JobPayload{
+	//	JobID:      uuid.NewString(),
+	//	Type:       "document-validation",
+	//	Params:     map[string]any{},
+	//	MaxRetries: 100,
+	//	OneTime:    true,
+	//}
+	//scheduler.AddJob(job)
+	m.mu.Lock()
+	m.pools[farmID] = pool
+	m.poolsByName[poolName] = pool
+	m.schedulers[farmID] = scheduler
+	m.schedulersByName[schedulerName] = scheduler
+	m.mu.Unlock()
+
+	return &farmID, nil
 }
 
 // RecoverWorkerInfrastructure recovers all active worker infrastructure after restart

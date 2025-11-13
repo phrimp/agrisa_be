@@ -135,6 +135,7 @@ func main() {
 	// Register job handlers with WorkerManagerV2
 	workerManager.RegisterJobHandler("fetch-farm-monitoring-data", registeredPolicyService.FetchFarmMonitoringDataJob)
 	workerManager.RegisterJobHandler("document-validation", basePolicyService.AIPolicyValidationJob)
+	workerManager.RegisterJobHandler("farm-imagery", farmService.GetFarmPhotoJob)
 	worker.AIWorkerPoolUUID, err = workerManager.CreateAIWorkerInfrastructure(workerManager.ManagerContext())
 	if err != nil {
 		slog.Error("error create AI worker pool", "error", err)
@@ -156,12 +157,14 @@ func main() {
 	dataSourceHandler := handlers.NewDataSourceHandler(dataSourceService)
 	basePolicyHandler := handlers.NewBasePolicyHandler(basePolicyService, minioClient, workerManager)
 	farmHandler := handlers.NewFarmHandler(farmService, minioClient)
+	policyHandler := handlers.NewPolicyHandler(registeredPolicyService)
 
 	// Register routes
 	dataTierHandler.Register(app)
 	dataSourceHandler.Register(app)
 	basePolicyHandler.Register(app)
 	farmHandler.RegisterRoutes(app)
+	policyHandler.Register(app)
 
 	shutdownChan := make(chan os.Signal, 1)
 	doneChan := make(chan bool, 1)

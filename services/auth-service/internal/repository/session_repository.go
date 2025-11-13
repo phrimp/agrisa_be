@@ -35,7 +35,7 @@ type sessionRepository struct {
 func NewSessionRepository(client *redis.Client) SessionRepository {
 	return &sessionRepository{
 		client:     client,
-		expiration: 5 * time.Minute, // 5 minutes as requested
+		expiration: 30 * time.Minute,
 	}
 }
 

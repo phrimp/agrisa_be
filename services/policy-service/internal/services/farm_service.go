@@ -245,8 +245,196 @@ func (s *FarmService) VerifyLandCertificate(verifyRequest models.VerifyLandCerti
 	return nil
 }
 
+// SatelliteImageryResponse represents the response from satellite service
+type SatelliteImageryResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+	Data    struct {
+		Summary struct {
+			TotalImages     int `json:"total_images"`
+			ImagesProcessed int `json:"images_processed"`
+		} `json:"summary"`
+		FarmInfo struct {
+			Boundary interface{} `json:"boundary"`
+			Area     struct {
+				Value float64 `json:"value"`
+				Unit  string  `json:"unit"`
+			} `json:"area"`
+		} `json:"farm_info"`
+		Images []struct {
+			ImageIndex      int    `json:"image_index"`
+			ImageID         string `json:"image_id,omitempty"`
+			ProductID       string `json:"product_id,omitempty"`
+			AcquisitionDate string `json:"acquisition_date"`
+			CloudCover      struct {
+				Value float64 `json:"value"`
+				Unit  string  `json:"unit"`
+			} `json:"cloud_cover"`
+			Visualization struct {
+				NaturalColor struct {
+					URL         string `json:"url"`
+					Description string `json:"description"`
+				} `json:"natural_color"`
+			} `json:"visualization"`
+		} `json:"images"`
+	} `json:"data"`
+	Error *struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
+}
+
+// GetFarmPhotoJob fetches satellite imagery from satellite-data-service and saves to database
 func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
-	// call farm photo api
-	// save to db
+	// Extract farm_id from params
+	farmIDStr, ok := params["farm_id"].(string)
+	if !ok {
+		log.Printf("GetFarmPhotoJob: missing or invalid farm_id parameter")
+		return fmt.Errorf("missing or invalid farm_id parameter")
+	}
+
+	farmID, err := uuid.Parse(farmIDStr)
+	if err != nil {
+		log.Printf("GetFarmPhotoJob: invalid farm_id format: %v", err)
+		return fmt.Errorf("invalid farm_id format: %w", err)
+	}
+
+	log.Printf("GetFarmPhotoJob: Starting fetch for farm_id=%s", farmID)
+
+	// 1. Get farm details to retrieve boundary
+	farm, err := s.farmRepository.GetFarmByID(context.Background(), farmID.String())
+	if err != nil {
+		log.Printf("GetFarmPhotoJob: failed to get farm: %v", err)
+		return fmt.Errorf("failed to get farm: %w", err)
+	}
+
+	if farm.Boundary == nil {
+		log.Printf("GetFarmPhotoJob: farm %s has no boundary defined", farmID)
+		return fmt.Errorf("farm has no boundary defined")
+	}
+
+	// 2. Extract coordinates from GeoJSON boundary (first ring of polygon)
+	coordinates := farm.Boundary.Coordinates[0]
+	coordsJSON, err := json.Marshal(coordinates)
+	if err != nil {
+		log.Printf("GetFarmPhotoJob: failed to marshal coordinates: %v", err)
+		return fmt.Errorf("failed to marshal coordinates: %w", err)
+	}
+
+	SatelliteDataServiceURL := "satellite-data-service"
+
+	// 3. Build GET request with query parameters
+	apiURL := fmt.Sprintf("%s/satellite/public/boundary/imagery", SatelliteDataServiceURL)
+	req, err := http.NewRequest("GET", apiURL, nil)
+	if err != nil {
+		log.Printf("GetFarmPhotoJob: failed to create HTTP request: %v", err)
+		return fmt.Errorf("failed to create HTTP request: %w", err)
+	}
+
+	startDate, ok := params["start_date"].(string)
+	if !ok {
+		log.Printf("GetFarmPhotoJob: missing or invalid start_date parameter")
+		return fmt.Errorf("missing or invalid start_date parameter")
+	}
+	endDate, ok := params["end_date"].(string)
+	if !ok {
+		log.Printf("GetFarmPhotoJob: missing or invalid end_date parameter")
+		return fmt.Errorf("missing or invalid end_date parameter")
+	}
+
+	// Add query parameters
+	q := req.URL.Query()
+	q.Add("coordinates", string(coordsJSON))
+	q.Add("start_date", startDate)
+	q.Add("end_date", endDate)
+	q.Add("max_cloud_cover", "0.0")
+	req.URL.RawQuery = q.Encode()
+
+	log.Printf("GetFarmPhotoJob: Calling satellite service at %s", req.URL.String())
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Printf("GetFarmPhotoJob: failed to call satellite service: %v", err)
+		return fmt.Errorf("failed to call satellite service: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// 4. Read and parse response
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("GetFarmPhotoJob: failed to read response body: %v", err)
+		return fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("GetFarmPhotoJob: satellite service returned error status %d: %s", resp.StatusCode, string(body))
+
+		var errorResp SatelliteImageryResponse
+		if err := json.Unmarshal(body, &errorResp); err == nil && errorResp.Error != nil {
+			return fmt.Errorf("satellite service error: %s - %s", errorResp.Error.Code, errorResp.Error.Message)
+		}
+		return fmt.Errorf("satellite service returned status %d", resp.StatusCode)
+	}
+
+	var satelliteResp SatelliteImageryResponse
+	if err := json.Unmarshal(body, &satelliteResp); err != nil {
+		log.Printf("GetFarmPhotoJob: failed to unmarshal response: %v", err)
+		return fmt.Errorf("failed to unmarshal response: %w", err)
+	}
+
+	if satelliteResp.Status != "success" {
+		log.Printf("GetFarmPhotoJob: satellite service returned status=%s", satelliteResp.Status)
+		if satelliteResp.Error != nil {
+			return fmt.Errorf("satellite service error: %s - %s", satelliteResp.Error.Code, satelliteResp.Error.Message)
+		}
+		return fmt.Errorf("satellite service returned status=%s", satelliteResp.Status)
+	}
+
+	// 5. Save images to database
+	if len(satelliteResp.Data.Images) == 0 {
+		log.Printf("GetFarmPhotoJob: no images returned for farm %s", farmID)
+		return nil // Not an error, just no images available
+	}
+
+	log.Printf("GetFarmPhotoJob: Retrieved %d images from satellite service", len(satelliteResp.Data.Images))
+
+	savedCount := 0
+	for _, img := range satelliteResp.Data.Images {
+		// Parse acquisition date to Unix timestamp
+		var takenAt *int64
+		if img.AcquisitionDate != "" {
+			t, err := time.Parse("2006-01-02", img.AcquisitionDate)
+			if err == nil {
+				timestamp := t.Unix()
+				takenAt = &timestamp
+			} else {
+				log.Printf("GetFarmPhotoJob: failed to parse date %s: %v", img.AcquisitionDate, err)
+			}
+		}
+
+		photo := &models.FarmPhoto{
+			FarmID:    farmID,
+			PhotoURL:  img.Visualization.NaturalColor.URL,
+			PhotoType: models.PhotoSatellite,
+			TakenAt:   takenAt,
+		}
+
+		err := s.farmRepository.CreateFarmPhoto(photo)
+		if err != nil {
+			log.Printf("GetFarmPhotoJob: failed to save photo (url=%s): %v", img.Visualization.NaturalColor.URL, err)
+			// Continue with other photos even if one fails
+			continue
+		}
+		savedCount++
+	}
+
+	log.Printf("GetFarmPhotoJob: Successfully saved %d/%d photos for farm %s",
+		savedCount, len(satelliteResp.Data.Images), farmID)
+
+	if savedCount == 0 && len(satelliteResp.Data.Images) > 0 {
+		return fmt.Errorf("failed to save any photos to database")
+	}
+
 	return nil
 }

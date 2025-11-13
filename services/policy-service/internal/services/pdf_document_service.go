@@ -230,6 +230,11 @@ func (s *PDFService) UploadFilledPDF(ctx context.Context, originalName string, f
 }
 
 func (s *PDFService) FillFromStorageAndUpload(ctx context.Context, templateObjectName string, values map[string]string) (string, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("PDFService: recovered from panic", "panic", r)
+		}
+	}()
 	slog.Info("Fill and upload operation started",
 		"template", templateObjectName,
 		"values_count", len(values))

@@ -158,7 +158,6 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 				TakenAt:   row.TakenAt,
 			})
 		}
-
 	}
 
 	return &farm, nil
@@ -498,6 +497,256 @@ func (r *FarmRepository) unmarshalGeometry(row *farmRow, farm *models.Farm) erro
 			Coordinates: []float64{pointCoords.X(), pointCoords.Y()},
 		}
 		farm.CenterLocation = &geoJSONPoint
+	}
+
+	return nil
+}
+
+// ============================================================================
+// FARM PHOTO CRUD OPERATIONS
+// ============================================================================
+
+// CreateFarmPhoto creates a new farm photo record
+func (r *FarmRepository) CreateFarmPhoto(photo *models.FarmPhoto) error {
+	if photo.ID == uuid.Nil {
+		photo.ID = uuid.New()
+	}
+	photo.CreatedAt = time.Now()
+
+	query := `
+		INSERT INTO farm_photo (
+			id, farm_id, photo_url, photo_type, taken_at, created_at
+		) VALUES (
+			:id, :farm_id, :photo_url, :photo_type, :taken_at, :created_at
+		)`
+
+	_, err := r.db.NamedExec(query, photo)
+	if err != nil {
+		return fmt.Errorf("failed to create farm photo: %w", err)
+	}
+
+	return nil
+}
+
+// GetFarmPhotoByID retrieves a farm photo by its ID
+func (r *FarmRepository) GetFarmPhotoByID(id uuid.UUID) (*models.FarmPhoto, error) {
+	var photo models.FarmPhoto
+	query := `SELECT * FROM farm_photo WHERE id = $1`
+
+	err := r.db.Get(&photo, query, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("farm photo not found: %s", id)
+		}
+		return nil, fmt.Errorf("failed to get farm photo: %w", err)
+	}
+
+	return &photo, nil
+}
+
+// GetFarmPhotosByFarmID retrieves all photos for a specific farm
+func (r *FarmRepository) GetFarmPhotosByFarmID(farmID uuid.UUID) ([]models.FarmPhoto, error) {
+	var photos []models.FarmPhoto
+	query := `
+		SELECT * FROM farm_photo
+		WHERE farm_id = $1
+		ORDER BY created_at DESC`
+
+	err := r.db.Select(&photos, query, farmID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get farm photos: %w", err)
+	}
+
+	return photos, nil
+}
+
+// GetFarmPhotosByType retrieves all photos of a specific type for a farm
+func (r *FarmRepository) GetFarmPhotosByType(farmID uuid.UUID, photoType models.PhotoType) ([]models.FarmPhoto, error) {
+	var photos []models.FarmPhoto
+	query := `
+		SELECT * FROM farm_photo
+		WHERE farm_id = $1 AND photo_type = $2
+		ORDER BY created_at DESC`
+
+	err := r.db.Select(&photos, query, farmID, photoType)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get farm photos by type: %w", err)
+	}
+
+	return photos, nil
+}
+
+// UpdateFarmPhoto updates an existing farm photo record
+func (r *FarmRepository) UpdateFarmPhoto(photo *models.FarmPhoto) error {
+	query := `
+		UPDATE farm_photo SET
+			photo_url = :photo_url,
+			photo_type = :photo_type,
+			taken_at = :taken_at
+		WHERE id = :id`
+
+	result, err := r.db.NamedExec(query, photo)
+	if err != nil {
+		return fmt.Errorf("failed to update farm photo: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("farm photo not found: %s", photo.ID)
+	}
+
+	return nil
+}
+
+// DeleteFarmPhoto deletes a farm photo by ID
+func (r *FarmRepository) DeleteFarmPhoto(id uuid.UUID) error {
+	query := `DELETE FROM farm_photo WHERE id = $1`
+
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete farm photo: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("farm photo not found: %s", id)
+	}
+
+	return nil
+}
+
+// DeleteFarmPhotosByFarmID deletes all photos for a specific farm
+func (r *FarmRepository) DeleteFarmPhotosByFarmID(farmID uuid.UUID) error {
+	query := `DELETE FROM farm_photo WHERE farm_id = $1`
+
+	_, err := r.db.Exec(query, farmID)
+	if err != nil {
+		return fmt.Errorf("failed to delete farm photos: %w", err)
+	}
+
+	return nil
+}
+
+// ============================================================================
+// FARM PHOTO TRANSACTION SUPPORT
+// ============================================================================
+
+// CreateFarmPhotoTx creates a farm photo within a transaction
+func (r *FarmRepository) CreateFarmPhotoTx(tx *sqlx.Tx, photo *models.FarmPhoto) error {
+	if photo.ID == uuid.Nil {
+		photo.ID = uuid.New()
+	}
+	photo.CreatedAt = time.Now()
+
+	query := `
+		INSERT INTO farm_photo (
+			id, farm_id, photo_url, photo_type, taken_at, created_at
+		) VALUES (
+			:id, :farm_id, :photo_url, :photo_type, :taken_at, :created_at
+		)`
+
+	_, err := tx.NamedExec(query, photo)
+	if err != nil {
+		return fmt.Errorf("failed to create farm photo in transaction: %w", err)
+	}
+
+	return nil
+}
+
+// GetFarmPhotoByIDTx retrieves a farm photo by ID within a transaction
+func (r *FarmRepository) GetFarmPhotoByIDTx(tx *sqlx.Tx, id uuid.UUID) (*models.FarmPhoto, error) {
+	var photo models.FarmPhoto
+	query := `SELECT * FROM farm_photo WHERE id = $1`
+
+	err := tx.Get(&photo, query, id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("farm photo not found: %s", id)
+		}
+		return nil, fmt.Errorf("failed to get farm photo in transaction: %w", err)
+	}
+
+	return &photo, nil
+}
+
+// GetFarmPhotosByFarmIDTx retrieves all photos for a farm within a transaction
+func (r *FarmRepository) GetFarmPhotosByFarmIDTx(tx *sqlx.Tx, farmID uuid.UUID) ([]models.FarmPhoto, error) {
+	var photos []models.FarmPhoto
+	query := `
+		SELECT * FROM farm_photo
+		WHERE farm_id = $1
+		ORDER BY created_at DESC`
+
+	err := tx.Select(&photos, query, farmID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get farm photos in transaction: %w", err)
+	}
+
+	return photos, nil
+}
+
+// UpdateFarmPhotoTx updates a farm photo within a transaction
+func (r *FarmRepository) UpdateFarmPhotoTx(tx *sqlx.Tx, photo *models.FarmPhoto) error {
+	query := `
+		UPDATE farm_photo SET
+			photo_url = :photo_url,
+			photo_type = :photo_type,
+			taken_at = :taken_at
+		WHERE id = :id`
+
+	result, err := tx.NamedExec(query, photo)
+	if err != nil {
+		return fmt.Errorf("failed to update farm photo in transaction: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("farm photo not found: %s", photo.ID)
+	}
+
+	return nil
+}
+
+// DeleteFarmPhotoTx deletes a farm photo within a transaction
+func (r *FarmRepository) DeleteFarmPhotoTx(tx *sqlx.Tx, id uuid.UUID) error {
+	query := `DELETE FROM farm_photo WHERE id = $1`
+
+	result, err := tx.Exec(query, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete farm photo in transaction: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("farm photo not found: %s", id)
+	}
+
+	return nil
+}
+
+// DeleteFarmPhotosByFarmIDTx deletes all photos for a farm within a transaction
+func (r *FarmRepository) DeleteFarmPhotosByFarmIDTx(tx *sqlx.Tx, farmID uuid.UUID) error {
+	query := `DELETE FROM farm_photo WHERE farm_id = $1`
+
+	_, err := tx.Exec(query, farmID)
+	if err != nil {
+		return fmt.Errorf("failed to delete farm photos in transaction: %w", err)
 	}
 
 	return nil

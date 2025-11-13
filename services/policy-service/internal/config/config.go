@@ -3,15 +3,16 @@ package config
 import "os"
 
 type PolicyServiceConfig struct {
-	Port                string
-	APIKey              string
-	PostgresCfg         PostgresConfig
-	RabbitMQCfg         RabbitMQConfig
-	RedisCfg            RedisConfig
-	MinioCfg            MinioConfig
-	GeminiAPICfg        GeminiAPIConfig
-	VerifyNationalIDURL string
+	Port                         string
+	APIKey                       string
+	PostgresCfg                  PostgresConfig
+	RabbitMQCfg                  RabbitMQConfig
+	RedisCfg                     RedisConfig
+	MinioCfg                     MinioConfig
+	GeminiAPICfg                 GeminiAPIConfig
+	VerifyNationalIDURL          string
 	VerifyLandCertificateHostAPI string
+	SatelliteDataServiceURL      string
 }
 
 type MinioConfig struct {
@@ -85,8 +86,9 @@ func New() *PolicyServiceConfig {
 			FlashName: getEnvOrDefault("GEMINI_FLASH_MODEL", "gemini-2.5-flash"),
 			ProName:   getEnvOrDefault("GEMINI_PRO_MODEL", "gemini-2.5-pro"),
 		},
-		VerifyNationalIDURL: getEnvOrDefault("VERIFY_NATIONAL_ID_URL", "key"),
+		VerifyNationalIDURL:          getEnvOrDefault("VERIFY_NATIONAL_ID_URL", "key"),
 		VerifyLandCertificateHostAPI: getEnvOrDefault("VERIFY_LAND_CERTIFICATE_HOST_API", "key"),
+		SatelliteDataServiceURL:      getEnvOrDefault("SATELLITE_DATA_SERVICE_URL", "http://localhost:8084"),
 	}
 }
 

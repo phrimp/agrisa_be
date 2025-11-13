@@ -540,7 +540,7 @@ Before outputting JSON, verify:
 
 Read the PDF document carefully. For each field in the system JSON, find its corresponding value in the PDF. Compare them. Report all mismatches with detailed impact analysis.
 
-Your goal: Ensure the system operates exactly as the PDF contract states. Any deviation is a potential source of financial loss, legal liability, or customer disputes.
+Your goal: Ensure the system operates exactly as the PDF contract states. Any deviation is a potential source of financial loss, legal liability, or customer disputes. Translate the response into Vietnamese
 
 BEGIN YOUR JSON OUTPUT NOW (start with opening brace):
 `
