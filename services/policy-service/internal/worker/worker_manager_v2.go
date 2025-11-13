@@ -441,7 +441,7 @@ func (m *WorkerManagerV2) CreateFarmImageryWorkerInfrastructure(ctx context.Cont
 	// Register job handler for farm monitoring data fetch
 	handler, exists := m.GetJobHandler("farm-imagery")
 	if !exists {
-		return nil, fmt.Errorf("job handler not registered: document-validation")
+		return nil, fmt.Errorf("job handler not registered: farm-imagery")
 	}
 	pool.RegisterJob("farm-imagery", handler)
 

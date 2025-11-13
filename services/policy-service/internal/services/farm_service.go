@@ -86,7 +86,7 @@ func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
 		MaxRetries: 100,
 		OneTime:    false,
 	}
-	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(*worker.AIWorkerPoolUUID)
+	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(farm.ID)
 	if !ok {
 		slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist")
 	}
@@ -140,7 +140,7 @@ func (s *FarmService) CreateFarmTx(farm *models.Farm, ownerID string, tx *sqlx.T
 		MaxRetries: 100,
 		OneTime:    false,
 	}
-	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(*worker.AIWorkerPoolUUID)
+	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(farm.ID)
 	if !ok {
 		slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist")
 	}
