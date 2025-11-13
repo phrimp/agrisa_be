@@ -107,9 +107,11 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 	err := r.db.SelectContext(ctx, &rows, query, id)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("farm not found: %s", id)
+			log.Printf("No farm found with ID: %s", id)
+			return nil, fmt.Errorf("not_found farm not found: %s", id)
 		}
-		return nil, fmt.Errorf("query failed: %w", err)
+		log.Printf("Error querying farm by ID: %v", err)
+		return nil, fmt.Errorf("internal_error: query failed: %w", err)
 	}
 
 	farm := models.Farm{
