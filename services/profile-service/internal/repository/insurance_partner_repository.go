@@ -3,6 +3,7 @@ package repository
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"profile-service/internal/models"
 	"strings"
 	"utils"
@@ -18,6 +19,7 @@ type IInsurancePartnerRepository interface {
 	GetPublicProfile(partnerID string) (*models.PublicPartnerProfile, error)
 	GetPrivateProfile(partnerID string) (*models.PrivatePartnerProfile, error)
 	UpdateInsurancePartner(query string, args ...interface{}) error
+	GetAllPublicProfiles() ([]models.PublicPartnerProfile, error)
 }
 type InsurancePartnerRepository struct {
 	db *sqlx.DB
@@ -271,6 +273,63 @@ func (r *InsurancePartnerRepository) GetPublicProfile(partnerID string) (*models
 	}
 
 	return &profile, nil
+}
+
+func (r *InsurancePartnerRepository) GetAllPublicProfiles() ([]models.PublicPartnerProfile, error) {
+	query := `
+		SELECT 
+			-- A. Brand Identity Information
+			ip.partner_id,
+			COALESCE(ip.partner_display_name, '') AS partner_display_name,
+			COALESCE(ip.partner_logo_url, '') AS partner_logo_url,
+			COALESCE(ip.cover_photo_url, '') AS cover_photo_url,
+			COALESCE(ip.partner_tagline, '') AS partner_tagline,
+			COALESCE(ip.partner_description, '') AS partner_description,
+			
+			-- B. Public Contact Information
+			COALESCE(ip.partner_phone, '') AS partner_phone,
+			COALESCE(ip.partner_official_email, '') AS partner_official_email,
+			COALESCE(ip.customer_service_hotline, '') AS customer_service_hotline,
+			COALESCE(ip.hotline, '') AS hotline,
+			COALESCE(ip.support_hours, '') AS support_hours,
+			COALESCE(ip.partner_website, '') AS partner_website,
+			COALESCE(ip.fax_number, '') AS fax_number,
+
+			-- C. Location Information
+			COALESCE(ip.head_office_address, '') AS head_office_address,
+			COALESCE(ip.province_name, '') AS province_name,
+			COALESCE(ip.ward_name, '') AS ward_name,
+			
+			-- D. Trust Metrics and Ratings
+			COALESCE(ip.partner_rating_score, 0.0) AS partner_rating_score,
+			COALESCE(ip.partner_rating_count, 0) AS partner_rating_count,
+			COALESCE(ip.trust_metric_experience, 0) AS trust_metric_experience,
+			COALESCE(ip.trust_metric_clients, 0) AS trust_metric_clients,
+			COALESCE(ip.trust_metric_claim_rate, 0) AS trust_metric_claim_rate,
+			COALESCE(ip.total_payouts, '') AS total_payouts,
+			
+			-- E. Product and Service Information
+			COALESCE(ip.average_payout_time, '') AS average_payout_time,
+			COALESCE(ip.confirmation_timeline, '') AS confirmation_timeline,
+			COALESCE(ip.coverage_areas, '') AS coverage_areas,
+			COALESCE(ip.year_established, 0) AS year_established
+		FROM insurance_partners ip
+		WHERE ip.status = 'active'
+		ORDER BY ip.partner_rating_score DESC, ip.partner_rating_count DESC
+	`
+
+	var profiles []models.PublicPartnerProfile
+	err := r.db.Select(&profiles, query)
+	if err != nil {
+		slog.Error("Error getting all public profiles: ", "error", err)
+		return nil, fmt.Errorf("internal server error")
+	}
+
+	if profiles == nil {
+		profiles = []models.PublicPartnerProfile{}
+	}
+
+	return profiles, nil
 }
 
 // GetPrivateProfile - Lấy TOÀN BỘ thông tin của Insurance Partner (PUBLIC + PRIVATE)

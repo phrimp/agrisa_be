@@ -25,6 +25,7 @@ type IInsurancePartnerService interface {
 	CreateInsurancePartner(req *models.CreateInsurancePartnerRequest, userID string) CreateInsurancePartnerResult
 	GetPrivateProfile(userID string) (*models.PrivatePartnerProfile, error)
 	UpdateInsurancePartner(updateProfileRequestBody map[string]interface{}, updateByID, updateByName string) (*models.PrivatePartnerProfile, error)
+	GetAllPartnersPublicProfiles() ([]models.PublicPartnerProfile, error)
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
@@ -995,6 +996,10 @@ func ValidateLicenseExpiryDate(licenseExpiryDate time.Time, licenseIssueDate tim
 
 func (s *InsurancePartnerService) GetPublicProfile(partnerID string) (*models.PublicPartnerProfile, error) {
 	return s.repo.GetPublicProfile(partnerID)
+}
+
+func (s *InsurancePartnerService) GetAllPartnersPublicProfiles() ([]models.PublicPartnerProfile, error) {
+	return s.repo.GetAllPublicProfiles()
 }
 
 func (s *InsurancePartnerService) GetPrivateProfile(userID string) (*models.PrivatePartnerProfile, error) {

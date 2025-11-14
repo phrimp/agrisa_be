@@ -26,6 +26,7 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	insurancePartnerProfileGrPub.GET("/ping", h.Ping)
 	insurancePartnerProfileGrPub.GET("/insurance-partners/:partner_id/profile", h.GetInsurancePartnerPublicByID)
 	insurancePartnerProfileGrPub.GET("/insurance-partners/:partner_id/reviews", h.GetPartnerReviews)
+	insurancePartnerProfileGrPub.GET("/insurance-partners", h.GetAllInsurancePartnersPublicProfiles)
 
 	insurancePartnerProtectedGrPub := router.Group("/profile/protected/api/v1")
 	insurancePartnerProtectedGrPub.POST("/insurance-partners", h.CreateInsurancePartner) // featurea: insu
@@ -56,6 +57,18 @@ func MapErrorToHTTPStatusExtended(errorString string) (errorCode string, httpSta
 
 func (h *InsurancePartnerHandler) Ping(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "pong"})
+}
+
+func (h *InsurancePartnerHandler) GetAllInsurancePartnersPublicProfiles(c *gin.Context) {
+	result, err := h.InsurancePartnerService.GetAllPartnersPublicProfiles()
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	response := utils.CreateSuccessResponse(result)
+	c.JSON(http.StatusOK, response)
 }
 
 func (h *InsurancePartnerHandler) GetInsurancePartnerPublicByID(c *gin.Context) {
