@@ -26,6 +26,7 @@ type IInsurancePartnerService interface {
 	GetPrivateProfile(userID string) (*models.PrivatePartnerProfile, error)
 	UpdateInsurancePartner(updateProfileRequestBody map[string]interface{}, updateByID, updateByName string) (*models.PrivatePartnerProfile, error)
 	GetAllPartnersPublicProfiles() ([]models.PublicPartnerProfile, error)
+	GetPrivateProfileByPartnerID(partnerID string) (*models.PrivatePartnerProfile, error)
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
@@ -1009,4 +1010,8 @@ func (s *InsurancePartnerService) GetPrivateProfile(userID string) (*models.Priv
 	}
 	partnerID := staff.PartnerID
 	return s.repo.GetPrivateProfile(partnerID.String())
+}
+
+func (s *InsurancePartnerService) GetPrivateProfileByPartnerID(partnerID string) (*models.PrivatePartnerProfile, error) {
+	return s.repo.GetPrivateProfile(partnerID)
 }

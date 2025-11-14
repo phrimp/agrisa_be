@@ -27,6 +27,7 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	insurancePartnerProfileGrPub.GET("/insurance-partners/:partner_id/profile", h.GetInsurancePartnerPublicByID)
 	insurancePartnerProfileGrPub.GET("/insurance-partners/:partner_id/reviews", h.GetPartnerReviews)
 	insurancePartnerProfileGrPub.GET("/insurance-partners", h.GetAllInsurancePartnersPublicProfiles)
+	insurancePartnerProfileGrPub.GET("/insurance-partners/:partner_id", h.GetPrivateProfileByPartnerID)
 
 	insurancePartnerProtectedGrPub := router.Group("/profile/protected/api/v1")
 	insurancePartnerProtectedGrPub.POST("/insurance-partners", h.CreateInsurancePartner) // featurea: insu
@@ -182,4 +183,17 @@ func (h *InsurancePartnerHandler) UpdateInsurancePartnerProfile(c *gin.Context) 
 	}
 	successResponse := utils.CreateSuccessResponse(dataResponse)
 	c.JSON(http.StatusOK, successResponse)
+}
+
+func (h *InsurancePartnerHandler) GetPrivateProfileByPartnerID(c *gin.Context) {
+	partnerID := c.Param("partner_id")
+	result, err := h.InsurancePartnerService.GetPrivateProfileByPartnerID(partnerID)
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	response := utils.CreateSuccessResponse(result)
+	c.JSON(http.StatusOK, response)
 }
