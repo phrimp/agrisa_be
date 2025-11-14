@@ -14,6 +14,7 @@ import (
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -244,6 +245,31 @@ type DataResponse struct {
 	SkipReason     string // Optional: reason for skipping (e.g., "unsupported_parameter")
 }
 
+type WeatherAPIResponse struct {
+	PolygonID         string      `json:"polygon_id"`
+	PolygonName       string      `json:"polygon_name"`
+	PolygonCenter     []float64   `json:"polygon_center"`
+	PolygonArea       float64     `json:"polygon_area"`
+	PolygonReused     bool        `json:"polygon_reused"`      // True if existing polygon was reused
+	PolygonCreatedNew bool        `json:"polygon_created_new"` // True if new polygon was created
+	TimeRange         TimeRange   `json:"time_range"`
+	Data              []DataPoint `json:"data"`
+	TotalDataValue    float64     `json:"total_data_value"`
+	DataPointCount    int         `json:"data_point_count"`
+}
+
+type DataPoint struct {
+	Dt    int64   `json:"dt"`    // Unix timestamp
+	Data  float64 `json:"data"`  // Precipitation in mm
+	Count int     `json:"count"` // Number of measurements
+	Unit  string  `json:"unit"`
+}
+
+type TimeRange struct {
+	Start int64 `json:"start"` // Unix timestamp
+	End   int64 `json:"end"`   // Unix timestamp
+}
+
 // SatelliteAPIResponse matches the satellite-data-service response structure
 type SatelliteAPIResponse struct {
 	Status  string `json:"status"`
@@ -273,12 +299,6 @@ type SatelliteAPIResponse struct {
 			} `json:"component_data,omitempty"`
 		} `json:"images"`
 	} `json:"data"`
-}
-
-// endpointMap maps parameter names to satellite API endpoints
-var endpointMap = map[string]string{
-	"NDVI": "/satellite/public/ndvi",
-	"NDMI": "/satellite/public/ndmi",
 }
 
 // FetchFarmMonitoringDataJob is the job handler for fetching farm monitoring data
@@ -392,7 +412,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 			StartDate:                    startDateStr,
 			EndDate:                      endDateStr,
 			BasePolicyTriggerConditionID: uuid.Nil, // Will be set by trigger conditions
-			MaxCloudCover:                30.0,
+			MaxCloudCover:                100.0,
 			MaxImages:                    10,
 			IncludeComponents:            true,
 		}
@@ -486,7 +506,7 @@ func fetchMonitoringDataWorker(
 		//	}
 
 		// Fetch data with retry logic
-		monitoringData, err := fetchSatelliteDataWithRetry(
+		monitoringData, err := fetchDataWithRetry(
 			httpClient,
 			*response.DataSource.APIEndpoint,
 			req,
@@ -504,7 +524,7 @@ func fetchMonitoringDataWorker(
 }
 
 // fetchSatelliteDataWithRetry fetches data with exponential backoff retry
-func fetchSatelliteDataWithRetry(
+func fetchDataWithRetry(
 	client *http.Client,
 	endpoint string,
 	req DataRequest,
@@ -522,19 +542,171 @@ func fetchSatelliteDataWithRetry(
 			time.Sleep(backoff)
 		}
 
-		data, err := fetchSatelliteData(client, endpoint, req)
-		if err == nil {
-			return data, nil
-		}
+		if strings.Contains(endpoint, "satellite") {
+			data, err := fetchSatelliteData(client, endpoint, req)
+			if err == nil {
+				return data, nil
+			}
 
-		lastErr = err
-		slog.Warn("Satellite API call failed",
-			"attempt", attempt,
-			"parameter", req.DataSource.ParameterName,
-			"error", err)
+			lastErr = err
+			slog.Warn("Satellite API call failed",
+				"attempt", attempt,
+				"parameter", req.DataSource.ParameterName,
+				"error", err)
+		} else if strings.Contains(endpoint, "weather") {
+			data, err := fetchWeatherData(client, endpoint, req)
+			if err == nil {
+				return data, nil
+			}
+
+			lastErr = err
+			slog.Warn("Weather API call failed",
+				"attempt", attempt,
+				"parameter", req.DataSource.ParameterName,
+				"error", err)
+		}
 	}
 
 	return nil, fmt.Errorf("failed after %d retries: %w", maxRetries, lastErr)
+}
+
+func fetchWeatherData(client *http.Client,
+	endpoint string,
+	req DataRequest,
+) ([]models.FarmMonitoringData, error) {
+	// Convert date strings (YYYY-MM-DD) to Unix timestamps
+	startTime, err := time.Parse("2006-01-02", req.StartDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse start date: %w", err)
+	}
+	endTime, err := time.Parse("2006-01-02", req.EndDate)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse end date: %w", err)
+	}
+
+	// Add one day to end date to include the entire day
+	endTime = endTime.Add(24 * time.Hour)
+
+	// Extract first 4 coordinates for polygon (weather API expects 4 corners)
+	if len(req.FarmCoordinates) < 4 {
+		return nil, fmt.Errorf("insufficient coordinates: need at least 4 points, got %d", len(req.FarmCoordinates))
+	}
+
+	// Build query parameters for weather API
+	params := url.Values{}
+	for i := 0; i < 4 && i < len(req.FarmCoordinates); i++ {
+		if len(req.FarmCoordinates[i]) < 2 {
+			return nil, fmt.Errorf("invalid coordinate at index %d", i)
+		}
+		// Weather API expects lat/lon format
+		params.Set(fmt.Sprintf("lat%d", i+1), fmt.Sprintf("%.6f", req.FarmCoordinates[i][1]))
+		params.Set(fmt.Sprintf("lon%d", i+1), fmt.Sprintf("%.6f", req.FarmCoordinates[i][0]))
+	}
+	params.Set("start", strconv.FormatInt(startTime.Unix(), 10))
+	params.Set("end", strconv.FormatInt(endTime.Unix(), 10))
+
+	// Create HTTP request
+	fullURL := endpoint + "?" + params.Encode()
+	httpReq, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Execute request with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	httpReq = httpReq.WithContext(ctx)
+
+	startRequestTime := time.Now()
+	resp, err := client.Do(httpReq)
+	duration := time.Since(startRequestTime)
+
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check HTTP status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response - UnifiedAPIResponse from weather service
+	var apiResp struct {
+		PolygonID         string    `json:"polygon_id"`
+		PolygonName       string    `json:"polygon_name"`
+		PolygonCenter     []float64 `json:"polygon_center"`
+		PolygonArea       float64   `json:"polygon_area"`
+		PolygonReused     bool      `json:"polygon_reused"`
+		PolygonCreatedNew bool      `json:"polygon_created_new"`
+		TimeRange         struct {
+			Start int64 `json:"start"`
+			End   int64 `json:"end"`
+		} `json:"time_range"`
+		Data []struct {
+			Dt    int64   `json:"dt"`
+			Data  float64 `json:"data"`
+			Count int     `json:"count"`
+			Unit  string  `json:"unit"`
+		} `json:"data"`
+		TotalDataValue float64 `json:"total_data_value"`
+		DataPointCount int     `json:"data_point_count"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	slog.Info("Weather API call completed",
+		"parameter", req.DataSource.ParameterName,
+		"data_points", apiResp.DataPointCount,
+		"duration_ms", duration.Milliseconds())
+
+	// Convert to FarmMonitoringData models
+	var monitoringData []models.FarmMonitoringData
+
+	for _, dataPoint := range apiResp.Data {
+		// Determine data quality based on measurement count
+		dataQuality := models.DataQualityGood
+		if dataPoint.Count < 5 {
+			dataQuality = models.DataQualityPoor
+		} else if dataPoint.Count < 10 {
+			dataQuality = models.DataQualityAcceptable
+		}
+
+		// Calculate confidence score based on data count
+		confidenceScore := math.Min(1.0, float64(dataPoint.Count)/20.0)
+
+		// Build component data
+		componentData := utils.JSONMap{
+			"measurement_count": dataPoint.Count,
+			"polygon_id":        apiResp.PolygonID,
+			"polygon_area_sqm":  apiResp.PolygonArea,
+			"total_value":       apiResp.TotalDataValue,
+		}
+
+		monitoringData = append(monitoringData, models.FarmMonitoringData{
+			ID:                           uuid.New(),
+			FarmID:                       req.FarmID,
+			BasePolicyTriggerConditionID: req.BasePolicyTriggerConditionID,
+			ParameterName:                req.DataSource.ParameterName,
+			MeasuredValue:                dataPoint.Data,
+			Unit:                         &dataPoint.Unit,
+			MeasurementTimestamp:         dataPoint.Dt,
+			ComponentData:                componentData,
+			DataQuality:                  dataQuality,
+			ConfidenceScore:              &confidenceScore,
+			MeasurementSource:            req.DataSource.DataProvider,
+			CreatedAt:                    time.Now(),
+		})
+	}
+
+	slog.Info("Converted weather data to monitoring records",
+		"parameter", req.DataSource.ParameterName,
+		"records_created", len(monitoringData))
+
+	return monitoringData, nil
 }
 
 // fetchSatelliteData performs a single API call to satellite service

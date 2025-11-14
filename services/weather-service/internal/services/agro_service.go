@@ -20,8 +20,8 @@ type IAgroService interface {
 	CreatePolygon(name string, coordinates [][2]float64) (*models.AgroPolygonResponse, error)
 	GetPolygon(polygonID string) (*models.AgroPolygonResponse, error)
 	GetAccumulatedPrecipitation(polygonID string, start, end int64) ([]models.PrecipitationDataPoint, error)
-	CreatePolygonAndGetPrecipitation(coordinates [][2]float64, start, end int64) (*models.PrecipitationResponse, error)
-	GetPrecipitationWithPolygonID(polygonID string, coordinates [][2]float64, start, end int64) (*models.PrecipitationResponse, error)
+	CreatePolygonAndGetPrecipitation(coordinates [][2]float64, start, end int64) (*models.UnifiedAPIResponse, error)
+	GetPrecipitationWithPolygonID(polygonID string, coordinates [][2]float64, start, end int64) (*models.UnifiedAPIResponse, error)
 }
 
 func NewAgroService(cfg config.WeatherServiceConfig) IAgroService {
@@ -189,7 +189,7 @@ func (a *AgroService) GetAccumulatedPrecipitation(polygonID string, start, end i
 }
 
 // CreatePolygonAndGetPrecipitation combines polygon creation and precipitation fetching
-func (a *AgroService) CreatePolygonAndGetPrecipitation(coordinates [][2]float64, start, end int64) (*models.PrecipitationResponse, error) {
+func (a *AgroService) CreatePolygonAndGetPrecipitation(coordinates [][2]float64, start, end int64) (*models.UnifiedAPIResponse, error) {
 	// Generate polygon name based on timestamp
 	polygonName := fmt.Sprintf("temp_polygon_%d", time.Now().Unix())
 
@@ -205,24 +205,33 @@ func (a *AgroService) CreatePolygonAndGetPrecipitation(coordinates [][2]float64,
 		return nil, err
 	}
 
-	// Calculate total rainfall
+	// Convert PrecipitationDataPoint to DataPoint format
+	dataPoints := make([]models.DataPoint, len(precipData))
 	totalRainfall := 0.0
-	for _, data := range precipData {
+	for i, data := range precipData {
+		dataPoints[i] = models.DataPoint{
+			Dt:    data.Dt,
+			Data:  data.Rain,
+			Count: data.Count,
+			Unit:  "mm",
+		}
 		totalRainfall += data.Rain
 	}
 
-	response := &models.PrecipitationResponse{
-		PolygonID:     polygonResp.ID,
-		PolygonName:   polygonResp.Name,
-		PolygonCenter: polygonResp.Center,
-		PolygonArea:   polygonResp.Area,
+	response := &models.UnifiedAPIResponse{
+		PolygonID:         polygonResp.ID,
+		PolygonName:       polygonResp.Name,
+		PolygonCenter:     polygonResp.Center,
+		PolygonArea:       polygonResp.Area,
+		PolygonCreatedNew: true,
+		PolygonReused:     false,
 		TimeRange: models.TimeRange{
 			Start: start,
 			End:   end,
 		},
-		PrecipitationData: precipData,
-		TotalRainfall:     totalRainfall,
-		DataPointCount:    len(precipData),
+		Data:           dataPoints,
+		TotalDataValue: totalRainfall,
+		DataPointCount: len(dataPoints),
 	}
 
 	return response, nil
@@ -230,7 +239,7 @@ func (a *AgroService) CreatePolygonAndGetPrecipitation(coordinates [][2]float64,
 
 // GetPrecipitationWithPolygonID fetches precipitation data, reusing existing polygon if provided,
 // or creating a new one if polygon ID is empty or doesn't exist
-func (a *AgroService) GetPrecipitationWithPolygonID(polygonID string, coordinates [][2]float64, start, end int64) (*models.PrecipitationResponse, error) {
+func (a *AgroService) GetPrecipitationWithPolygonID(polygonID string, coordinates [][2]float64, start, end int64) (*models.UnifiedAPIResponse, error) {
 	var polygonResp *models.AgroPolygonResponse
 	var err error
 	polygonReused := false
@@ -268,13 +277,20 @@ func (a *AgroService) GetPrecipitationWithPolygonID(polygonID string, coordinate
 		return nil, err
 	}
 
-	// Calculate total rainfall
+	// Convert PrecipitationDataPoint to DataPoint format
+	dataPoints := make([]models.DataPoint, len(precipData))
 	totalRainfall := 0.0
-	for _, data := range precipData {
+	for i, data := range precipData {
+		dataPoints[i] = models.DataPoint{
+			Dt:    data.Dt,
+			Data:  data.Rain,
+			Count: data.Count,
+			Unit:  "mm",
+		}
 		totalRainfall += data.Rain
 	}
 
-	response := &models.PrecipitationResponse{
+	response := &models.UnifiedAPIResponse{
 		PolygonID:         polygonResp.ID,
 		PolygonName:       polygonResp.Name,
 		PolygonCenter:     polygonResp.Center,
@@ -285,9 +301,9 @@ func (a *AgroService) GetPrecipitationWithPolygonID(polygonID string, coordinate
 			Start: start,
 			End:   end,
 		},
-		PrecipitationData: precipData,
-		TotalRainfall:     totalRainfall,
-		DataPointCount:    len(precipData),
+		Data:           dataPoints,
+		TotalDataValue: totalRainfall,
+		DataPointCount: len(dataPoints),
 	}
 
 	return response, nil

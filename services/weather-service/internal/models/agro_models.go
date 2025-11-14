@@ -51,6 +51,25 @@ type PrecipitationResponse struct {
 	DataPointCount    int                      `json:"data_point_count"`
 }
 
+type DataPoint struct {
+	Dt    int64   `json:"dt"`    // Unix timestamp
+	Data  float64 `json:"data"`  // Precipitation in mm
+	Count int     `json:"count"` // Number of measurements
+	Unit  string  `json:"unit"`
+}
+type UnifiedAPIResponse struct {
+	PolygonID         string      `json:"polygon_id"`
+	PolygonName       string      `json:"polygon_name"`
+	PolygonCenter     []float64   `json:"polygon_center"`
+	PolygonArea       float64     `json:"polygon_area"`
+	PolygonReused     bool        `json:"polygon_reused"`      // True if existing polygon was reused
+	PolygonCreatedNew bool        `json:"polygon_created_new"` // True if new polygon was created
+	TimeRange         TimeRange   `json:"time_range"`
+	Data              []DataPoint `json:"data"`
+	TotalDataValue    float64     `json:"total_data_value"`
+	DataPointCount    int         `json:"data_point_count"`
+}
+
 // TimeRange represents the start and end time of the query
 type TimeRange struct {
 	Start int64 `json:"start"` // Unix timestamp
