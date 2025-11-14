@@ -168,3 +168,10 @@ type ClaimRejectionType string
 const (
 	ClaimRejectionTypeClaimDataIncorrect ClaimRejectionType = "claim_data_incorrect"
 )
+
+type DataSourceAPIAddress string
+
+const (
+	SatelliteNDVI DataSourceAPIAddress = "/satellite/public/ndvi"
+	SatelliteNDMI DataSourceAPIAddress = "/satellite/public/ndmi"
+)

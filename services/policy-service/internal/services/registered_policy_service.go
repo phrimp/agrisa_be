@@ -3,11 +3,17 @@ package services
 import (
 	utils "agrisa_utils"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"math"
+	"net/http"
+	"net/url"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,12 +21,14 @@ import (
 
 // RegisteredPolicyService handles registered policy operations and worker infrastructure lifecycle
 type RegisteredPolicyService struct {
-	registeredPolicyRepo *repository.RegisteredPolicyRepository
-	basePolicyRepo       *repository.BasePolicyRepository
-	basePolicyService    *BasePolicyService
-	farmService          *FarmService
-	workerManager        *worker.WorkerManagerV2
-	pdfDocumentService   *PDFService
+	registeredPolicyRepo   *repository.RegisteredPolicyRepository
+	basePolicyRepo         *repository.BasePolicyRepository
+	basePolicyService      *BasePolicyService
+	farmService            *FarmService
+	workerManager          *worker.WorkerManagerV2
+	pdfDocumentService     *PDFService
+	dataSourceRepo         *repository.DataSourceRepository
+	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository
 }
 
 // NewRegisteredPolicyService creates a new registered policy service
@@ -30,6 +38,9 @@ func NewRegisteredPolicyService(
 	basePolicyService *BasePolicyService,
 	farmService *FarmService,
 	workerManager *worker.WorkerManagerV2,
+	pdfDocumentService *PDFService,
+	dataSourceRepo *repository.DataSourceRepository,
+	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository,
 ) *RegisteredPolicyService {
 	return &RegisteredPolicyService{
 		registeredPolicyRepo: registeredPolicyRepo,
@@ -37,6 +48,8 @@ func NewRegisteredPolicyService(
 		basePolicyService:    basePolicyService,
 		farmService:          farmService,
 		workerManager:        workerManager,
+		pdfDocumentService:   pdfDocumentService,
+		dataSourceRepo:       dataSourceRepo,
 	}
 }
 
@@ -206,6 +219,68 @@ func (s *RegisteredPolicyService) recoverPolicyInfrastructure(ctx context.Contex
 	return nil
 }
 
+// ============================================================================
+// FARM MONITORING DATA FETCH TYPES
+// ============================================================================
+
+// DataRequest contains information needed to fetch monitoring data
+type DataRequest struct {
+	DataSource                   models.DataSource
+	FarmID                       uuid.UUID
+	FarmCoordinates              [][]float64 // GeoJSON polygon coordinates (first ring only)
+	StartDate                    string      // YYYY-MM-DD format
+	EndDate                      string      // YYYY-MM-DD format
+	BasePolicyTriggerConditionID uuid.UUID
+	MaxCloudCover                float64
+	MaxImages                    int
+	IncludeComponents            bool
+}
+
+// DataResponse contains the result of a monitoring data fetch operation
+type DataResponse struct {
+	DataSource     models.DataSource
+	MonitoringData []models.FarmMonitoringData
+	Err            error
+	SkipReason     string // Optional: reason for skipping (e.g., "unsupported_parameter")
+}
+
+// SatelliteAPIResponse matches the satellite-data-service response structure
+type SatelliteAPIResponse struct {
+	Status  string `json:"status"`
+	Message string `json:"message"`
+	Data    struct {
+		Summary struct {
+			ImagesProcessed int `json:"images_processed"`
+		} `json:"summary"`
+		Images []struct {
+			ImageIndex      int    `json:"image_index"`
+			AcquisitionDate string `json:"acquisition_date"`
+			CloudCover      struct {
+				Value float64 `json:"value"`
+				Unit  string  `json:"unit"`
+			} `json:"cloud_cover"`
+			Statistics struct {
+				Mean   *float64 `json:"mean"`
+				Median *float64 `json:"median"`
+				Min    *float64 `json:"min"`
+				Max    *float64 `json:"max"`
+				Stddev *float64 `json:"stddev"`
+			} `json:"statistics"`
+			ComponentData *struct {
+				NIR  *float64 `json:"nir,omitempty"`
+				Red  *float64 `json:"red,omitempty"`
+				SWIR *float64 `json:"swir,omitempty"`
+			} `json:"component_data,omitempty"`
+		} `json:"images"`
+	} `json:"data"`
+}
+
+// endpointMap maps parameter names to satellite API endpoints
+var endpointMap = map[string]string{
+	"NDVI": "/satellite/public/ndvi",
+	"NDMI": "/satellite/public/ndmi",
+}
+
 // FetchFarmMonitoringDataJob is the job handler for fetching farm monitoring data
 func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]any) error {
 	slog.Info("Executing farm monitoring data fetch job", "params", params)
@@ -221,6 +296,15 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		return fmt.Errorf("invalid policy_id format: %w", err)
 	}
 
+	basePolicyIDStr, ok := params["base_policy_id"].(string)
+	if !ok {
+		return fmt.Errorf("missing or invalid base_policy_id parameters")
+	}
+	basePolicyID, err := uuid.Parse(basePolicyIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid base_policy_id format: %w", err)
+	}
+
 	farmIDStr, ok := params["farm_id"].(string)
 	if !ok {
 		return fmt.Errorf("missing or invalid farm_id parameter")
@@ -231,19 +315,396 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		return fmt.Errorf("invalid farm_id format: %w", err)
 	}
 
-	// TODO: Implement actual farm monitoring data fetch logic
-	// This would typically:
-	// 1. Query data source APIs (weather, satellite, soil sensors, etc.)
-	// 2. Store raw data in database
-	// 3. Evaluate trigger conditions
-	// 4. Generate alerts if conditions are met
-	// 5. Update policy status if needed
+	dataSources, err := s.dataSourceRepo.GetDataSourcesByBasePolicyID(basePolicyID)
+	if err != nil {
+		return fmt.Errorf("retrieve data sources from base policy id failed: %w", err)
+	}
+
+	startDate, ok := params["start_date"].(int64)
+	if !ok {
+		slog.Error("GetFarmPhotoJob: missing or invalid start_date parameter", "farm_id", farmID)
+		return fmt.Errorf("missing or invalid start_date parameter")
+	}
+	endDate, ok := params["end_date"].(int64)
+	if !ok {
+		slog.Error("GetFarmPhotoJob: missing or invalid end_date parameter", "farm_id", farmID)
+		return fmt.Errorf("missing or invalid end_date parameter")
+	}
+
+	if endDate == 0 {
+		endDate = time.Now().Add(24 * time.Hour).Unix()
+	}
+
+	// Check for existing data in range (skip if exists)
+	ctx := context.Background()
+	existingMonitorData, err := s.farmMonitoringDataRepo.CheckDataExistsInTimeRange(ctx, farmID, startDate, endDate)
+	if err != nil {
+		slog.Error("error checking existing monitor farm data", "error", err)
+	}
+	if existingMonitorData {
+		slog.Info("existing monitor farm data found, skipping fetch job",
+			"farm_id", farmID,
+			"date_range", fmt.Sprintf("%d to %d", startDate, endDate))
+		return nil
+	}
+
+	// Load farm to get boundary coordinates
+	farm, err := s.farmService.GetByFarmID(ctx, farmID.String())
+	if err != nil {
+		return fmt.Errorf("failed to load farm: %w", err)
+	}
+
+	if farm.Boundary == nil {
+		return fmt.Errorf("farm boundary is required for monitoring data fetch")
+	}
+
+	// Extract coordinates from GeoJSON polygon (first ring only)
+	farmCoordinates := extractPolygonCoordinates(farm.Boundary)
+	if len(farmCoordinates) < 3 {
+		return fmt.Errorf("invalid farm boundary: need at least 3 coordinates")
+	}
+
+	// Convert Unix timestamps to YYYY-MM-DD format
+	startDateStr := unixToDateString(startDate)
+	endDateStr := unixToDateString(endDate)
+
+	// Initialize worker pool
+	numWorkers := min(10, len(dataSources))
+	jobs := make(chan DataRequest, len(dataSources))
+	results := make(chan DataResponse, len(dataSources))
+
+	// Create HTTP client with timeout
+	httpClient := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	// Start workers
+	for i := 0; i < numWorkers; i++ {
+		go fetchMonitoringDataWorker(jobs, results, httpClient)
+	}
+
+	// Enqueue jobs for each data source
+	for _, ds := range dataSources {
+		jobs <- DataRequest{
+			DataSource:                   ds,
+			FarmID:                       farmID,
+			FarmCoordinates:              farmCoordinates,
+			StartDate:                    startDateStr,
+			EndDate:                      endDateStr,
+			BasePolicyTriggerConditionID: uuid.Nil, // Will be set by trigger conditions
+			MaxCloudCover:                30.0,
+			MaxImages:                    10,
+			IncludeComponents:            true,
+		}
+	}
+	close(jobs)
+
+	// Collect results from all workers
+	allMonitoringData := []models.FarmMonitoringData{}
+	errorSummary := make(map[string]error)
+	skipSummary := make(map[string]string)
+
+	for i := 0; i < len(dataSources); i++ {
+		resp := <-results
+
+		if resp.Err != nil {
+			errorSummary[resp.DataSource.ParameterName] = resp.Err
+			slog.Error("Data source fetch failed",
+				"parameter", resp.DataSource.ParameterName,
+				"data_source_id", resp.DataSource.ID,
+				"error", resp.Err)
+		} else if resp.SkipReason != "" {
+			skipSummary[resp.DataSource.ParameterName] = resp.SkipReason
+			slog.Warn("Data source skipped",
+				"parameter", resp.DataSource.ParameterName,
+				"reason", resp.SkipReason)
+		} else {
+			allMonitoringData = append(allMonitoringData, resp.MonitoringData...)
+			slog.Info("Data source fetch succeeded",
+				"parameter", resp.DataSource.ParameterName,
+				"records_fetched", len(resp.MonitoringData))
+		}
+	}
+
+	// Store monitoring data in database (batch insert)
+	if len(allMonitoringData) > 0 {
+		if err := s.farmMonitoringDataRepo.CreateBatch(ctx, allMonitoringData); err != nil {
+			return fmt.Errorf("failed to store monitoring data: %w", err)
+		}
+		slog.Info("Monitoring data stored successfully",
+			"farm_id", farmID,
+			"total_records", len(allMonitoringData))
+	}
+
+	// Log summary
+	successCount := len(dataSources) - len(errorSummary) - len(skipSummary)
+	successRate := float64(successCount) / float64(len(dataSources)) * 100
 
 	slog.Info("Farm monitoring data fetch completed",
 		"policy_id", policyID,
-		"farm_id", farmID)
+		"farm_id", farmID,
+		"base_policy_id", basePolicyID,
+		"total_sources", len(dataSources),
+		"successful", successCount,
+		"failed", len(errorSummary),
+		"skipped", len(skipSummary),
+		"success_rate", fmt.Sprintf("%.1f%%", successRate),
+		"records_stored", len(allMonitoringData))
+
+	// Only fail if ALL sources failed
+	if len(errorSummary) == len(dataSources) {
+		return fmt.Errorf("all %d data sources failed to fetch", len(dataSources))
+	}
 
 	return nil
+}
+
+// ============================================================================
+// FARM MONITORING DATA FETCH HELPERS
+// ============================================================================
+
+// fetchMonitoringDataWorker processes DataRequest jobs and fetches monitoring data from satellite API
+func fetchMonitoringDataWorker(
+	jobs <-chan DataRequest,
+	results chan<- DataResponse,
+	httpClient *http.Client,
+) {
+	for req := range jobs {
+		response := DataResponse{
+			DataSource: req.DataSource,
+		}
+
+		// Determine API endpoint
+		// endpoint, exists := endpointMap[req.DataSource.ParameterName]
+		//	if !exists {
+		//		response.SkipReason = fmt.Sprintf("unsupported parameter: %s", req.DataSource.ParameterName)
+		//		slog.Warn("Skipping unsupported data source",
+		//			"parameter", req.DataSource.ParameterName,
+		//			"data_source_id", req.DataSource.ID)
+		//		results <- response
+		//		continue
+		//	}
+
+		// Fetch data with retry logic
+		monitoringData, err := fetchSatelliteDataWithRetry(
+			httpClient,
+			*response.DataSource.APIEndpoint,
+			req,
+			3, // max retries
+		)
+
+		if err != nil {
+			response.Err = err
+		} else {
+			response.MonitoringData = monitoringData
+		}
+
+		results <- response
+	}
+}
+
+// fetchSatelliteDataWithRetry fetches data with exponential backoff retry
+func fetchSatelliteDataWithRetry(
+	client *http.Client,
+	endpoint string,
+	req DataRequest,
+	maxRetries int,
+) ([]models.FarmMonitoringData, error) {
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
+			slog.Info("Retrying satellite API call",
+				"attempt", attempt,
+				"backoff_seconds", backoff.Seconds(),
+				"parameter", req.DataSource.ParameterName)
+			time.Sleep(backoff)
+		}
+
+		data, err := fetchSatelliteData(client, endpoint, req)
+		if err == nil {
+			return data, nil
+		}
+
+		lastErr = err
+		slog.Warn("Satellite API call failed",
+			"attempt", attempt,
+			"parameter", req.DataSource.ParameterName,
+			"error", err)
+	}
+
+	return nil, fmt.Errorf("failed after %d retries: %w", maxRetries, lastErr)
+}
+
+// fetchSatelliteData performs a single API call to satellite service
+func fetchSatelliteData(
+	client *http.Client,
+	endpoint string,
+	req DataRequest,
+) ([]models.FarmMonitoringData, error) {
+	// Build query parameters
+	coordsJSON, err := json.Marshal(req.FarmCoordinates)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal coordinates: %w", err)
+	}
+
+	params := url.Values{}
+	params.Set("coordinates", string(coordsJSON))
+	params.Set("start_date", req.StartDate)
+	params.Set("end_date", req.EndDate)
+	params.Set("max_cloud_cover", fmt.Sprintf("%.1f", req.MaxCloudCover))
+	params.Set("max_images", strconv.Itoa(req.MaxImages))
+	params.Set("include_components", strconv.FormatBool(req.IncludeComponents))
+
+	// Create HTTP request
+	fullURL := endpoint + "?" + params.Encode()
+	httpReq, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	// Execute request with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	httpReq = httpReq.WithContext(ctx)
+
+	startTime := time.Now()
+	resp, err := client.Do(httpReq)
+	duration := time.Since(startTime)
+
+	if err != nil {
+		return nil, fmt.Errorf("API request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Check HTTP status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Parse response
+	var apiResp SatelliteAPIResponse
+	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	if apiResp.Status != "success" {
+		return nil, fmt.Errorf("API returned non-success status: %s - %s", apiResp.Status, apiResp.Message)
+	}
+
+	slog.Info("Satellite API call completed",
+		"parameter", req.DataSource.ParameterName,
+		"images_processed", apiResp.Data.Summary.ImagesProcessed,
+		"duration_ms", duration.Milliseconds())
+
+	// Convert to FarmMonitoringData models
+	return convertToMonitoringData(apiResp, req), nil
+}
+
+// convertToMonitoringData converts satellite API response to FarmMonitoringData models
+func convertToMonitoringData(
+	apiResp SatelliteAPIResponse,
+	req DataRequest,
+) []models.FarmMonitoringData {
+	var monitoringData []models.FarmMonitoringData
+
+	for _, image := range apiResp.Data.Images {
+		// Skip images with no valid measurements
+		if image.Statistics.Mean == nil {
+			slog.Warn("Skipping image with no mean value",
+				"parameter", req.DataSource.ParameterName,
+				"acquisition_date", image.AcquisitionDate)
+			continue
+		}
+
+		// Parse acquisition date to Unix timestamp
+		acquisitionTime, err := time.Parse("2006-01-02", image.AcquisitionDate)
+		if err != nil {
+			slog.Warn("Failed to parse acquisition date",
+				"date", image.AcquisitionDate,
+				"error", err)
+			continue
+		}
+
+		// Build component data JSON
+		componentData := utils.JSONMap{}
+		if req.IncludeComponents && image.ComponentData != nil {
+			if image.ComponentData.NIR != nil {
+				componentData["nir"] = *image.ComponentData.NIR
+			}
+			if image.ComponentData.Red != nil {
+				componentData["red"] = *image.ComponentData.Red
+			}
+			if image.ComponentData.SWIR != nil {
+				componentData["swir"] = *image.ComponentData.SWIR
+			}
+		}
+
+		// Add statistics to component data
+		componentData["statistics"] = map[string]interface{}{
+			"median": image.Statistics.Median,
+			"min":    image.Statistics.Min,
+			"max":    image.Statistics.Max,
+			"stddev": image.Statistics.Stddev,
+		}
+
+		// Determine data quality based on cloud cover
+		dataQuality := models.DataQualityGood
+		if image.CloudCover.Value > 50 {
+			dataQuality = models.DataQualityPoor
+		} else if image.CloudCover.Value > 20 {
+			dataQuality = models.DataQualityAcceptable
+		}
+
+		// Calculate confidence score (inverse of cloud cover)
+		confidenceScore := math.Max(0.0, (100.0-image.CloudCover.Value)/100.0)
+
+		monitoringData = append(monitoringData, models.FarmMonitoringData{
+			ID:                           uuid.New(),
+			FarmID:                       req.FarmID,
+			BasePolicyTriggerConditionID: req.BasePolicyTriggerConditionID,
+			ParameterName:                req.DataSource.ParameterName,
+			MeasuredValue:                *image.Statistics.Mean,
+			Unit:                         req.DataSource.Unit,
+			MeasurementTimestamp:         acquisitionTime.Unix(),
+			ComponentData:                componentData,
+			DataQuality:                  dataQuality,
+			ConfidenceScore:              &confidenceScore,
+			MeasurementSource:            req.DataSource.DataProvider,
+			CloudCoverPercentage:         &image.CloudCover.Value,
+			CreatedAt:                    time.Now(),
+		})
+	}
+
+	slog.Info("Converted satellite data to monitoring records",
+		"parameter", req.DataSource.ParameterName,
+		"records_created", len(monitoringData))
+
+	return monitoringData
+}
+
+// extractPolygonCoordinates extracts coordinates from GeoJSON polygon (first ring only)
+func extractPolygonCoordinates(polygon *models.GeoJSONPolygon) [][]float64 {
+	if polygon == nil || len(polygon.Coordinates) == 0 {
+		return nil
+	}
+	// Return first ring (outer boundary)
+	return polygon.Coordinates[0]
+}
+
+// unixToDateString converts Unix timestamp to YYYY-MM-DD format
+func unixToDateString(unixTime int64) string {
+	return time.Unix(unixTime, 0).Format("2006-01-02")
+}
+
+// min returns the minimum of two integers
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // ============================================================================

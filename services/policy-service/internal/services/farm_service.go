@@ -42,6 +42,12 @@ func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) ([]mo
 }
 
 func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered", "panic", r)
+		}
+	}()
+
 	if farm.ID == uuid.Nil {
 		farm.ID = uuid.New()
 	}
@@ -100,6 +106,12 @@ func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
 }
 
 func (s *FarmService) CreateFarmTx(farm *models.Farm, ownerID string, tx *sqlx.Tx) error {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered", "panic", r)
+		}
+	}()
+
 	if farm.ID == uuid.Nil {
 		farm.ID = uuid.New()
 	}
@@ -650,22 +662,6 @@ func (s *FarmService) FarmJobRecovery() error {
 			continue // Continue with next farm
 		}
 
-		// Calculate date ranges
-		currentTime := time.Now()
-		previousYearTime := currentTime.AddDate(-1, 0, 0)
-		formattedTime := currentTime.Format("2006-01-02")
-		previousYearFormattedTime := previousYearTime.Format("2006-01-02")
-
-		// Create full year job (one-time, run now)
-		fullYearJob := worker.JobPayload{
-			JobID:      uuid.NewString(),
-			Type:       "farm-imagery",
-			Params:     map[string]any{"farm_id": farm.ID, "start_date": previousYearFormattedTime, "end_date": formattedTime},
-			MaxRetries: 100,
-			OneTime:    true,
-			RunNow:     true,
-		}
-
 		// Create everyday job (recurring)
 		everydayJob := worker.JobPayload{
 			JobID:      uuid.NewString(),
@@ -676,14 +672,13 @@ func (s *FarmService) FarmJobRecovery() error {
 		}
 
 		// Get scheduler and add jobs
-		scheduler, ok := s.workerManager.GetSchedulerByPolicyID(*worker.AIWorkerPoolUUID)
+		scheduler, ok := s.workerManager.GetSchedulerByPolicyID(farm.ID)
 		if !ok {
 			slog.Error("FarmJobRecovery: failed to get farm-imagery scheduler", "farm_id", farm.ID, "error", "scheduler doesn't exist")
 			failCount++
 			continue
 		}
 
-		scheduler.AddJob(fullYearJob)
 		scheduler.AddJob(everydayJob)
 
 		slog.Info("FarmJobRecovery: successfully recovered farm", "farm_id", farm.ID, "jobs_added", 2)

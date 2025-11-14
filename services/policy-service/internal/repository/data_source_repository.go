@@ -250,7 +250,7 @@ func (r *DataSourceRepository) GetDataSourcesByTierID(tierID uuid.UUID) ([]model
 func (r *DataSourceRepository) GetDataSourcesByParameterName(parameterName string) ([]models.DataSource, error) {
 	var dataSources []models.DataSource
 	query := `
-		SELECT 
+		SELECT
 			id, data_source, parameter_name, parameter_type, unit,
 			display_name_vi, description_vi, min_value, max_value,
 			update_frequency, spatial_resolution, accuracy_rating, base_cost,
@@ -264,6 +264,42 @@ func (r *DataSourceRepository) GetDataSourcesByParameterName(parameterName strin
 	if err != nil {
 		return nil, fmt.Errorf("failed to get data sources by parameter name: %w", err)
 	}
+
+	return dataSources, nil
+}
+
+// GetDataSourcesByBasePolicyID retrieves all data sources used by a base policy
+// through its triggers and conditions
+func (r *DataSourceRepository) GetDataSourcesByBasePolicyID(basePolicyID uuid.UUID) ([]models.DataSource, error) {
+	slog.Debug("Retrieving data sources for base policy", "base_policy_id", basePolicyID)
+	start := time.Now()
+
+	var dataSources []models.DataSource
+	query := `
+		SELECT DISTINCT
+			ds.id, ds.data_source, ds.parameter_name, ds.parameter_type, ds.unit,
+			ds.display_name_vi, ds.description_vi, ds.min_value, ds.max_value,
+			ds.update_frequency, ds.spatial_resolution, ds.accuracy_rating, ds.base_cost,
+			ds.data_tier_id, ds.data_provider, ds.api_endpoint, ds.is_active,
+			ds.created_at, ds.updated_at
+		FROM data_source ds
+		INNER JOIN base_policy_trigger_condition bptc ON ds.id = bptc.data_source_id
+		INNER JOIN base_policy_trigger bpt ON bptc.base_policy_trigger_id = bpt.id
+		WHERE bpt.base_policy_id = $1
+		ORDER BY ds.parameter_name`
+
+	err := r.db.Select(&dataSources, query, basePolicyID)
+	if err != nil {
+		slog.Error("Failed to get data sources by base policy ID",
+			"base_policy_id", basePolicyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get data sources by base policy ID: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved data sources for base policy",
+		"base_policy_id", basePolicyID,
+		"count", len(dataSources),
+		"duration", time.Since(start))
 
 	return dataSources, nil
 }

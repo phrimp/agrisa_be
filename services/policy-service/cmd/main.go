@@ -66,6 +66,12 @@ func setupLogging() (*os.File, error) {
 }
 
 func main() {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered", "panic", r)
+		}
+	}()
+
 	logFile, err := setupLogging()
 	if err != nil {
 		log.Fatalf("Failed to set up logging: %v", err)
@@ -110,6 +116,7 @@ func main() {
 	dataSourceRepo := repository.NewDataSourceRepository(db)
 	registeredPolicyRepo := repository.NewRegisteredPolicyRepository(db)
 	farmRepo := repository.NewFarmRepository(db)
+	farmMonitoringDataRepo := repository.NewFarmMonitoringDataRepository(db)
 
 	// Initialize WorkerManagerV2
 	workerManager := worker.NewWorkerManagerV2(db, redisClient)
@@ -119,7 +126,8 @@ func main() {
 	dataSourceService := services.NewDataSourceService(dataSourceRepo)
 	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, geminiClient)
 	farmService := services.NewFarmService(farmRepo, cfg, minioClient, workerManager)
-	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager)
+	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
+	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo)
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
 
 	// Expiration Listener
@@ -129,6 +137,20 @@ func main() {
 	go func() {
 		if err := expirationService.StartListener(ctx); err != nil {
 			log.Printf("Expiration service error: %v", err)
+		}
+	}()
+
+	go func() {
+		retryWait := 0.5
+		for {
+			retryWait = retryWait * 2
+			time.Sleep(time.Duration(retryWait) * time.Second)
+			err := farmService.FarmJobRecovery()
+			if err != nil {
+				slog.Error("error recovering farm imagery jobs", "error", err)
+				continue
+			}
+			break
 		}
 	}()
 
