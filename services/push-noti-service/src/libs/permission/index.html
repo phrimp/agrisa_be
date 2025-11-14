@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cấp quyền thông báo</title>
+</head>
+<body>
+    <h1>Notification Permission Request</h1>
+    <p>This page requests notification permission automatically.</p>
+    <p id="status">Loading...</p>
+
+    <script>
+        const statusElement = document.getElementById('status');
+
+        // Function to request permission
+        function requestNotificationPermission() {
+            if ('Notification' in window) {
+                if (Notification.permission === 'default') {
+                    Notification.requestPermission().then(permission => {
+                        statusElement.textContent = `Permission: ${permission}`;
+                        if (permission === 'granted') {
+                            new Notification('Permission granted!', {
+                                body: 'You can now receive notifications.',
+                                icon: '/favicon.ico' // Optional icon
+                            });
+                        }
+                    });
+                } else {
+                    statusElement.textContent = `Current permission: ${Notification.permission}`;
+                }
+            } else {
+                statusElement.textContent = 'Notifications not supported in this browser.';
+            }
+        }
+
+        // Request permission on page load
+        window.addEventListener('load', requestNotificationPermission);
+    </script>
+</body>
+</html>
