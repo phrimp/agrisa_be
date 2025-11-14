@@ -229,8 +229,9 @@ type DataRequest struct {
 	DataSource                   models.DataSource
 	FarmID                       uuid.UUID
 	FarmCoordinates              [][]float64 // GeoJSON polygon coordinates (first ring only)
-	StartDate                    string      // YYYY-MM-DD format
-	EndDate                      string      // YYYY-MM-DD format
+	AgroPolygonID                string
+	StartDate                    string // YYYY-MM-DD format
+	EndDate                      string // YYYY-MM-DD format
 	BasePolicyTriggerConditionID uuid.UUID
 	MaxCloudCover                float64
 	MaxImages                    int
@@ -241,6 +242,7 @@ type DataRequest struct {
 type DataResponse struct {
 	DataSource     models.DataSource
 	MonitoringData []models.FarmMonitoringData
+	AgroPolygonID  string // Polygon ID from weather API for farm update
 	Err            error
 	SkipReason     string // Optional: reason for skipping (e.g., "unsupported_parameter")
 }
@@ -395,7 +397,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 	// Create HTTP client with timeout
 	httpClient := &http.Client{
-		Timeout: 30 * time.Second,
+		Timeout: 120 * time.Second,
 	}
 
 	// Start workers
@@ -409,6 +411,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 			DataSource:                   ds,
 			FarmID:                       farmID,
 			FarmCoordinates:              farmCoordinates,
+			AgroPolygonID:                farm.AgroPolygonID,
 			StartDate:                    startDateStr,
 			EndDate:                      endDateStr,
 			BasePolicyTriggerConditionID: uuid.Nil, // Will be set by trigger conditions
@@ -423,6 +426,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	allMonitoringData := []models.FarmMonitoringData{}
 	errorSummary := make(map[string]error)
 	skipSummary := make(map[string]string)
+	var agroPolygonID string // Store polygon ID from weather API
 
 	for i := 0; i < len(dataSources); i++ {
 		resp := <-results
@@ -440,6 +444,15 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 				"reason", resp.SkipReason)
 		} else {
 			allMonitoringData = append(allMonitoringData, resp.MonitoringData...)
+
+			// Capture polygon ID from weather API response (if available)
+			if resp.AgroPolygonID != "" && agroPolygonID == "" {
+				agroPolygonID = resp.AgroPolygonID
+				slog.Info("Captured Agro polygon ID from weather API",
+					"polygon_id", agroPolygonID,
+					"parameter", resp.DataSource.ParameterName)
+			}
+
 			slog.Info("Data source fetch succeeded",
 				"parameter", resp.DataSource.ParameterName,
 				"records_fetched", len(resp.MonitoringData))
@@ -454,6 +467,23 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		slog.Info("Monitoring data stored successfully",
 			"farm_id", farmID,
 			"total_records", len(allMonitoringData))
+	}
+
+	// Update farm's AgroPolygonID if we received one from weather API
+	if agroPolygonID != "" && farm.AgroPolygonID != agroPolygonID {
+		// Update farm with new polygon ID
+		farm.AgroPolygonID = agroPolygonID
+		if err := s.farmService.UpdateFarm(ctx, farm, "system", farmID.String()); err != nil {
+			// Log error but don't fail the entire job
+			slog.Error("Failed to update farm AgroPolygonID",
+				"farm_id", farmID,
+				"polygon_id", agroPolygonID,
+				"error", err)
+		} else {
+			slog.Info("Updated farm AgroPolygonID successfully",
+				"farm_id", farmID,
+				"polygon_id", agroPolygonID)
+		}
 	}
 
 	// Log summary
@@ -506,7 +536,7 @@ func fetchMonitoringDataWorker(
 		//	}
 
 		// Fetch data with retry logic
-		monitoringData, err := fetchDataWithRetry(
+		monitoringData, polygonID, err := fetchDataWithRetry(
 			httpClient,
 			*response.DataSource.APIEndpoint,
 			req,
@@ -517,6 +547,7 @@ func fetchMonitoringDataWorker(
 			response.Err = err
 		} else {
 			response.MonitoringData = monitoringData
+			response.AgroPolygonID = polygonID
 		}
 
 		results <- response
@@ -529,7 +560,7 @@ func fetchDataWithRetry(
 	endpoint string,
 	req DataRequest,
 	maxRetries int,
-) ([]models.FarmMonitoringData, error) {
+) ([]models.FarmMonitoringData, string, error) {
 	var lastErr error
 
 	for attempt := 0; attempt <= maxRetries; attempt++ {
@@ -545,7 +576,7 @@ func fetchDataWithRetry(
 		if strings.Contains(endpoint, "satellite") {
 			data, err := fetchSatelliteData(client, endpoint, req)
 			if err == nil {
-				return data, nil
+				return data, "", nil // Satellite data doesn't return polygon ID
 			}
 
 			lastErr = err
@@ -554,9 +585,9 @@ func fetchDataWithRetry(
 				"parameter", req.DataSource.ParameterName,
 				"error", err)
 		} else if strings.Contains(endpoint, "weather") {
-			data, err := fetchWeatherData(client, endpoint, req)
+			data, polygonID, err := fetchWeatherData(client, endpoint, req)
 			if err == nil {
-				return data, nil
+				return data, polygonID, nil
 			}
 
 			lastErr = err
@@ -567,21 +598,21 @@ func fetchDataWithRetry(
 		}
 	}
 
-	return nil, fmt.Errorf("failed after %d retries: %w", maxRetries, lastErr)
+	return nil, "", fmt.Errorf("failed after %d retries: %w", maxRetries, lastErr)
 }
 
 func fetchWeatherData(client *http.Client,
 	endpoint string,
 	req DataRequest,
-) ([]models.FarmMonitoringData, error) {
+) ([]models.FarmMonitoringData, string, error) {
 	// Convert date strings (YYYY-MM-DD) to Unix timestamps
 	startTime, err := time.Parse("2006-01-02", req.StartDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse start date: %w", err)
+		return nil, "", fmt.Errorf("failed to parse start date: %w", err)
 	}
 	endTime, err := time.Parse("2006-01-02", req.EndDate)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse end date: %w", err)
+		return nil, "", fmt.Errorf("failed to parse end date: %w", err)
 	}
 
 	// Add one day to end date to include the entire day
@@ -589,14 +620,14 @@ func fetchWeatherData(client *http.Client,
 
 	// Extract first 4 coordinates for polygon (weather API expects 4 corners)
 	if len(req.FarmCoordinates) < 4 {
-		return nil, fmt.Errorf("insufficient coordinates: need at least 4 points, got %d", len(req.FarmCoordinates))
+		return nil, "", fmt.Errorf("insufficient coordinates: need at least 4 points, got %d", len(req.FarmCoordinates))
 	}
 
 	// Build query parameters for weather API
 	params := url.Values{}
 	for i := 0; i < 4 && i < len(req.FarmCoordinates); i++ {
 		if len(req.FarmCoordinates[i]) < 2 {
-			return nil, fmt.Errorf("invalid coordinate at index %d", i)
+			return nil, "", fmt.Errorf("invalid coordinate at index %d", i)
 		}
 		// Weather API expects lat/lon format
 		params.Set(fmt.Sprintf("lat%d", i+1), fmt.Sprintf("%.6f", req.FarmCoordinates[i][1]))
@@ -604,12 +635,13 @@ func fetchWeatherData(client *http.Client,
 	}
 	params.Set("start", strconv.FormatInt(startTime.Unix(), 10))
 	params.Set("end", strconv.FormatInt(endTime.Unix(), 10))
+	params.Set("polygon_id", req.AgroPolygonID)
 
 	// Create HTTP request
 	fullURL := endpoint + "?" + params.Encode()
 	httpReq, err := http.NewRequest("GET", fullURL, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return nil, "", fmt.Errorf("failed to create request: %w", err)
 	}
 
 	// Execute request with timeout
@@ -622,14 +654,14 @@ func fetchWeatherData(client *http.Client,
 	duration := time.Since(startRequestTime)
 
 	if err != nil {
-		return nil, fmt.Errorf("API request failed: %w", err)
+		return nil, "", fmt.Errorf("API request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	// Check HTTP status
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
+		return nil, "", fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(body))
 	}
 
 	// Parse response - UnifiedAPIResponse from weather service
@@ -655,12 +687,13 @@ func fetchWeatherData(client *http.Client,
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+		return nil, "", fmt.Errorf("failed to parse response: %w", err)
 	}
 
 	slog.Info("Weather API call completed",
 		"parameter", req.DataSource.ParameterName,
 		"data_points", apiResp.DataPointCount,
+		"polygon_id", apiResp.PolygonID,
 		"duration_ms", duration.Milliseconds())
 
 	// Convert to FarmMonitoringData models
@@ -704,9 +737,10 @@ func fetchWeatherData(client *http.Client,
 
 	slog.Info("Converted weather data to monitoring records",
 		"parameter", req.DataSource.ParameterName,
-		"records_created", len(monitoringData))
+		"records_created", len(monitoringData),
+		"polygon_id", apiResp.PolygonID)
 
-	return monitoringData, nil
+	return monitoringData, apiResp.PolygonID, nil
 }
 
 // fetchSatelliteData performs a single API call to satellite service

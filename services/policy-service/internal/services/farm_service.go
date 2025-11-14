@@ -275,7 +275,7 @@ func (s *FarmService) VerifyLandCertificateAPI(nationalIDInput string, token str
 	req.Host = s.config.VerifyLandCertificateHostAPI
 	slog.Info("sending request to Verify National ID API", "url", apiURl, "host", req.Host)
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		slog.Error("failed to send HTTP request", "error", err)
@@ -454,7 +454,7 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 
 	slog.Info("GetFarmPhotoJob: calling satellite service", "farm_id", farmID, "url", req.URL.String())
 
-	client := &http.Client{Timeout: 60 * time.Second}
+	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		slog.Error("GetFarmPhotoJob: failed to call satellite service", "farm_id", farmID, "error", err)

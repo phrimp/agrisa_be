@@ -32,7 +32,7 @@ func NewAgroService(cfg config.WeatherServiceConfig) IAgroService {
 func (a *AgroService) CreatePolygon(name string, coordinates [][2]float64) (*models.AgroPolygonResponse, error) {
 	if a.cfg.AgroAPIKey == "" {
 		log.Println("Agro API key not configured")
-		return nil, fmt.Errorf("Agro API key not configured")
+		return nil, fmt.Errorf("agro API key not configured")
 	}
 
 	// Convert coordinates to GeoJSON format
@@ -53,12 +53,12 @@ func (a *AgroService) CreatePolygon(name string, coordinates [][2]float64) (*mod
 
 	requestBody := models.AgroPolygonRequest{
 		Name: name,
-		GeoJSON: map[string]interface{}{
+		GeoJSON: map[string]any{
 			"type":       "Feature",
-			"properties": map[string]interface{}{},
-			"geometry": map[string]interface{}{
+			"properties": map[string]any{},
+			"geometry": map[string]any{
 				"type":        "Polygon",
-				"coordinates": []interface{}{geoJSONCoords},
+				"coordinates": []any{geoJSONCoords},
 			},
 		},
 	}
@@ -94,7 +94,7 @@ func (a *AgroService) CreatePolygon(name string, coordinates [][2]float64) (*mod
 
 	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
 		log.Printf("Agro API returned non-success status: %d, body: %s", resp.StatusCode, string(body))
-		return nil, fmt.Errorf("Agro API error: %s", string(body))
+		return nil, fmt.Errorf("agro API error: %s", string(body))
 	}
 
 	var polygonResp models.AgroPolygonResponse
@@ -111,7 +111,7 @@ func (a *AgroService) CreatePolygon(name string, coordinates [][2]float64) (*mod
 func (a *AgroService) GetPolygon(polygonID string) (*models.AgroPolygonResponse, error) {
 	if a.cfg.AgroAPIKey == "" {
 		log.Println("Agro API key not configured")
-		return nil, fmt.Errorf("Agro API key not configured")
+		return nil, fmt.Errorf("agro API key not configured")
 	}
 
 	url := fmt.Sprintf("%s/polygons/%s?appid=%s", a.cfg.AgroAPIBaseURL, polygonID, a.cfg.AgroAPIKey)
