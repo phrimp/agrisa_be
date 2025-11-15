@@ -401,7 +401,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	}
 
 	// Start workers
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		go fetchMonitoringDataWorker(jobs, results, httpClient)
 	}
 
