@@ -633,8 +633,8 @@ func (s *FarmService) FarmJobRecovery() error {
 	// 1. Get all farms from database
 	farms, err := s.farmRepository.GetAll(context.Background())
 	if err != nil {
-		slog.Error("FarmJobRecovery: failed to get all farms", "error", err)
-		return fmt.Errorf("failed to get all farms: %w", err)
+		slog.Error("FarmJobRecovery: failed to get all farms, skipping", "error", err)
+		return nil
 	}
 
 	slog.Info("FarmJobRecovery: found farms to recover", "farm_count", len(farms))
