@@ -1022,6 +1022,8 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 	request.RegisteredPolicy.PremiumPaidByFarmer = false
 
 	calculatedTotalPremium := s.calculateFarmerPremium(farm.AreaSqm, completeBasePolicy.BasePolicy.PremiumBaseRate, completeBasePolicy.BasePolicy.FixPremiumAmount)
+	calculateCoverageAmount := s.calculateCoverageAmount(completeBasePolicy.BasePolicy.PayoutBaseRate, farm.AreaSqm, completeBasePolicy.BasePolicy.FixPayoutAmount, completeBasePolicy.BasePolicy.IsPerHectare)
+	request.RegisteredPolicy.CoverageAmount = calculateCoverageAmount
 
 	// validate register policy
 	err = s.validateRegisteredPolicy(&request.RegisteredPolicy, completeBasePolicy.Metadata.TotalDataCost, calculatedTotalPremium)
@@ -1119,6 +1121,13 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 		RegisterPolicyID:             request.RegisteredPolicy.ID.String(),
 		SignedPolicyDocumentLocation: signedDocumentLocation,
 	}, nil
+}
+
+func (s *RegisteredPolicyService) calculateCoverageAmount(payoutBaseRate, hectare float64, baseCoverageAmount int, isPerHactare bool) float64 {
+	if isPerHactare {
+		return float64(baseCoverageAmount) * hectare * payoutBaseRate
+	}
+	return float64(baseCoverageAmount) * payoutBaseRate
 }
 
 func (s *RegisteredPolicyService) calculateFarmerPremium(areasqm, basePremiumRate float64, fixPremiumAmount int) float64 {
