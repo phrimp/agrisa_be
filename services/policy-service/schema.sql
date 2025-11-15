@@ -136,7 +136,7 @@ CREATE TABLE farm (
     -- Location
     boundary GEOMETRY(Polygon, 4326),
     center_location GEOGRAPHY(Point, 4326),
-    agro_polygon_id VARCHAR(50);
+    agro_polygon_id VARCHAR(50),
     area_sqm DECIMAL(12,2) NOT NULL,
     
     -- Address
