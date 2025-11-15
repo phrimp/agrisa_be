@@ -424,8 +424,8 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 	// Collect results from all workers
 	allMonitoringData := []models.FarmMonitoringData{}
-	errorSummary := make(map[string]error)
-	skipSummary := make(map[string]string)
+	errorSummary := make(map[models.DataSourceParameterName]error)
+	skipSummary := make(map[models.DataSourceParameterName]string)
 	var agroPolygonID string // Store polygon ID from weather API
 
 	for i := 0; i < len(dataSources); i++ {
@@ -1086,6 +1086,33 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 			}
 			break
 		}
+		currentTime := time.Now()
+		previousYearTime := currentTime.AddDate(-1, 0, 0)
+		formattedTime := currentTime.Format("2006-01-02")
+		previousYearFormattedTime := previousYearTime.Format("2006-01-02")
+
+		// send job
+		fullYearJob := worker.JobPayload{
+			JobID:      uuid.NewString(),
+			Type:       "fetch-farm-monitoring-data",
+			Params:     map[string]any{"policy_id": request.RegisteredPolicy.ID, "base_policy_id": completeBasePolicy.BasePolicy.ID, "farm_id": farm.ID, "start_date": previousYearFormattedTime, "end_date": formattedTime},
+			MaxRetries: 10,
+			OneTime:    true,
+			RunNow:     true,
+		}
+		everydayJob := worker.JobPayload{
+			JobID:      uuid.NewString(),
+			Type:       "fetch-farm-monitoring-data",
+			Params:     map[string]any{"policy_id": request.RegisteredPolicy.ID, "base_policy_id": completeBasePolicy.BasePolicy.ID, "farm_id": farm.ID, "start_date": "", "end_date": "now"},
+			MaxRetries: 10,
+			OneTime:    false,
+		}
+		scheduler, ok := s.workerManager.GetSchedulerByPolicyID(request.RegisteredPolicy.ID)
+		if !ok {
+			slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist")
+		}
+		scheduler.AddJob(fullYearJob)
+		scheduler.AddJob(everydayJob)
 	}()
 
 	return &models.RegisterAPolicyResponse{

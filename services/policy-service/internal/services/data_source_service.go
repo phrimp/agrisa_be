@@ -3,6 +3,7 @@ package services
 import (
 	"fmt"
 	"log/slog"
+	"policy-service/internal/config"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 
@@ -10,12 +11,14 @@ import (
 )
 
 type DataSourceService struct {
-	repo *repository.DataSourceRepository
+	repo   *repository.DataSourceRepository
+	config *config.PolicyServiceConfig
 }
 
-func NewDataSourceService(repo *repository.DataSourceRepository) *DataSourceService {
+func NewDataSourceService(repo *repository.DataSourceRepository, cfg *config.PolicyServiceConfig) *DataSourceService {
 	return &DataSourceService{
-		repo: repo,
+		repo:   repo,
+		config: cfg,
 	}
 }
 
@@ -42,6 +45,19 @@ func (s *DataSourceService) CreateDataSource(dataSource *models.DataSource) erro
 	// Set default values
 	dataSource.IsActive = true
 
+	if dataSource.DataSource == models.DataSourceSatellite {
+		var url string
+		if dataSource.ParameterName == models.NDVI {
+			url = s.config.SatelliteDataServiceURL + string(models.SatelliteNDVI)
+		}
+		if dataSource.ParameterName == models.NDMI {
+			url = s.config.SatelliteDataServiceURL + string(models.SatelliteNDMI)
+		}
+		if dataSource.ParameterName == models.RainFall {
+			url = s.config.WeatherDataServiceURL + string(models.WeatherRainFall)
+		}
+		dataSource.APIEndpoint = &url
+	}
 	return s.repo.CreateDataSource(dataSource)
 }
 
