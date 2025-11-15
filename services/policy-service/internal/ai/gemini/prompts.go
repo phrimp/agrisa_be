@@ -544,3 +544,5 @@ Your goal: Ensure the system operates exactly as the PDF contract states. Any de
 
 BEGIN YOUR JSON OUTPUT NOW (start with opening brace):
 `
+
+const RiskAnalysisPromptTemplate = ""

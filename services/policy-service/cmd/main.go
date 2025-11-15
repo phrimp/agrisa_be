@@ -17,6 +17,7 @@ import (
 	"policy-service/internal/repository"
 	"policy-service/internal/services"
 	"policy-service/internal/worker"
+	"strings"
 	"syscall"
 	"time"
 
@@ -97,9 +98,13 @@ func main() {
 		log.Printf("error connect to redis: %s", err)
 	}
 
-	geminiClient, err := gemini.NewGenAIClient(cfg.GeminiAPICfg.APIKey, cfg.GeminiAPICfg.FlashName, cfg.GeminiAPICfg.ProName)
-	if err != nil {
-		slog.Error("error initializing gemini client", "error", err)
+	keys := strings.Split(cfg.GeminiAPICfg.APIKey, ",")
+	for _, key := range keys {
+		geminiClient, err := gemini.NewGenAIClient(key, cfg.GeminiAPICfg.FlashName, cfg.GeminiAPICfg.ProName)
+		if err != nil {
+			slog.Error("error initializing gemini client", "error", err)
+		}
+		gemini.GeminiClients = append(gemini.GeminiClients, *geminiClient)
 	}
 
 	// Initialize MinIO client
@@ -124,7 +129,7 @@ func main() {
 	// Initialize services
 	dataTierService := services.NewDataTierService(dataTierRepo)
 	dataSourceService := services.NewDataSourceService(dataSourceRepo, cfg)
-	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, geminiClient)
+	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, gemini.GeminiClients)
 	farmService := services.NewFarmService(farmRepo, cfg, minioClient, workerManager)
 	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo)

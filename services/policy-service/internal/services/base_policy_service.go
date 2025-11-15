@@ -23,16 +23,16 @@ type BasePolicyService struct {
 	dataSourceRepo *repository.DataSourceRepository
 	dataTierRepo   *repository.DataTierRepository
 	minioClient    *minio.MinioClient
-	geminiClient   *gemini.GeminiClient
+	geminiSelector *gemini.GeminiClientSelector
 }
 
-func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient, geminiClient *gemini.GeminiClient) *BasePolicyService {
+func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient, geminiClients []gemini.GeminiClient) *BasePolicyService {
 	return &BasePolicyService{
 		basePolicyRepo: basePolicyRepo,
 		dataSourceRepo: dataSourceRepo,
 		dataTierRepo:   dataTierRepo,
 		minioClient:    minioClient,
-		geminiClient:   geminiClient,
+		geminiSelector: gemini.NewGeminiClientSelector(geminiClients),
 	}
 }
 

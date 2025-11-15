@@ -4,6 +4,7 @@ import (
 	utils "agrisa_utils"
 	"errors"
 	"log"
+	"log/slog"
 	"net/http"
 	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
@@ -79,6 +80,7 @@ func (h *FarmHandler) GetFarmByID(c fiber.Ctx) error {
 func (h *FarmHandler) CreateFarm(c fiber.Ctx) error {
 	var farm models.Farm
 	if err := c.Bind().JSON(&farm); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return fiber.NewError(fiber.StatusBadRequest, "Invalid request body")
 	}
 
@@ -130,6 +132,7 @@ func (h *FarmHandler) CreateFarm(c fiber.Ctx) error {
 func (h *FarmHandler) UpdateFarm(c fiber.Ctx) error {
 	var farm models.Farm
 	if err := c.Bind().JSON(&farm); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "Invalid request body"))
 	}
 

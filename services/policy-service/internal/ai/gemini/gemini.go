@@ -11,6 +11,8 @@ import (
 	"google.golang.org/api/option"
 )
 
+var GeminiClients []GeminiClient
+
 type GeminiClient struct {
 	Client     *genai.Client
 	FlashModel *genai.GenerativeModel
@@ -64,4 +66,23 @@ func (g *GeminiClient) SendAIWithPDF(ctx context.Context, prompt string, data ma
 		return nil, fmt.Errorf("failed to unmarshal AI response to JSON: %w. \nRaw response was: %s", err, aiResponse)
 	}
 	return resultMap, nil
+}
+
+// SendAIWithPDFAndRetry attempts the request with automatic failover across multiple clients
+func SendAIWithPDFAndRetry(ctx context.Context, prompt string, data map[string]any, selector *GeminiClientSelector) (map[string]any, error) {
+	var result map[string]any
+
+	err := selector.TryAllClients(func(client *GeminiClient, clientIdx int) error {
+		resp, err := client.SendAIWithPDF(ctx, prompt, data)
+		if err != nil {
+			return err
+		}
+		result = resp
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }

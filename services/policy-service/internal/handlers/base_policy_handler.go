@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/base64"
 	"fmt"
-	"log"
 	"log/slog"
 	"net/http"
 	"policy-service/internal/database/minio"
@@ -81,8 +80,7 @@ func (bph *BasePolicyHandler) GetAllActivePolicy(c fiber.Ctx) error {
 func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 	var req models.CompletePolicyCreationRequest
 	if err := c.Bind().Body(&req); err != nil {
-		// add logging
-		log.Printf("Error binding request body: %v", err)
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 	createdBy := c.Get("X-User-ID")
@@ -196,6 +194,7 @@ func (bph *BasePolicyHandler) GetDraftPoliciesWithFilter(c fiber.Ctx) error {
 func (bph *BasePolicyHandler) ValidatePolicy(c fiber.Ctx) error {
 	var req models.ValidatePolicyRequest
 	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 
@@ -218,6 +217,7 @@ func (bph *BasePolicyHandler) ValidatePolicy(c fiber.Ctx) error {
 func (bph *BasePolicyHandler) CommitPolicies(c fiber.Ctx) error {
 	var req models.CommitPoliciesRequest
 	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 
@@ -293,6 +293,7 @@ func (bph *BasePolicyHandler) UpdateBasePolicyValidationStatus(c fiber.Ctx) erro
 	}
 
 	if err := c.Bind().Body(&updateReq); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 
