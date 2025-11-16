@@ -35,6 +35,8 @@ type farmRow struct {
 	TakenAt     *int64     `db:"taken_at"`
 }
 
+var MinioResourceURL = "evolblob.phrimp.io.vn/"
+
 func (r *FarmRepository) Create(farm *models.Farm) error {
 	if farm.ID == uuid.Nil {
 		farm.ID = uuid.New()
@@ -158,7 +160,7 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 			farm.FarmPhotos = append(farm.FarmPhotos, models.FarmPhoto{
 				ID:        *row.FarmPhotoID,
 				FarmID:    *row.FarmID,
-				PhotoURL:  *row.PhotoURL,
+				PhotoURL:  MinioResourceURL + *row.PhotoURL,
 				PhotoType: models.PhotoType(*row.PhotoType),
 				TakenAt:   row.TakenAt,
 			})
@@ -285,7 +287,7 @@ func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]mo
 			photo := models.FarmPhoto{
 				ID:        *row.FarmPhotoID,
 				FarmID:    *row.FarmID,
-				PhotoURL:  *row.PhotoURL,
+				PhotoURL:  MinioResourceURL + *row.PhotoURL,
 				PhotoType: models.PhotoType(*row.PhotoType),
 				TakenAt:   row.TakenAt,
 			}
