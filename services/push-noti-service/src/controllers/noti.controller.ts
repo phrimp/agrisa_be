@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
-import { Controller, Post, Body, Inject } from '@nestjs/common';
+import { Controller, Post, Body, Inject, Get, Headers } from '@nestjs/common';
 import type { IPushNotificationService } from 'src/services/push-notification.service';
 import type { ISubscriberService } from 'src/services/subscriber.service';
 
-@Controller('push-noti/public')
+@Controller('push-noti')
 export class NotiController {
   constructor(
     @Inject('IPushNotificationService')
@@ -13,8 +13,15 @@ export class NotiController {
     private readonly subscriberService: ISubscriberService,
   ) {}
 
+  @Get('/protected/permission')
+  getPermission(@Headers('x-user-id') user_id: string) {
+    return {
+      return_url: `https://agrisa-noti.phrimp.io.vn?user_id=${user_id}`,
+    };
+  }
+
   // Đăng ký Expo token
-  @Post('subscribe/expo')
+  @Post('/public/subscribe/expo')
   async subscribeExpo(@Body() body: { expo_token: string; user_id: string }) {
     return await this.subscriberService.registerSubscriber({
       expo_token: body.expo_token,
@@ -24,7 +31,7 @@ export class NotiController {
   }
 
   // Đăng ký Web Push subscription
-  @Post('subscribe/web')
+  @Post('/public/subscribe/web')
   async subscribeWeb(
     @Body()
     body: {
@@ -43,7 +50,7 @@ export class NotiController {
   }
 
   // Gửi notification cho một user cụ thể
-  @Post('send/user')
+  @Post('/public/send/user')
   async sendToUser(
     @Body()
     body: {
@@ -62,7 +69,7 @@ export class NotiController {
   }
 
   // Gửi notification cho nhiều users
-  @Post('send/users')
+  @Post('/public/send/users')
   async sendToUsers(
     @Body()
     body: {
@@ -81,7 +88,7 @@ export class NotiController {
   }
 
   // Gửi notification cho tất cả users
-  @Post('send/all')
+  @Post('/public/send/all')
   async sendToAll(
     @Body()
     body: {
