@@ -148,7 +148,13 @@ func (m *WorkerManagerV2) CreatePolicyWorkerInfrastructure(
 	if !exists {
 		return fmt.Errorf("job handler not registered: fetch-farm-monitoring-data")
 	}
+	riskHandler, exists := m.GetJobHandler("risk-analysis")
+	if !exists {
+		return fmt.Errorf("job handler not registered: risk-analysis")
+	}
+
 	pool.RegisterJob("fetch-farm-monitoring-data", handler)
+	pool.RegisterJob("risk-analysis", riskHandler)
 
 	// 2. Create scheduler
 	schedulerName := fmt.Sprintf("policy-%s-scheduler", registeredPolicy.ID)
