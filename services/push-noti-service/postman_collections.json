@@ -1,0 +1,154 @@
+{
+  "info": {
+    "name": "Push Notification Service API",
+    "description": "API documentation for the Push Notification Service built with NestJS. This service handles push notifications for Expo (mobile) and Web Push subscriptions.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Root",
+      "item": [
+        {
+          "name": "Get Hello",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/",
+              "host": ["{{base_url}}"],
+              "path": [""]
+            },
+            "description": "Basic health check endpoint that returns a hello message."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subscription",
+      "item": [
+        {
+          "name": "Subscribe Expo Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expo_token\": \"ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]\",\n  \"user_id\": \"user123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/pushed-noti/subscribe/expo",
+              "host": ["{{base_url}}"],
+              "path": ["pushed-noti", "subscribe", "expo"]
+            },
+            "description": "Register a user with their Expo push token for mobile notifications."
+          }
+        },
+        {
+          "name": "Subscribe Web Push",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"endpoint\": \"https://fcm.googleapis.com/fcm/send/...\",\n  \"keys\": {\n    \"p256dh\": \"base64-encoded-public-key\",\n    \"auth\": \"base64-encoded-auth-secret\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/pushed-noti/subscribe/web",
+              "host": ["{{base_url}}"],
+              "path": ["pushed-noti", "subscribe", "web"]
+            },
+            "description": "Register a user with their Web Push subscription for browser notifications."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Send Notifications",
+      "item": [
+        {
+          "name": "Send to Specific User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"title\": \"Notification Title\",\n  \"body\": \"Notification message content\",\n  \"data\": {\n    \"customField\": \"customValue\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/pushed-noti/send/user",
+              "host": ["{{base_url}}"],
+              "path": ["pushed-noti", "send", "user"]
+            },
+            "description": "Send a push notification to a specific user by their user ID."
+          }
+        },
+        {
+          "name": "Send to Multiple Users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_ids\": [\"user123\", \"user456\"],\n  \"title\": \"Notification Title\",\n  \"body\": \"Notification message content\",\n  \"data\": {\n    \"customField\": \"customValue\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/pushed-noti/send/users",
+              "host": ["{{base_url}}"],
+              "path": ["pushed-noti", "send", "users"]
+            },
+            "description": "Send a push notification to multiple users by their user IDs."
+          }
+        },
+        {
+          "name": "Send to All Users",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Notification Title\",\n  \"body\": \"Notification message content\",\n  \"data\": {\n    \"customField\": \"customValue\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/pushed-noti/send/all",
+              "host": ["{{base_url}}"],
+              "path": ["pushed-noti", "send", "all"]
+            },
+            "description": "Send a push notification to all registered users."
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:3000",
+      "type": "string"
+    }
+  ]
+}

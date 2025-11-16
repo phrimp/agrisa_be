@@ -6,13 +6,25 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-@Entity('fmc')
-export class Fmc {
+@Entity('subscribers')
+export class Subscriber {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ type: 'varchar', length: 255 })
-  fmc_token: string;
+  expo_token: string;
+
+  @Column({ type: 'varchar', length: 255 })
+  type: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  p256dh: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  auth: string;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  endpoint: string;
 
   @Column({ type: 'varchar', length: 255 })
   user_id: string;
