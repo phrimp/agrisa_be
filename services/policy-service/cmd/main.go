@@ -126,13 +126,16 @@ func main() {
 	// Initialize WorkerManagerV2
 	workerManager := worker.NewWorkerManagerV2(db, redisClient)
 
+	// Initialize Gemini client selector for AI operations
+	geminiSelector := gemini.NewGeminiClientSelector(gemini.GeminiClients)
+
 	// Initialize services
 	dataTierService := services.NewDataTierService(dataTierRepo)
 	dataSourceService := services.NewDataSourceService(dataSourceRepo, cfg)
 	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, gemini.GeminiClients)
 	farmService := services.NewFarmService(farmRepo, cfg, minioClient, workerManager)
 	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
-	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo)
+	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, geminiSelector)
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
 
 	// Expiration Listener
@@ -163,6 +166,7 @@ func main() {
 	workerManager.RegisterJobHandler("fetch-farm-monitoring-data", registeredPolicyService.FetchFarmMonitoringDataJob)
 	workerManager.RegisterJobHandler("document-validation", basePolicyService.AIPolicyValidationJob)
 	workerManager.RegisterJobHandler("farm-imagery", farmService.GetFarmPhotoJob)
+	workerManager.RegisterJobHandler("risk-analysis", registeredPolicyService.RiskAnalysisJob)
 	worker.AIWorkerPoolUUID, err = workerManager.CreateAIWorkerInfrastructure(workerManager.ManagerContext())
 	if err != nil {
 		slog.Error("error create AI worker pool", "error", err)

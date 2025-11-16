@@ -10,6 +10,8 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"policy-service/internal/ai/gemini"
+	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
@@ -30,6 +32,8 @@ type RegisteredPolicyService struct {
 	pdfDocumentService     *PDFService
 	dataSourceRepo         *repository.DataSourceRepository
 	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository
+	minioClient            *minio.MinioClient
+	geminiSelector         *gemini.GeminiClientSelector
 }
 
 // NewRegisteredPolicyService creates a new registered policy service
@@ -42,15 +46,20 @@ func NewRegisteredPolicyService(
 	pdfDocumentService *PDFService,
 	dataSourceRepo *repository.DataSourceRepository,
 	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository,
+	minioClient *minio.MinioClient,
+	geminiSelector *gemini.GeminiClientSelector,
 ) *RegisteredPolicyService {
 	return &RegisteredPolicyService{
-		registeredPolicyRepo: registeredPolicyRepo,
-		basePolicyRepo:       basePolicyRepo,
-		basePolicyService:    basePolicyService,
-		farmService:          farmService,
-		workerManager:        workerManager,
-		pdfDocumentService:   pdfDocumentService,
-		dataSourceRepo:       dataSourceRepo,
+		registeredPolicyRepo:   registeredPolicyRepo,
+		basePolicyRepo:         basePolicyRepo,
+		basePolicyService:      basePolicyService,
+		farmService:            farmService,
+		workerManager:          workerManager,
+		pdfDocumentService:     pdfDocumentService,
+		dataSourceRepo:         dataSourceRepo,
+		farmMonitoringDataRepo: farmMonitoringDataRepo,
+		minioClient:            minioClient,
+		geminiSelector:         geminiSelector,
 	}
 }
 
@@ -505,6 +514,22 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	if len(errorSummary) == len(dataSources) {
 		return fmt.Errorf("all %d data sources failed to fetch", len(dataSources))
 	}
+
+	riskAnalysisJob := worker.JobPayload{
+		JobID:      uuid.NewString(),
+		Type:       "risk-analysis",
+		Params:     map[string]any{"registered_policy_id": policyID, "force_reanalysis": false},
+		MaxRetries: 10,
+		OneTime:    true,
+		RunNow:     true,
+	}
+
+	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(policyID)
+	if !ok {
+		slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist")
+	}
+
+	scheduler.AddJob(riskAnalysisJob)
 
 	return nil
 }

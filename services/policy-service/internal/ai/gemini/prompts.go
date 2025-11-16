@@ -898,7 +898,7 @@ Analyze weather data around policy start:
 Generate a JSON response matching the RegisteredPolicyRiskAnalysis model structure:
 
 {
-  "analysis_status": "passed" | "passed_ai" | "failed" | "warning",
+  "analysis_status": "passed_ai" | "failed" | "warning",
   "analysis_type": "ai_model",
   "analysis_source": "Agricultural Risk AI Analyzer v2.0 - Multi-Parameter",
   "analysis_timestamp": <current_unix_timestamp>,
@@ -954,8 +954,7 @@ Higher score = higher risk (concerning)
 - 76-100: CRITICAL
 
 **Analysis Status Decision:**
-- "passed": Risk ≤40 AND fraud <30 AND no critical flags
-- "passed_ai": Risk ≤50 AND fraud <40 AND minor warnings
+- "passed_ai": Risk ≤50 AND fraud <40 AND no critical flags
 - "warning": Risk 51-75 OR fraud 40-60
 - "failed": Risk >75 OR fraud >60 OR critical indicators
 
@@ -1166,25 +1165,33 @@ func formatFarmPhotosWithImages(photos []models.FarmPhoto, imageData []string) s
 		return "No farm photos available."
 	}
 
+	if len(photos) != len(imageData) {
+		return fmt.Sprintf("Photo data mismatch: %d photos but %d image data entries.", len(photos), len(imageData))
+	}
+
 	var builder strings.Builder
 	builder.WriteString("[\n")
 
 	for i, photo := range photos {
+		// Escape JSON strings properly
+		escapedPhotoURL, _ := json.Marshal(photo.PhotoURL)
+		escapedImageData, _ := json.Marshal(imageData[i])
+
 		photoJSON := fmt.Sprintf(`  {
     "id": "%s",
     "farm_id": "%s",
     "photo_type": "%s",
     "taken_at": %d,
-    "photo_url": "%s",
-    "image_base64": "%s",
+    "photo_url": %s,
+    "image_base64": %s,
     "created_at": "%s"
   }`,
 			photo.ID,
 			photo.FarmID,
 			photo.PhotoType,
 			int64PtrOrZero(photo.TakenAt),
-			photo.PhotoURL,
-			imageData[i], // Placeholder - replace with actual base64 data
+			string(escapedPhotoURL),
+			string(escapedImageData),
 			photo.CreatedAt.Format(time.RFC3339),
 		)
 
@@ -1277,11 +1284,14 @@ func formatConditionsWithDataSources(
 		ds, exists := dataSources[cond.DataSourceID.String()]
 		paramName := "unknown"
 		unit := "unknown"
+		dataSourceWarning := ""
 		if exists {
 			paramName = string(ds.ParameterName)
 			if ds.Unit != nil {
 				unit = *ds.Unit
 			}
+		} else {
+			dataSourceWarning = fmt.Sprintf("WARNING: Data source %s not found in provided map", cond.DataSourceID.String())
 		}
 
 		condJSON := fmt.Sprintf(`  {
@@ -1299,7 +1309,8 @@ func formatConditionsWithDataSources(
     "baseline_window_days": %d,
     "baseline_function": "%s",
     "include_component": %t,
-    "data_cost": %.2f
+    "data_cost": %.2f,
+    "data_source_warning": "%s"
   }`,
 			cond.ID,
 			cond.ConditionOrder,
@@ -1316,6 +1327,7 @@ func formatConditionsWithDataSources(
 			aggregationFunctionPtrOrEmpty(cond.BaselineFunction),
 			cond.IncludeComponent,
 			cond.CalculatedCost,
+			dataSourceWarning,
 		)
 
 		builder.WriteString(condJSON)

@@ -434,3 +434,170 @@ func (r *RegisteredPolicyRepository) GetByFarmIDTx(tx *sqlx.Tx, farmID uuid.UUID
 
 	return policies, nil
 }
+
+// ============================================================================
+// RISK ANALYSIS OPERATIONS
+// ============================================================================
+
+// CreateRiskAnalysis creates a new risk analysis record for a registered policy
+func (r *RegisteredPolicyRepository) CreateRiskAnalysis(analysis *models.RegisteredPolicyRiskAnalysis) error {
+	if analysis.ID == uuid.Nil {
+		analysis.ID = uuid.New()
+	}
+	analysis.CreatedAt = time.Now()
+
+	slog.Info("Creating risk analysis record",
+		"id", analysis.ID,
+		"registered_policy_id", analysis.RegisteredPolicyID,
+		"analysis_status", analysis.AnalysisStatus,
+		"analysis_type", analysis.AnalysisType)
+
+	query := `
+		INSERT INTO registered_policy_risk_analysis (
+			id, registered_policy_id, analysis_status, analysis_type,
+			analysis_source, analysis_timestamp, overall_risk_score,
+			overall_risk_level, identified_risks, recommendations,
+			raw_output, analysis_notes, created_at
+		) VALUES (
+			:id, :registered_policy_id, :analysis_status, :analysis_type,
+			:analysis_source, :analysis_timestamp, :overall_risk_score,
+			:overall_risk_level, :identified_risks, :recommendations,
+			:raw_output, :analysis_notes, :created_at
+		)`
+
+	_, err := r.db.NamedExec(query, analysis)
+	if err != nil {
+		slog.Error("Failed to create risk analysis record",
+			"id", analysis.ID,
+			"registered_policy_id", analysis.RegisteredPolicyID,
+			"error", err)
+		return fmt.Errorf("failed to create risk analysis: %w", err)
+	}
+
+	slog.Info("Successfully created risk analysis record", "id", analysis.ID)
+	return nil
+}
+
+// GetRiskAnalysesByPolicyID retrieves all risk analyses for a specific registered policy
+func (r *RegisteredPolicyRepository) GetRiskAnalysesByPolicyID(policyID uuid.UUID) ([]models.RegisteredPolicyRiskAnalysis, error) {
+	slog.Debug("Retrieving risk analyses by policy ID", "registered_policy_id", policyID)
+
+	var analyses []models.RegisteredPolicyRiskAnalysis
+	query := `
+		SELECT * FROM registered_policy_risk_analysis
+		WHERE registered_policy_id = $1
+		ORDER BY analysis_timestamp DESC`
+
+	err := r.db.Select(&analyses, query, policyID)
+	if err != nil {
+		slog.Error("Failed to get risk analyses by policy ID",
+			"registered_policy_id", policyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get risk analyses: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved risk analyses",
+		"registered_policy_id", policyID,
+		"count", len(analyses))
+	return analyses, nil
+}
+
+// GetLatestRiskAnalysis retrieves the most recent risk analysis for a policy
+func (r *RegisteredPolicyRepository) GetLatestRiskAnalysis(policyID uuid.UUID) (*models.RegisteredPolicyRiskAnalysis, error) {
+	slog.Debug("Retrieving latest risk analysis", "registered_policy_id", policyID)
+
+	var analysis models.RegisteredPolicyRiskAnalysis
+	query := `
+		SELECT * FROM registered_policy_risk_analysis
+		WHERE registered_policy_id = $1
+		ORDER BY analysis_timestamp DESC
+		LIMIT 1`
+
+	err := r.db.Get(&analysis, query, policyID)
+	if err != nil {
+		slog.Error("Failed to get latest risk analysis",
+			"registered_policy_id", policyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get latest risk analysis: %w", err)
+	}
+
+	return &analysis, nil
+}
+
+// UpdateUnderwritingStatus updates the underwriting status of a registered policy
+func (r *RegisteredPolicyRepository) UpdateUnderwritingStatus(policyID uuid.UUID, status models.UnderwritingStatus) error {
+	slog.Info("Updating underwriting status",
+		"registered_policy_id", policyID,
+		"new_status", status)
+
+	query := `
+		UPDATE registered_policy
+		SET underwriting_status = $1, updated_at = $2
+		WHERE id = $3`
+
+	result, err := r.db.Exec(query, status, time.Now(), policyID)
+	if err != nil {
+		slog.Error("Failed to update underwriting status",
+			"registered_policy_id", policyID,
+			"error", err)
+		return fmt.Errorf("failed to update underwriting status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		slog.Warn("Registered policy not found for underwriting status update",
+			"registered_policy_id", policyID)
+		return fmt.Errorf("registered policy not found")
+	}
+
+	slog.Info("Successfully updated underwriting status",
+		"registered_policy_id", policyID,
+		"new_status", status)
+	return nil
+}
+
+// GetRiskAnalysisByID retrieves a specific risk analysis by ID
+func (r *RegisteredPolicyRepository) GetRiskAnalysisByID(id uuid.UUID) (*models.RegisteredPolicyRiskAnalysis, error) {
+	slog.Debug("Retrieving risk analysis by ID", "id", id)
+
+	var analysis models.RegisteredPolicyRiskAnalysis
+	query := `SELECT * FROM registered_policy_risk_analysis WHERE id = $1`
+
+	err := r.db.Get(&analysis, query, id)
+	if err != nil {
+		slog.Error("Failed to get risk analysis by ID", "id", id, "error", err)
+		return nil, fmt.Errorf("failed to get risk analysis: %w", err)
+	}
+
+	return &analysis, nil
+}
+
+// DeleteRiskAnalysis deletes a risk analysis record
+func (r *RegisteredPolicyRepository) DeleteRiskAnalysis(id uuid.UUID) error {
+	slog.Info("Deleting risk analysis", "id", id)
+
+	query := `DELETE FROM registered_policy_risk_analysis WHERE id = $1`
+
+	result, err := r.db.Exec(query, id)
+	if err != nil {
+		slog.Error("Failed to delete risk analysis", "id", id, "error", err)
+		return fmt.Errorf("failed to delete risk analysis: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		slog.Warn("Risk analysis not found for deletion", "id", id)
+		return fmt.Errorf("risk analysis not found")
+	}
+
+	slog.Info("Successfully deleted risk analysis", "id", id)
+	return nil
+}
