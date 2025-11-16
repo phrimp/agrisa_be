@@ -151,20 +151,64 @@ const (
 type CancelRequestType string
 
 const (
-	CancelRequestTypeContractViolation CancelRequestType = "contract_violation"
-	CancelRequestTypeOther             CancelRequestType = "other"
+	CancelRequestTypeContractViolation  CancelRequestType = "contract_violation"
+	CancelRequestTypeOther              CancelRequestType = "other"
+	CancelRequestTypeNonPayment         CancelRequestType = "non_payment"
+	CancelRequestTypePolicyholderRequest CancelRequestType = "policyholder_request"
+	CancelRequestTypeRegulatoryChange   CancelRequestType = "regulatory_change"
 )
 
 type CancelRequestStatus string
 
 const (
-	CancelRequestStatusApproved   CancelRequestStatus = "approved"
-	CancelRequestStatusLitigation CancelRequestStatus = "litigation"
-	CancelRequestStatusDenied     CancelRequestStatus = "denied"
+	CancelRequestStatusApproved      CancelRequestStatus = "approved"
+	CancelRequestStatusLitigation    CancelRequestStatus = "litigation"
+	CancelRequestStatusDenied        CancelRequestStatus = "denied"
+	CancelRequestStatusPendingReview CancelRequestStatus = "pending_review"
 )
 
 type ClaimRejectionType string
 
 const (
 	ClaimRejectionTypeClaimDataIncorrect ClaimRejectionType = "claim_data_incorrect"
+	ClaimRejectionTypeTriggerNotMet      ClaimRejectionType = "trigger_not_met"
+	ClaimRejectionTypePolicyNotActive    ClaimRejectionType = "policy_not_active"
+	ClaimRejectionTypeLocationMismatch   ClaimRejectionType = "location_mismatch"
+	ClaimRejectionTypeDuplicateClaim     ClaimRejectionType = "duplicate_claim"
+	ClaimRejectionTypeSuspectedFraud     ClaimRejectionType = "suspected_fraud"
+	ClaimRejectionTypeOther              ClaimRejectionType = "other"
+)
+
+type DataSourceAPIAddress string
+
+const (
+	SatelliteNDVI   DataSourceAPIAddress = "/satellite/public/ndvi"
+	SatelliteNDMI   DataSourceAPIAddress = "/satellite/public/ndmi"
+	WeatherRainFall DataSourceAPIAddress = "/weather/public/api/v2/precipitation/polygon"
+)
+
+type DataSourceParameterName string
+
+const (
+	NDVI     DataSourceParameterName = "ndvi"
+	NDMI     DataSourceParameterName = "ndmi"
+	RainFall DataSourceParameterName = "rainfall"
+)
+
+type RiskAnalysisType string
+
+const (
+	RiskAnalysisTypeAIModel            RiskAnalysisType = "ai_model"
+	RiskAnalysisTypeDocumentValidation RiskAnalysisType = "document_validation"
+	RiskAnalysisTypeCrossReference     RiskAnalysisType = "cross_reference"
+	RiskAnalysisTypeManual             RiskAnalysisType = "manual"
+)
+
+type RiskLevel string
+
+const (
+	RiskLevelLow      RiskLevel = "low"
+	RiskLevelMedium   RiskLevel = "medium"
+	RiskLevelHigh     RiskLevel = "high"
+	RiskLevelCritical RiskLevel = "critical"
 )

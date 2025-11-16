@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 	"policy-service/internal/models"
 	"policy-service/internal/services"
@@ -55,6 +56,7 @@ func (dsh *DataSourceHandler) Register(app *fiber.App) {
 func (dsh *DataSourceHandler) CreateDataSource(c fiber.Ctx) error {
 	var req models.CreateDataSourceRequest
 	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 
@@ -92,6 +94,7 @@ func (dsh *DataSourceHandler) CreateDataSource(c fiber.Ctx) error {
 func (dsh *DataSourceHandler) CreateDataSourcesBatch(c fiber.Ctx) error {
 	var req models.CreateDataSourceBatchRequest
 	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 
@@ -216,6 +219,7 @@ func (dsh *DataSourceHandler) GetDataSourcesByParameterName(c fiber.Ctx) error {
 func (dsh *DataSourceHandler) GetDataSourcesWithFilters(c fiber.Ctx) error {
 	var req models.DataSourceFiltersRequest
 	if err := c.Bind().Query(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid query parameters"))
 	}
 
@@ -255,6 +259,7 @@ func (dsh *DataSourceHandler) UpdateDataSource(c fiber.Ctx) error {
 
 	var req models.UpdateDataSourceRequest
 	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 

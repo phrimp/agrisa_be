@@ -41,7 +41,7 @@ func (h *PolicyHandler) RegisterPolicy(c fiber.Ctx) error {
 	// Parse request body
 	var req models.RegisterAPolicyAPIRequest
 	if err := c.Bind().Body(&req); err != nil {
-		slog.Error("Failed to bind request body", "error", err)
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(
 			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body: "+err.Error()))
 	}

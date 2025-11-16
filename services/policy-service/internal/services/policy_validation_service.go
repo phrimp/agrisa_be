@@ -260,11 +260,11 @@ func (s *BasePolicyService) AIPolicyValidationJob(params map[string]any) error {
 
 	aiRequestData := map[string]any{"pdf": templateData}
 
-	// Call AI validation service
-	slog.Info("Sending validation request to AI service",
+	// Call AI validation service with automatic failover
+	slog.Info("Sending validation request to AI service with multi-client failover",
 		"base_policy_id", basePolicyIDStr)
 
-	resp, err := s.geminiClient.SendAIWithPDF(context.Background(), finalPrompt, aiRequestData)
+	resp, err := gemini.SendAIWithPDFAndRetry(context.Background(), finalPrompt, aiRequestData, s.geminiSelector)
 	if err != nil {
 		return fmt.Errorf("AI validation request failed: %w", err)
 	}

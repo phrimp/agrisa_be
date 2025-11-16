@@ -4,7 +4,6 @@ go 1.25.1
 
 require (
 	agrisa_utils v0.0.0
-	github.com/cridenour/go-postgis v1.0.1
 	github.com/gofiber/fiber/v3 v3.0.0-rc.2
 	github.com/google/generative-ai-go v0.20.1
 	github.com/google/uuid v1.6.0

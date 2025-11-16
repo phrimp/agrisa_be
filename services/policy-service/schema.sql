@@ -136,6 +136,7 @@ CREATE TABLE farm (
     -- Location
     boundary GEOMETRY(Polygon, 4326),
     center_location GEOGRAPHY(Point, 4326),
+    agro_polygon_id VARCHAR(50),
     area_sqm DECIMAL(12,2) NOT NULL,
     
     -- Address
@@ -182,6 +183,7 @@ CREATE INDEX idx_farm_status ON farm(status);
 CREATE INDEX idx_farm_location ON farm USING GIST(center_location);
 CREATE INDEX idx_farm_boundary ON farm USING GIST(boundary);
 CREATE INDEX idx_farm_planting_date ON farm(planting_date);
+CREATE INDEX idx_farm_agro_polygon ON farm(agro_polygon_id);
 
 COMMENT ON COLUMN farm.owner_id IS 'External user service reference';
 

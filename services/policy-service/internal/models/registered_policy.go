@@ -75,6 +75,22 @@ type RegisteredPolicyUnderwriting struct {
 	ValidationNotes     *string            `json:"validation_notes,omitempty" db:"validation_notes"`
 	CreatedAt           time.Time          `json:"created_at" db:"created_at"`
 }
+
+type RegisteredPolicyRiskAnalysis struct {
+	ID                 uuid.UUID        `json:"id" db:"id"`
+	RegisteredPolicyID uuid.UUID        `json:"registered_policy_id" db:"registered_policy_id"`
+	AnalysisStatus     ValidationStatus `json:"analysis_status" db:"analysis_status"`
+	AnalysisType       RiskAnalysisType `json:"analysis_type" db:"analysis_type"`
+	AnalysisSource     *string          `json:"analysis_source,omitempty" db:"analysis_source"`
+	AnalysisTimestamp  int64            `json:"analysis_timestamp" db:"analysis_timestamp"`
+	OverallRiskScore   *float64         `json:"overall_risk_score,omitempty" db:"overall_risk_score"`
+	OverallRiskLevel   *RiskLevel       `json:"overall_risk_level,omitempty" db:"overall_risk_level"`
+	IdentifiedRisks    utils.JSONMap    `json:"identified_risks,omitempty" db:"identified_risks"`
+	Recommendations    utils.JSONMap    `json:"recommendations,omitempty" db:"recommendations"`
+	RawOutput          utils.JSONMap    `json:"raw_output,omitempty" db:"raw_output"`
+	AnalysisNotes      *string          `json:"analysis_notes,omitempty" db:"analysis_notes"`
+	CreatedAt          time.Time        `json:"created_at" db:"created_at"`
+}
 type CancelRequest struct {
 	ID                 uuid.UUID `json:"id" db:"id"`
 	RegisteredPolicyID uuid.UUID `json:"registered_policy_id" db:"registered_policy_id"`

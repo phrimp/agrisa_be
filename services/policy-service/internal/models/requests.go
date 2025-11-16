@@ -23,6 +23,15 @@ func isValidDataSourceType(dataSource DataSourceType) bool {
 	}
 }
 
+func isValidDataSourceParamName(paramName DataSourceParameterName) bool {
+	switch paramName {
+	case NDMI, NDVI, RainFall:
+		return true
+	default:
+		return false
+	}
+}
+
 func isValidParameterType(paramType ParameterType) bool {
 	switch paramType {
 	case ParameterNumeric, ParameterBoolean, ParameterCategorical:
@@ -304,21 +313,21 @@ func (r ValidatePolicyRequest) Validate() error {
 // ============================================================================
 
 type CreateDataSourceRequest struct {
-	DataSource        DataSourceType `json:"data_source" validate:"required"`
-	ParameterName     string         `json:"parameter_name" validate:"required,min=1,max=100"`
-	ParameterType     ParameterType  `json:"parameter_type" validate:"required"`
-	Unit              *string        `json:"unit,omitempty" validate:"omitempty,max=50"`
-	DisplayNameVi     *string        `json:"display_name_vi,omitempty" validate:"omitempty,max=200"`
-	DescriptionVi     *string        `json:"description_vi,omitempty" validate:"omitempty,max=1000"`
-	MinValue          *float64       `json:"min_value,omitempty"`
-	MaxValue          *float64       `json:"max_value,omitempty"`
-	UpdateFrequency   *string        `json:"update_frequency,omitempty" validate:"omitempty,max=100"`
-	SpatialResolution *string        `json:"spatial_resolution,omitempty" validate:"omitempty,max=100"`
-	AccuracyRating    *float64       `json:"accuracy_rating,omitempty" validate:"omitempty,min=0,max=100"`
-	BaseCost          int64          `json:"base_cost" validate:"min=0"`
-	DataTierID        uuid.UUID      `json:"data_tier_id" validate:"required"`
-	DataProvider      *string        `json:"data_provider,omitempty" validate:"omitempty,max=200"`
-	APIEndpoint       *string        `json:"api_endpoint,omitempty" validate:"omitempty,max=500"`
+	DataSource        DataSourceType          `json:"data_source" validate:"required"`
+	ParameterName     DataSourceParameterName `json:"parameter_name" validate:"required,min=1,max=100"`
+	ParameterType     ParameterType           `json:"parameter_type" validate:"required"`
+	Unit              *string                 `json:"unit,omitempty" validate:"omitempty,max=50"`
+	DisplayNameVi     *string                 `json:"display_name_vi,omitempty" validate:"omitempty,max=200"`
+	DescriptionVi     *string                 `json:"description_vi,omitempty" validate:"omitempty,max=1000"`
+	MinValue          *float64                `json:"min_value,omitempty"`
+	MaxValue          *float64                `json:"max_value,omitempty"`
+	UpdateFrequency   *string                 `json:"update_frequency,omitempty" validate:"omitempty,max=100"`
+	SpatialResolution *string                 `json:"spatial_resolution,omitempty" validate:"omitempty,max=100"`
+	AccuracyRating    *float64                `json:"accuracy_rating,omitempty" validate:"omitempty,min=0,max=100"`
+	BaseCost          int64                   `json:"base_cost" validate:"min=0"`
+	DataTierID        uuid.UUID               `json:"data_tier_id" validate:"required"`
+	DataProvider      *string                 `json:"data_provider,omitempty" validate:"omitempty,max=200"`
+	APIEndpoint       *string                 `json:"api_endpoint,omitempty" validate:"omitempty,max=500"`
 }
 
 func (r CreateDataSourceRequest) Validate() error {
@@ -334,8 +343,8 @@ func (r CreateDataSourceRequest) Validate() error {
 	}
 
 	// Validate required fields with trimming
-	if err := trimAndValidateString(r.ParameterName, "parameter_name", 1, 100); err != nil {
-		return err
+	if !isValidDataSourceParamName(r.ParameterName) {
+		return fmt.Errorf("invalid parameter_name: must be one of %s, %s, %s", NDVI, NDMI, RainFall)
 	}
 
 	if r.DataTierID == uuid.Nil {
@@ -395,22 +404,22 @@ func (r CreateDataSourceRequest) Validate() error {
 }
 
 type UpdateDataSourceRequest struct {
-	DataSource        *DataSourceType `json:"data_source,omitempty"`
-	ParameterName     *string         `json:"parameter_name,omitempty" validate:"omitempty,min=1,max=100"`
-	ParameterType     *ParameterType  `json:"parameter_type,omitempty"`
-	Unit              *string         `json:"unit,omitempty" validate:"omitempty,max=50"`
-	DisplayNameVi     *string         `json:"display_name_vi,omitempty" validate:"omitempty,max=200"`
-	DescriptionVi     *string         `json:"description_vi,omitempty" validate:"omitempty,max=1000"`
-	MinValue          *float64        `json:"min_value,omitempty"`
-	MaxValue          *float64        `json:"max_value,omitempty"`
-	UpdateFrequency   *string         `json:"update_frequency,omitempty" validate:"omitempty,max=100"`
-	SpatialResolution *string         `json:"spatial_resolution,omitempty" validate:"omitempty,max=100"`
-	AccuracyRating    *float64        `json:"accuracy_rating,omitempty" validate:"omitempty,min=0,max=100"`
-	BaseCost          *int64          `json:"base_cost,omitempty" validate:"omitempty,min=0"`
-	DataTierID        *uuid.UUID      `json:"data_tier_id,omitempty"`
-	DataProvider      *string         `json:"data_provider,omitempty" validate:"omitempty,max=200"`
-	APIEndpoint       *string         `json:"api_endpoint,omitempty" validate:"omitempty,max=500"`
-	IsActive          *bool           `json:"is_active,omitempty"`
+	DataSource        *DataSourceType          `json:"data_source,omitempty"`
+	ParameterName     *DataSourceParameterName `json:"parameter_name,omitempty" validate:"omitempty,min=1,max=100"`
+	ParameterType     *ParameterType           `json:"parameter_type,omitempty"`
+	Unit              *string                  `json:"unit,omitempty" validate:"omitempty,max=50"`
+	DisplayNameVi     *string                  `json:"display_name_vi,omitempty" validate:"omitempty,max=200"`
+	DescriptionVi     *string                  `json:"description_vi,omitempty" validate:"omitempty,max=1000"`
+	MinValue          *float64                 `json:"min_value,omitempty"`
+	MaxValue          *float64                 `json:"max_value,omitempty"`
+	UpdateFrequency   *string                  `json:"update_frequency,omitempty" validate:"omitempty,max=100"`
+	SpatialResolution *string                  `json:"spatial_resolution,omitempty" validate:"omitempty,max=100"`
+	AccuracyRating    *float64                 `json:"accuracy_rating,omitempty" validate:"omitempty,min=0,max=100"`
+	BaseCost          *int64                   `json:"base_cost,omitempty" validate:"omitempty,min=0"`
+	DataTierID        *uuid.UUID               `json:"data_tier_id,omitempty"`
+	DataProvider      *string                  `json:"data_provider,omitempty" validate:"omitempty,max=200"`
+	APIEndpoint       *string                  `json:"api_endpoint,omitempty" validate:"omitempty,max=500"`
+	IsActive          *bool                    `json:"is_active,omitempty"`
 }
 
 func (r UpdateDataSourceRequest) Validate() error {
@@ -427,8 +436,8 @@ func (r UpdateDataSourceRequest) Validate() error {
 
 	// Validate parameter name if provided
 	if r.ParameterName != nil {
-		if err := trimAndValidateString(*r.ParameterName, "parameter_name", 1, 100); err != nil {
-			return err
+		if !isValidDataSourceParamName(*r.ParameterName) {
+			return fmt.Errorf("invalid parameter_name: must be one of %s, %s, %s", NDVI, NDMI, RainFall)
 		}
 	}
 
@@ -713,7 +722,6 @@ func (r *PolicyDetailFilterRequest) Validate() error {
 type RegisterAPolicyAPIRequest struct {
 	RegisteredPolicy RegisteredPolicy  `json:"registered_policy" validate:"required"`
 	Farm             Farm              `json:"farm"`
-	PolicyDocument   PolicyDocument    `json:"policy_document"`
 	PolicyTags       map[string]string `json:"policy_tags"`
 }
 

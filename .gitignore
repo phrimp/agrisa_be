@@ -237,3 +237,4 @@ prometheus_data/
 grafana_data/
 
 .claude
+claudedocs

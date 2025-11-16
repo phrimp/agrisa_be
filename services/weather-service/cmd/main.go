@@ -76,7 +76,8 @@ func main() {
 	// Initialize and register routes
 	// Initialize services and handlers here
 	weatherService := services.NewWeatherService(*config)
-	weatherHandler := handlers.NewWeatherHandler(weatherService)
+	agroService := services.NewAgroService(*config)
+	weatherHandler := handlers.NewWeatherHandler(weatherService, agroService)
 	weatherHandler.RegisterRoutes(r)
 
 	log.Printf("Starting weather-service on port %s", serverPort)

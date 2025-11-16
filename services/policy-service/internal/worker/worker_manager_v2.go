@@ -207,17 +207,6 @@ func (m *WorkerManagerV2) StartPolicyWorkerInfrastructure(ctx context.Context, p
 		return fmt.Errorf("worker infrastructure not found for policy %s", policyID)
 	}
 
-	// Update statuses in transaction
-	err := m.persistor.WithTransaction(ctx, func(ctx context.Context, txPersistor WorkerPersistor) error {
-		if err := txPersistor.SetPoolStatus(ctx, policyID, PoolStatusActive); err != nil {
-			return err
-		}
-		return txPersistor.SetSchedulerStatus(ctx, policyID, SchedulerStatusActive)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update worker infrastructure status: %w", err)
-	}
-
 	// Start pool workers with dedicated context
 	poolCtx, poolCancel := context.WithCancel(m.managerCtx)
 	m.mu.Lock()
@@ -266,17 +255,6 @@ func (m *WorkerManagerV2) StopWorkerInfrastructure(ctx context.Context, poolID u
 	// Stop scheduler (stops ticker)
 	scheduler.Ticker.Stop()
 
-	// Update statuses in transaction
-	err := m.persistor.WithTransaction(ctx, func(ctx context.Context, txPersistor WorkerPersistor) error {
-		if err := txPersistor.SetPoolStatus(ctx, poolID, PoolStatusStopped); err != nil {
-			return err
-		}
-		return txPersistor.SetSchedulerStatus(ctx, poolID, SchedulerStatusStopped)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to update worker infrastructure status: %w", err)
-	}
-
 	slog.Info("Worker infrastructure stopped successfully", "policy_id", poolID)
 
 	return nil
@@ -289,17 +267,6 @@ func (m *WorkerManagerV2) ArchiveWorkerInfrastructure(ctx context.Context, polic
 	// First stop if not already stopped
 	if err := m.StopWorkerInfrastructure(ctx, policyID); err != nil {
 		slog.Warn("Failed to stop before archive (may already be stopped)", "error", err)
-	}
-
-	// Update statuses to archived
-	err := m.persistor.WithTransaction(ctx, func(ctx context.Context, txPersistor WorkerPersistor) error {
-		if err := txPersistor.SetPoolStatus(ctx, policyID, PoolStatusArchived); err != nil {
-			return err
-		}
-		return txPersistor.SetSchedulerStatus(ctx, policyID, SchedulerStatusArchived)
-	})
-	if err != nil {
-		return fmt.Errorf("failed to archive worker infrastructure: %w", err)
 	}
 
 	// Remove from in-memory maps
@@ -435,7 +402,7 @@ func (m *WorkerManagerV2) CreateFarmImageryWorkerInfrastructure(ctx context.Cont
 		goRedisClient,
 		1,
 		1,
-		100,
+		-1,
 	)
 
 	// Register job handler for farm monitoring data fetch

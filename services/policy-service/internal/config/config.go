@@ -13,6 +13,7 @@ type PolicyServiceConfig struct {
 	VerifyNationalIDURL          string
 	VerifyLandCertificateHostAPI string
 	SatelliteDataServiceURL      string
+	WeatherDataServiceURL        string
 }
 
 type MinioConfig struct {
@@ -89,6 +90,7 @@ func New() *PolicyServiceConfig {
 		VerifyNationalIDURL:          getEnvOrDefault("VERIFY_NATIONAL_ID_URL", "key"),
 		VerifyLandCertificateHostAPI: getEnvOrDefault("VERIFY_LAND_CERTIFICATE_HOST_API", "key"),
 		SatelliteDataServiceURL:      getEnvOrDefault("SATELLITE_DATA_SERVICE_URL", "http://satellite-data-service:8000"),
+		WeatherDataServiceURL:        getEnvOrDefault("WEATHER_SERVICE_URL", "http://weather-service:8086"),
 	}
 }
 

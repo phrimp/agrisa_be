@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log/slog"
 	"net/http"
 	"policy-service/internal/models"
 	"policy-service/internal/services"
@@ -47,6 +48,7 @@ func (dth *DataTierHandler) Register(app *fiber.App) {
 func (dth *DataTierHandler) CreateDataTierCategory(c fiber.Ctx) error {
 	var req models.CreateDataTierCategoryRequest
 	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 
@@ -91,6 +93,7 @@ func (dth *DataTierHandler) UpdateDataTierCategory(c fiber.Ctx) error {
 
 	var req models.UpdateDataTierCategoryRequest
 	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 
@@ -122,6 +125,7 @@ func (dth *DataTierHandler) DeleteDataTierCategory(c fiber.Ctx) error {
 func (dth *DataTierHandler) CreateDataTier(c fiber.Ctx) error {
 	var req models.CreateDataTierRequest
 	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 
@@ -166,6 +170,7 @@ func (dth *DataTierHandler) UpdateDataTier(c fiber.Ctx) error {
 
 	var req models.UpdateDataTierRequest
 	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
 

@@ -12,36 +12,37 @@ import (
 // ============================================================================
 
 type Farm struct {
-	ID                      uuid.UUID        `json:"id" db:"id"`
-	OwnerID                 string           `json:"owner_id" db:"owner_id"`
-	FarmName                *string          `json:"farm_name,omitempty" db:"farm_name"`
-	FarmCode                *string          `json:"farm_code,omitempty" db:"farm_code"`
-	Boundary                *GeoJSONPolygon  `json:"boundary,omitempty" db:"boundary"`
-	CenterLocation          *GeoJSONPoint    `json:"center_location,omitempty" db:"center_location"`
-	AreaSqm                 float64          `json:"area_sqm" db:"area_sqm"`
-	Province                *string          `json:"province,omitempty" db:"province"`
-	District                *string          `json:"district,omitempty" db:"district"`
-	Commune                 *string          `json:"commune,omitempty" db:"commune"`
-	Address                 *string          `json:"address,omitempty" db:"address"`
-	CropType                string           `json:"crop_type" db:"crop_type"`
-	PlantingDate            *int64           `json:"planting_date,omitempty" db:"planting_date"`
-	ExpectedHarvestDate     *int64           `json:"expected_harvest_date,omitempty" db:"expected_harvest_date"`
-	CropTypeVerified        bool             `json:"crop_type_verified" db:"crop_type_verified"`
-	CropTypeVerifiedAt      *int64           `json:"crop_type_verified_at,omitempty" db:"crop_type_verified_at"`
-	CropTypeVerifiedBy      *string          `json:"crop_type_verified_by,omitempty" db:"crop_type_verified_by"`
-	CropTypeConfidence      *float64         `json:"crop_type_confidence,omitempty" db:"crop_type_confidence"`
-	LandCertificateNumber   *string          `json:"land_certificate_number,omitempty" db:"land_certificate_number"`
-	LandCertificateURL      *string          `json:"land_certificate_url,omitempty" db:"land_certificate_url"`
-	LandOwnershipVerified   bool             `json:"land_ownership_verified" db:"land_ownership_verified"`
-	LandOwnershipVerifiedAt *int64           `json:"land_ownership_verified_at,omitempty" db:"land_ownership_verified_at"`
-	HasIrrigation           bool             `json:"has_irrigation" db:"has_irrigation"`
-	IrrigationType          *string          `json:"irrigation_type,omitempty" db:"irrigation_type"`
-	SoilType                *string          `json:"soil_type,omitempty" db:"soil_type"`
-	Status                  FarmStatus       `json:"status" db:"status"`
-	CreatedAt               time.Time        `json:"created_at" db:"created_at"`
-	UpdatedAt               time.Time        `json:"updated_at" db:"updated_at"`
-	FarmPhotos              []FarmPhoto      `json:"farm_photos"`
-	OwnerNationalID         *string          `json:"owner_national_id,omitempty"`
+	ID                      uuid.UUID          `json:"id" db:"id"`
+	OwnerID                 string             `json:"owner_id" db:"owner_id"`
+	FarmName                *string            `json:"farm_name,omitempty" db:"farm_name"`
+	FarmCode                *string            `json:"farm_code,omitempty" db:"farm_code"`
+	Boundary                *GeoJSONPolygon    `json:"boundary,omitempty" db:"boundary"`
+	CenterLocation          *GeoJSONPoint      `json:"center_location,omitempty" db:"center_location"`
+	AgroPolygonID           string             `json:"agro_polygon_id" db:"agro_polygon_id"`
+	AreaSqm                 float64            `json:"area_sqm" db:"area_sqm"`
+	Province                *string            `json:"province,omitempty" db:"province"`
+	District                *string            `json:"district,omitempty" db:"district"`
+	Commune                 *string            `json:"commune,omitempty" db:"commune"`
+	Address                 *string            `json:"address,omitempty" db:"address"`
+	CropType                string             `json:"crop_type" db:"crop_type"`
+	PlantingDate            *int64             `json:"planting_date,omitempty" db:"planting_date"`
+	ExpectedHarvestDate     *int64             `json:"expected_harvest_date,omitempty" db:"expected_harvest_date"`
+	CropTypeVerified        bool               `json:"crop_type_verified" db:"crop_type_verified"`
+	CropTypeVerifiedAt      *int64             `json:"crop_type_verified_at,omitempty" db:"crop_type_verified_at"`
+	CropTypeVerifiedBy      *string            `json:"crop_type_verified_by,omitempty" db:"crop_type_verified_by"`
+	CropTypeConfidence      *float64           `json:"crop_type_confidence,omitempty" db:"crop_type_confidence"`
+	LandCertificateNumber   *string            `json:"land_certificate_number,omitempty" db:"land_certificate_number"`
+	LandCertificateURL      *string            `json:"land_certificate_url,omitempty" db:"land_certificate_url"`
+	LandOwnershipVerified   bool               `json:"land_ownership_verified" db:"land_ownership_verified"`
+	LandOwnershipVerifiedAt *int64             `json:"land_ownership_verified_at,omitempty" db:"land_ownership_verified_at"`
+	HasIrrigation           bool               `json:"has_irrigation" db:"has_irrigation"`
+	IrrigationType          *string            `json:"irrigation_type,omitempty" db:"irrigation_type"`
+	SoilType                *string            `json:"soil_type,omitempty" db:"soil_type"`
+	Status                  FarmStatus         `json:"status" db:"status"`
+	CreatedAt               time.Time          `json:"created_at" db:"created_at"`
+	UpdatedAt               time.Time          `json:"updated_at" db:"updated_at"`
+	FarmPhotos              []FarmPhoto        `json:"farm_photos"`
+	OwnerNationalID         *string            `json:"owner_national_id,omitempty"`
 	LandCertificatePhotos   []minio.FileUpload `json:"land_certificate_photos,omitempty"`
 }
 
