@@ -1127,19 +1127,11 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 			OneTime:    true,
 			RunNow:     true,
 		}
-		everydayJob := worker.JobPayload{
-			JobID:      uuid.NewString(),
-			Type:       "fetch-farm-monitoring-data",
-			Params:     map[string]any{"policy_id": request.RegisteredPolicy.ID, "base_policy_id": completeBasePolicy.BasePolicy.ID, "farm_id": farm.ID, "start_date": "", "end_date": "now"},
-			MaxRetries: 10,
-			OneTime:    false,
-		}
 		scheduler, ok := s.workerManager.GetSchedulerByPolicyID(request.RegisteredPolicy.ID)
 		if !ok {
 			slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist")
 		}
 		scheduler.AddJob(fullYearJob)
-		scheduler.AddJob(everydayJob)
 	}()
 
 	return &models.RegisterAPolicyResponse{
