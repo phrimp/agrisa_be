@@ -102,3 +102,5 @@ func GetQueryParamAsInt(c *gin.Context, paramName string, defaultValue int) (int
 
 	return intValue, nil
 }
+
+

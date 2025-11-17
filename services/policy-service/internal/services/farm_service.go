@@ -603,8 +603,22 @@ func (s *FarmService) CreateFarmValidate(farm *models.Farm, token string) error 
 	if farm.CropType == "" {
 		return fmt.Errorf("bad_request: crop_type is required")
 	}
+
 	if farm.AreaSqm <= 0 {
 		return fmt.Errorf("bad_request: area_sqm must be greater than 0")
+	}
+
+	if !ValidateCroptype(farm.CropType) {
+		return fmt.Errorf("bad_request: invalid crop_type (only rice or coffee allowed)")
+	}
+
+	// validate soil_type
+	if farm.SoilType == nil {
+		return fmt.Errorf("bad_request: soil_type is required")
+	}
+
+	if !ValidateSoilType(farm.SoilType, farm.CropType) {
+		return fmt.Errorf("bad_request: invalid soil_type for the given crop_type")
 	}
 
 	// Validate harvest date if provided
@@ -830,5 +844,39 @@ func CalculatePolygonCentroid(coordinates [][]float64) Point {
 	return Point{
 		Lng: centroidLng,
 		Lat: centroidLat,
+	}
+}
+
+func ValidateCroptype(cropType string) bool {
+	var cropTypes = []string{"rice", "coffee"}
+	for _, ct := range cropTypes {
+		if ct == cropType {
+			return true
+		}
+	}
+	return false
+}
+
+var riceSoilTypes = map[string]bool{
+	"Đất chuyên trồng lúa nước (LUC)":  true,
+	"Đất trồng lúa nước còn lại (LUK)": true,
+	"Đất lúa nương (LUN)":              true,
+}
+
+var coffeeSoilTypes = map[string]bool{
+	"Đất trồng cây lâu năm (CLN)": true,
+}
+
+func ValidateSoilType(soilType *string, cropType string) bool {
+	if soilType == nil || *soilType == "" {
+		return false
+	}
+	switch cropType {
+	case "rice":
+		return riceSoilTypes[*soilType]
+	case "coffee":
+		return coffeeSoilTypes[*soilType]
+	default:
+		return false
 	}
 }
