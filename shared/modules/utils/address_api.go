@@ -148,3 +148,82 @@ func GetCommuneByCode(provinceCode string, wardCode string) (*Commune, error) {
 
 	return nil, fmt.Errorf("không tìm thấy phường/xã với mã: %s", wardCode)
 }
+
+func GetCentralMeridianByAddress(address string) float64 {
+	// Bảng tra cứu kinh tuyến trục theo tỉnh/thành phố
+	meridianMap := map[string]float64{
+		"An Giang":          104.75,
+		"Bà Rịa - Vũng Tàu": 107.75,
+		"Bình Dương":        105.75,
+		"Bình Phước":        106.25,
+		"Bình Thuận":        108.50,
+		"Bình Định":         108.25,
+		"Bạc Liêu":          105.00,
+		"Bắc Giang":         107.00,
+		"Bắc Kạn":           106.50,
+		"Bắc Ninh":          105.50,
+		"Bến Tre":           105.75,
+		"Cao Bằng":          105.75,
+		"Cà Mau":            104.50,
+		"Cần Thơ":           105.00,
+		"Gia Lai":           108.50,
+		"Hoà Bình":          106.00,
+		"Hà Giang":          105.50,
+		"Hà Nam":            105.00,
+		"Hà Nội":            105.00,
+		"Hà Tĩnh":           105.50,
+		"Hưng Yên":          105.50,
+		"Hải Dương":         105.50,
+		"Hải Phòng":         105.75,
+		"Hậu Giang":         105.00,
+		"Hồ Chí Minh":       105.75,
+		"Khánh Hoà":         108.25,
+		"Kiên Giang":        104.50,
+		"Kon Tum":           107.50,
+		"Lai Châu":          103.00,
+		"Long An":           105.75,
+		"Lào Cai":           104.75,
+		"Lâm Đồng":          107.75,
+		"Lạng Sơn":          107.25,
+		"Nam Định":          105.50,
+		"Nghệ An":           104.75,
+		"Ninh Bình":         105.00,
+		"Ninh Thuận":        108.25,
+		"Phú Thọ":           104.75,
+		"Phú Yên":           108.50,
+		"Quảng Bình":        106.00,
+		"Quảng Nam":         107.75,
+		"Quảng Ngãi":        108.00,
+		"Quảng Ninh":        107.75,
+		"Quảng Trị":         106.25,
+		"Sóc Trăng":         105.50,
+		"Sơn La":            104.00,
+		"Thanh Hoá":         105.00,
+		"Thái Bình":         105.50,
+		"Thái Nguyên":       106.50,
+		"Thừa Thiên Huế":    107.00,
+		"Tiền Giang":        105.75,
+		"Trà Vinh":          105.50,
+		"Tuyên Quang":       106.00,
+		"Tây Ninh":          105.50,
+		"Vĩnh Long":         105.50,
+		"Vĩnh Phúc":         105.00,
+		"Yên Bái":           104.75,
+		"Điện Biên":         103.00,
+		"Đà Nẵng":           107.75,
+		"Đắk Lắk":           108.50,
+		"Đắk Nông":          108.50,
+		"Đồng Nai":          107.75,
+		"Đồng Tháp":         105.00,
+	}
+
+	address = strings.TrimSpace(address)
+
+	for province, meridian := range meridianMap {
+		if strings.Contains(address, province) {
+			return meridian
+		}
+	}
+
+	return 0
+}

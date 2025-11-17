@@ -4,6 +4,7 @@ import (
 	utils "agrisa_utils"
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -42,11 +43,11 @@ func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) ([]mo
 }
 
 func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("panic recovered", "panic", r)
-		}
-	}()
+	// defer func() {
+	// 	if r := recover(); r != nil {
+	// 		slog.Error("panic recovered", "panic", r)
+	// 	}
+	// }()
 
 	if farm.ID == uuid.Nil {
 		farm.ID = uuid.New()
@@ -62,7 +63,24 @@ func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
 	// 	return fmt.Errorf("badrequest: farmer has already owned a farm")
 	// }
 
-	err := s.farmRepository.Create(farm)
+	// Get central_meridian
+	centralMeridian := utils.GetCentralMeridianByAddress(*farm.Address)
+
+	// Convert farm boundary to WGS84
+	err := ConvertFarmBoundaryToWGS84(farm, 3, centralMeridian)
+	if err != nil {
+		return err
+	}
+
+	// Calculate center location to WGS84
+	centralPoint := CalculateFarmCenter(*farm.Boundary)
+	if farm.CenterLocation == nil {
+		farm.CenterLocation = &models.GeoJSONPoint{}
+		farm.CenterLocation.Type = "Point"
+	}
+	farm.CenterLocation.Coordinates = []float64{centralPoint.Lng, centralPoint.Lat}
+
+	err = s.farmRepository.Create(farm)
 	if err != nil {
 		return fmt.Errorf("error creating farm: %w", err)
 	}
@@ -692,4 +710,125 @@ func (s *FarmService) FarmJobRecovery() error {
 	}
 
 	return nil
+}
+
+type VN2000ToWGS84Response struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    struct {
+		Lat float64 `json:"lat"`
+		Lng float64 `json:"lng"`
+	} `json:"data"`
+}
+
+func ConvertFarmBoundaryToWGS84(farm *models.Farm, zoneWidth, centralMeridian float64) error {
+	for i := range farm.Boundary.Coordinates {
+		for j := range farm.Boundary.Coordinates[i] {
+			x := farm.Boundary.Coordinates[i][j][0]
+			y := farm.Boundary.Coordinates[i][j][1]
+
+			// Gọi API chuyển đổi
+			result, err := ConvertVN2000ToWGS84(x, y, zoneWidth, centralMeridian)
+			if err != nil {
+				slog.Error("ConvertFarmBoundaryToWGS84: failed to convert coordinates", "x", x, "y", y, "error", err)
+				return fmt.Errorf("internal_error: failed to convert coordinates (%f, %f): %w", x, y, err)
+			}
+
+			// Cập nhật tọa độ mới (lng, lat theo chuẩn GeoJSON)
+			farm.Boundary.Coordinates[i][j][0] = result.Data.Lng
+			farm.Boundary.Coordinates[i][j][1] = result.Data.Lat
+		}
+	}
+	return nil
+}
+
+func ConvertVN2000ToWGS84(x, y, zoneWidth, centralMeridian float64) (*VN2000ToWGS84Response, error) {
+	// Tạo URL với query parameters
+	url := fmt.Sprintf("https://vn2000.vn/api/vn2000towgs84?x=%f&y=%f&zone_width=%f&central_meridian=%f",
+		x, y, zoneWidth, centralMeridian)
+
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+
+	// Gửi GET request
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	// Kiểm tra status code
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API returned status code: %d", resp.StatusCode)
+	}
+
+	// Đọc response body
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
+	}
+
+	// Parse JSON response
+	var result VN2000ToWGS84Response
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse JSON response: %w", err)
+	}
+
+	// Kiểm tra success flag
+	if !result.Success {
+		return nil, fmt.Errorf("API request failed: %s", result.Message)
+	}
+
+	return &result, nil
+}
+
+type Point struct {
+	Lng float64
+	Lat float64
+}
+
+func CalculateFarmCenter(boundary models.GeoJSONPolygon) Point {
+	if len(boundary.Coordinates) == 0 || len(boundary.Coordinates[0]) == 0 {
+		return Point{}
+	}
+
+	outerRing := boundary.Coordinates[0]
+
+	return CalculatePolygonCentroid(outerRing)
+}
+
+func CalculatePolygonCentroid(coordinates [][]float64) Point {
+	if len(coordinates) == 0 {
+		return Point{}
+	}
+
+	var area float64
+	var centroidLng float64
+	var centroidLat float64
+
+	// Tính diện tích có dấu và centroid
+	for i := 0; i < len(coordinates)-1; i++ {
+		x0 := coordinates[i][0]
+		y0 := coordinates[i][1]
+		x1 := coordinates[i+1][0]
+		y1 := coordinates[i+1][1]
+
+		// Cross product
+		cross := x0*y1 - x1*y0
+
+		area += cross
+		centroidLng += (x0 + x1) * cross
+		centroidLat += (y0 + y1) * cross
+	}
+
+	area /= 2.0
+	centroidLng /= (6.0 * area)
+	centroidLat /= (6.0 * area)
+
+	return Point{
+		Lng: centroidLng,
+		Lat: centroidLat,
+	}
 }
