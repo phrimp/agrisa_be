@@ -167,3 +167,71 @@ func (cr *CancelRequest) SetLitigation(reviewedBy string, reviewNotes *string) {
 	cr.ReviewNotes = reviewNotes
 	cr.UpdatedAt = now
 }
+
+// ============================================================================
+// REGISTERED POLICY FILTER REQUEST/RESPONSE
+// ============================================================================
+
+// RegisteredPolicyFilterRequest defines filter criteria for querying registered policies
+type RegisteredPolicyFilterRequest struct {
+	PolicyID            *uuid.UUID          `query:"policy_id"`
+	PolicyNumber        string              `query:"policy_number"`
+	FarmerID            string              `query:"farmer_id"`
+	BasePolicyID        *uuid.UUID          `query:"base_policy_id"`
+	FarmID              *uuid.UUID          `query:"farm_id"`
+	Status              *PolicyStatus       `query:"status"`
+	UnderwritingStatus  *UnderwritingStatus `query:"underwriting_status"`
+	InsuranceProviderID string              `query:"insurance_provider_id"`
+	IncludePresignedURL bool                `query:"include_presigned_url"`
+	URLExpiryHours      int                 `query:"url_expiry_hours"`
+}
+
+// Validate validates the filter request
+func (r *RegisteredPolicyFilterRequest) Validate() error {
+	if r.PolicyID == nil && r.PolicyNumber == "" && r.FarmerID == "" && r.BasePolicyID == nil && r.FarmID == nil && r.Status == nil && r.UnderwritingStatus == nil && r.InsuranceProviderID == "" {
+		return nil // No filter means get all
+	}
+	if r.URLExpiryHours <= 0 {
+		r.URLExpiryHours = 24 // Default 24 hours
+	}
+	return nil
+}
+
+// MinimalFarmInfo contains essential farm information
+type MinimalFarmInfo struct {
+	ID             uuid.UUID   `json:"id"`
+	FarmName       *string     `json:"farm_name,omitempty"`
+	FarmCode       *string     `json:"farm_code,omitempty"`
+	AreaSqm        float64     `json:"area_sqm"`
+	Province       *string     `json:"province,omitempty"`
+	District       *string     `json:"district,omitempty"`
+	Commune        *string     `json:"commune,omitempty"`
+	CropType       string      `json:"crop_type"`
+	CenterLocation interface{} `json:"center_location,omitempty"`
+}
+
+// MinimalBasePolicyInfo contains essential base policy information
+type MinimalBasePolicyInfo struct {
+	ID                   uuid.UUID        `json:"id"`
+	ProductName          string           `json:"product_name"`
+	CropType             string           `json:"crop_type"`
+	CoverageCurrency     string           `json:"coverage_currency"`
+	CoverageDurationDays int              `json:"coverage_duration_days"`
+	Status               BasePolicyStatus `json:"status"`
+}
+
+// RegisteredPolicyWithDetails contains registered policy with minimal related information
+type RegisteredPolicyWithDetails struct {
+	RegisteredPolicy
+	Farm                   *MinimalFarmInfo       `json:"farm,omitempty"`
+	BasePolicy             *MinimalBasePolicyInfo `json:"base_policy,omitempty"`
+	PresignedDocumentURL   *string                `json:"presigned_document_url,omitempty"`
+	PresignedURLExpiryTime *time.Time             `json:"presigned_url_expiry_time,omitempty"`
+}
+
+// RegisteredPolicyFilterResponse contains the filter results
+type RegisteredPolicyFilterResponse struct {
+	Policies   []RegisteredPolicyWithDetails `json:"policies"`
+	TotalCount int                           `json:"total_count"`
+	Filters    RegisteredPolicyFilterRequest `json:"filters_applied"`
+}

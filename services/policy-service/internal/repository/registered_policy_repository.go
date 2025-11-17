@@ -601,3 +601,168 @@ func (r *RegisteredPolicyRepository) DeleteRiskAnalysis(id uuid.UUID) error {
 	slog.Info("Successfully deleted risk analysis", "id", id)
 	return nil
 }
+
+// GetWithFilters retrieves registered policies based on filter criteria
+func (r *RegisteredPolicyRepository) GetWithFilters(filter models.RegisteredPolicyFilterRequest) ([]models.RegisteredPolicy, error) {
+	slog.Info("Querying registered policies with filters", "filter", filter)
+
+	query := `SELECT * FROM registered_policy WHERE 1=1`
+	args := []interface{}{}
+	argIndex := 1
+
+	if filter.PolicyID != nil {
+		query += fmt.Sprintf(" AND id = $%d", argIndex)
+		args = append(args, *filter.PolicyID)
+		argIndex++
+	}
+	if filter.PolicyNumber != "" {
+		query += fmt.Sprintf(" AND policy_number = $%d", argIndex)
+		args = append(args, filter.PolicyNumber)
+		argIndex++
+	}
+	if filter.FarmerID != "" {
+		query += fmt.Sprintf(" AND farmer_id = $%d", argIndex)
+		args = append(args, filter.FarmerID)
+		argIndex++
+	}
+	if filter.BasePolicyID != nil {
+		query += fmt.Sprintf(" AND base_policy_id = $%d", argIndex)
+		args = append(args, *filter.BasePolicyID)
+		argIndex++
+	}
+	if filter.FarmID != nil {
+		query += fmt.Sprintf(" AND farm_id = $%d", argIndex)
+		args = append(args, *filter.FarmID)
+		argIndex++
+	}
+	if filter.Status != nil {
+		query += fmt.Sprintf(" AND status = $%d", argIndex)
+		args = append(args, *filter.Status)
+		argIndex++
+	}
+	if filter.UnderwritingStatus != nil {
+		query += fmt.Sprintf(" AND underwriting_status = $%d", argIndex)
+		args = append(args, *filter.UnderwritingStatus)
+		argIndex++
+	}
+	if filter.InsuranceProviderID != "" {
+		query += fmt.Sprintf(" AND insurance_provider_id = $%d", argIndex)
+		args = append(args, filter.InsuranceProviderID)
+		argIndex++
+	}
+
+	query += " ORDER BY created_at DESC"
+
+	var policies []models.RegisteredPolicy
+	err := r.db.Select(&policies, query, args...)
+	if err != nil {
+		slog.Error("Failed to query registered policies with filters", "error", err)
+		return nil, fmt.Errorf("failed to get registered policies with filters: %w", err)
+	}
+
+	slog.Info("Successfully retrieved registered policies", "count", len(policies))
+	return policies, nil
+}
+
+// GetByInsuranceProviderID retrieves all policies for a specific insurance provider
+func (r *RegisteredPolicyRepository) GetByInsuranceProviderID(providerID string) ([]models.RegisteredPolicy, error) {
+	var policies []models.RegisteredPolicy
+	query := `SELECT * FROM registered_policy WHERE insurance_provider_id = $1 ORDER BY created_at DESC`
+	err := r.db.Select(&policies, query, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get policies by provider ID: %w", err)
+	}
+	return policies, nil
+}
+
+// GetPolicyStats retrieves aggregated statistics for policies
+func (r *RegisteredPolicyRepository) GetPolicyStats(providerID string) (map[string]interface{}, error) {
+	stats := make(map[string]interface{})
+
+	// Base query with optional provider filter
+	whereClause := ""
+	args := []interface{}{}
+	if providerID != "" {
+		whereClause = " WHERE insurance_provider_id = $1"
+		args = append(args, providerID)
+	}
+
+	// Total count
+	var totalCount int
+	countQuery := `SELECT COUNT(*) FROM registered_policy` + whereClause
+	err := r.db.Get(&totalCount, countQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total count: %w", err)
+	}
+	stats["total_count"] = totalCount
+
+	// Count by status
+	statusCounts := make(map[string]int)
+	statusQuery := `SELECT status, COUNT(*) as count FROM registered_policy` + whereClause + ` GROUP BY status`
+	rows, err := r.db.Queryx(statusQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get status counts: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var status string
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			continue
+		}
+		statusCounts[status] = count
+	}
+	stats["by_status"] = statusCounts
+
+	// Count by underwriting status
+	underwritingCounts := make(map[string]int)
+	uwQuery := `SELECT underwriting_status, COUNT(*) as count FROM registered_policy` + whereClause + ` GROUP BY underwriting_status`
+	rows2, err := r.db.Queryx(uwQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get underwriting status counts: %w", err)
+	}
+	defer rows2.Close()
+	for rows2.Next() {
+		var status string
+		var count int
+		if err := rows2.Scan(&status, &count); err != nil {
+			continue
+		}
+		underwritingCounts[status] = count
+	}
+	stats["by_underwriting_status"] = underwritingCounts
+
+	// Total coverage amount
+	var totalCoverage float64
+	coverageQuery := `SELECT COALESCE(SUM(coverage_amount), 0) FROM registered_policy` + whereClause
+	err = r.db.Get(&totalCoverage, coverageQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total coverage: %w", err)
+	}
+	stats["total_coverage_amount"] = totalCoverage
+
+	// Total premium collected
+	var totalPremium float64
+	premiumQuery := `SELECT COALESCE(SUM(total_farmer_premium), 0) FROM registered_policy` + whereClause
+	err = r.db.Get(&totalPremium, premiumQuery, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total premium: %w", err)
+	}
+	stats["total_premium_collected"] = totalPremium
+
+	return stats, nil
+}
+
+// UpdateStatus updates the status of a registered policy
+func (r *RegisteredPolicyRepository) UpdateStatus(policyID uuid.UUID, status models.PolicyStatus) error {
+	query := `UPDATE registered_policy SET status = $1, updated_at = NOW() WHERE id = $2`
+	result, err := r.db.Exec(query, status, policyID)
+	if err != nil {
+		return fmt.Errorf("failed to update policy status: %w", err)
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		return fmt.Errorf("policy not found")
+	}
+	return nil
+}

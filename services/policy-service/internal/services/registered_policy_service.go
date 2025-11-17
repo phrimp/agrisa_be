@@ -1168,3 +1168,110 @@ func (s *RegisteredPolicyService) calculateFarmerPremium(areasqm, basePremiumRat
 
 	return areasqm * basePremiumRate * float64(fixPremiumAmount)
 }
+
+// GetPolicyStats retrieves policy statistics (optionally filtered by provider)
+func (s *RegisteredPolicyService) GetPolicyStats(providerID string) (map[string]interface{}, error) {
+	return s.registeredPolicyRepo.GetPolicyStats(providerID)
+}
+
+// UpdatePolicyStatus updates the status of a registered policy
+func (s *RegisteredPolicyService) UpdatePolicyStatus(policyID uuid.UUID, status models.PolicyStatus) error {
+	return s.registeredPolicyRepo.UpdateStatus(policyID, status)
+}
+
+// UpdateUnderwritingStatus updates the underwriting status of a registered policy
+func (s *RegisteredPolicyService) UpdateUnderwritingStatus(policyID uuid.UUID, status models.UnderwritingStatus) error {
+	return s.registeredPolicyRepo.UpdateUnderwritingStatus(policyID, status)
+}
+
+// GetPolicyByID retrieves a single policy by ID
+func (s *RegisteredPolicyService) GetPolicyByID(policyID uuid.UUID) (*models.RegisteredPolicy, error) {
+	return s.registeredPolicyRepo.GetByID(policyID)
+}
+
+// GetPoliciesByFarmerID retrieves all policies for a specific farmer
+func (s *RegisteredPolicyService) GetPoliciesByFarmerID(farmerID string) ([]models.RegisteredPolicy, error) {
+	return s.registeredPolicyRepo.GetByFarmerID(farmerID)
+}
+
+// GetPoliciesByProviderID retrieves all policies for a specific insurance provider
+func (s *RegisteredPolicyService) GetPoliciesByProviderID(providerID string) ([]models.RegisteredPolicy, error) {
+	return s.registeredPolicyRepo.GetByInsuranceProviderID(providerID)
+}
+
+// GetAllPolicies retrieves all registered policies
+func (s *RegisteredPolicyService) GetAllPolicies() ([]models.RegisteredPolicy, error) {
+	return s.registeredPolicyRepo.GetAll()
+}
+
+// GetRegisteredPoliciesWithFilters retrieves registered policies with optional filters and presigned URLs
+func (s *RegisteredPolicyService) GetRegisteredPoliciesWithFilters(ctx context.Context, filter models.RegisteredPolicyFilterRequest) (*models.RegisteredPolicyFilterResponse, error) {
+	// Get filtered policies from repository
+	policies, err := s.registeredPolicyRepo.GetWithFilters(filter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get filtered policies: %w", err)
+	}
+
+	// Build response with additional details
+	var policiesWithDetails []models.RegisteredPolicyWithDetails
+	for _, policy := range policies {
+		policyDetail := models.RegisteredPolicyWithDetails{
+			RegisteredPolicy: policy,
+		}
+
+		// Fetch minimal farm info
+		if policy.FarmID != uuid.Nil {
+			farm, err := s.farmService.GetByFarmID(ctx, policy.FarmID.String())
+			if err == nil && farm != nil {
+				policyDetail.Farm = &models.MinimalFarmInfo{
+					ID:             farm.ID,
+					FarmName:       farm.FarmName,
+					FarmCode:       farm.FarmCode,
+					AreaSqm:        farm.AreaSqm,
+					Province:       farm.Province,
+					District:       farm.District,
+					Commune:        farm.Commune,
+					CropType:       farm.CropType,
+					CenterLocation: farm.CenterLocation,
+				}
+			}
+		}
+
+		// Fetch minimal base policy info
+		basePolicy, err := s.basePolicyRepo.GetBasePolicyByID(policy.BasePolicyID)
+		if err == nil && basePolicy != nil {
+			policyDetail.BasePolicy = &models.MinimalBasePolicyInfo{
+				ID:                   basePolicy.ID,
+				ProductName:          basePolicy.ProductName,
+				CropType:             basePolicy.CropType,
+				CoverageCurrency:     basePolicy.CoverageCurrency,
+				CoverageDurationDays: basePolicy.CoverageDurationDays,
+				Status:               basePolicy.Status,
+			}
+		}
+
+		// Generate presigned URL if requested and document exists
+		if filter.IncludePresignedURL && policy.SignedPolicyDocumentURL != nil && *policy.SignedPolicyDocumentURL != "" {
+			expiryDuration := time.Duration(filter.URLExpiryHours) * time.Hour
+			presignedURL, err := s.minioClient.GetPresignedURL(ctx, minio.Storage.PolicyDocuments, *policy.SignedPolicyDocumentURL, expiryDuration)
+			if err != nil {
+				slog.Warn("Failed to generate presigned URL",
+					"policy_id", policy.ID,
+					"document_url", *policy.SignedPolicyDocumentURL,
+					"error", err)
+			} else {
+				policyDetail.PresignedDocumentURL = &presignedURL
+				expiryTime := time.Now().Add(expiryDuration)
+				policyDetail.PresignedURLExpiryTime = &expiryTime
+			}
+		}
+
+		policiesWithDetails = append(policiesWithDetails, policyDetail)
+	}
+
+	return &models.RegisteredPolicyFilterResponse{
+		Policies:   policiesWithDetails,
+		TotalCount: len(policiesWithDetails),
+		Filters:    filter,
+	}, nil
+}
