@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"regexp"
@@ -894,6 +895,14 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 	if err != nil {
 		return nil, fmt.Errorf("error creating new user: %s", err)
 	}
+
+	// create farmer profile
+	isSuccess, err := s.CreateFarmerProfile(newUser.ID, phone, email)
+	if err != nil && !isSuccess {
+		slog.Error("failed to create farmer profile", "error", err)
+		return nil, err
+	}
+
 	// create ekyc progress
 	ekycProgress := models.UserEkycProgress{
 		UserID:         newUser.ID,
@@ -909,6 +918,71 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 		return nil, err
 	}
 	return &newUser, nil
+}
+
+func (s *UserService) CreateFarmerProfile(userID string, phone string, email string) (bool, error) {
+	payload := map[string]interface{}{
+		"user_id":           userID,
+		"role_id":           "user",
+		"partner_id":        nil,
+		"full_name":         "",
+		"display_name":      "",
+		"date_of_birth":     "1970-01-01",
+		"gender":            "",
+		"nationality":       "VN",
+		"email":             email,
+		"primary_phone":     phone,
+		"alternate_phone":   "",
+		"permanent_address": "",
+		"current_address":   "",
+		"province_code":     "",
+		"province_name":     "",
+		"district_code":     "",
+		"district_name":     "",
+		"ward_code":         "",
+		"ward_name":         "",
+		"postal_code":       "",
+	}
+
+	jsonBody, err := json.Marshal(payload)
+	if err != nil {
+		slog.Error("failed to marshal request body", "error", err)
+		return false, fmt.Errorf("badrequest: failed to marshal request body: %w", err)
+	}
+
+	apiURL := s.cfg.AuthCfg.CreateUserProfileURL
+
+	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		slog.Error("failed to create HTTP request", "error", err)
+		return false, fmt.Errorf("internal_error: failed to create HTTP request")
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	req.Host = s.cfg.AuthCfg.CreateUserProfileHostAPI
+	slog.Info("sending request to Verify National ID API", "url", apiURL, "host", req.Host)
+
+	client := &http.Client{Timeout: 120 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error("failed to send HTTP request", "error", err)
+		return false, fmt.Errorf("internal_error: failed to send HTTP request")
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		slog.Error("failed to read response body", "error", err)
+		return false, fmt.Errorf("internal_error: failed to read response body")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Error("failed to create farmer profile", "status_code", resp.StatusCode, "response_body", string(body))
+		return false, fmt.Errorf("badrequest: failed to create farmer profile, status code: %d, response: %s", resp.StatusCode, string(body))
+	}
+
+	return true, nil
 }
 
 func (s *UserService) GetUserByEmail(email string) (*models.User, error) {

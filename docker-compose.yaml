@@ -210,6 +210,8 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - ADMIN_PWD=${ADMIN_PWD}
       - API_KEY=${API_KEY}
+      - CREATE_USER_PROFILE_URL=${CREATE_USER_PROFILE_URL}
+      - CREATE_USER_PROFILE_HOST_API=${CREATE_USER_PROFILE_HOST_API}
 
     volumes:
       - ./logs/auth-service:/agrisa/log/auth_service
