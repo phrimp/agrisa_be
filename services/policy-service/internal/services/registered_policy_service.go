@@ -1051,7 +1051,7 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 	request.RegisteredPolicy.CoverageAmount = calculateCoverageAmount
 
 	// validate register policy
-	err = s.validateRegisteredPolicy(&request.RegisteredPolicy, completeBasePolicy.Metadata.TotalDataCost, calculatedTotalPremium)
+	err = s.validateRegisteredPolicy(&request.RegisteredPolicy, calculatedTotalPremium, completeBasePolicy.Metadata.TotalDataCost)
 	if err != nil {
 		slog.Error("error validating registered policy", "policy", request.RegisteredPolicy, "error", err)
 		return nil, fmt.Errorf("error validating registered policy: %w", err)
