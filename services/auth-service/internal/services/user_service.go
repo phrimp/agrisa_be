@@ -977,7 +977,7 @@ func (s *UserService) CreateFarmerProfile(userID string, phone string, email str
 		return false, fmt.Errorf("internal_error: failed to read response body")
 	}
 
-	if resp.StatusCode != http.StatusOK {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 		slog.Error("failed to create farmer profile", "status_code", resp.StatusCode, "response_body", string(body))
 		return false, fmt.Errorf("badrequest: failed to create farmer profile, status code: %d, response: %s", resp.StatusCode, string(body))
 	}
