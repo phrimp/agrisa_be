@@ -361,9 +361,48 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		return fmt.Errorf("invalid farm_id format: %w", err)
 	}
 
-	dataSources, err := s.dataSourceRepo.GetDataSourcesByBasePolicyID(basePolicyID)
+	// Get triggers and conditions for this base policy
+	triggers, err := s.basePolicyRepo.GetBasePolicyTriggersByPolicyID(basePolicyID)
 	if err != nil {
-		return fmt.Errorf("retrieve data sources from base policy id failed: %w", err)
+		return fmt.Errorf("retrieve triggers from base policy id failed: %w", err)
+	}
+
+	if len(triggers) == 0 {
+		return fmt.Errorf("no triggers found for base policy %s", basePolicyID)
+	}
+
+	// Build list of conditions with their data sources
+	type conditionWithDataSource struct {
+		ConditionID uuid.UUID
+		DataSource  models.DataSource
+	}
+	var conditionsWithDataSources []conditionWithDataSource
+
+	for _, trigger := range triggers {
+		conditions, err := s.basePolicyRepo.GetBasePolicyTriggerConditionsByTriggerID(trigger.ID)
+		if err != nil {
+			slog.Warn("Failed to get conditions for trigger", "trigger_id", trigger.ID, "error", err)
+			continue
+		}
+
+		for _, cond := range conditions {
+			ds, err := s.dataSourceRepo.GetDataSourceByID(cond.DataSourceID)
+			if err != nil {
+				slog.Warn("Failed to get data source for condition",
+					"condition_id", cond.ID,
+					"data_source_id", cond.DataSourceID,
+					"error", err)
+				continue
+			}
+			conditionsWithDataSources = append(conditionsWithDataSources, conditionWithDataSource{
+				ConditionID: cond.ID,
+				DataSource:  *ds,
+			})
+		}
+	}
+
+	if len(conditionsWithDataSources) == 0 {
+		return fmt.Errorf("no conditions with data sources found for base policy %s", basePolicyID)
 	}
 
 	startDateFloat, ok := params["start_date"].(float64)
@@ -418,9 +457,9 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	endDateStr := unixToDateString(endDate)
 
 	// Initialize worker pool
-	numWorkers := min(10, len(dataSources))
-	jobs := make(chan DataRequest, len(dataSources))
-	results := make(chan DataResponse, len(dataSources))
+	numWorkers := min(10, len(conditionsWithDataSources))
+	jobs := make(chan DataRequest, len(conditionsWithDataSources))
+	results := make(chan DataResponse, len(conditionsWithDataSources))
 
 	// Create HTTP client with timeout
 	httpClient := &http.Client{
@@ -432,16 +471,16 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		go fetchMonitoringDataWorker(jobs, results, httpClient)
 	}
 
-	// Enqueue jobs for each data source
-	for _, ds := range dataSources {
+	// Enqueue jobs for each condition with data source
+	for _, cds := range conditionsWithDataSources {
 		jobs <- DataRequest{
-			DataSource:                   ds,
+			DataSource:                   cds.DataSource,
 			FarmID:                       farmID,
 			FarmCoordinates:              farmCoordinates,
 			AgroPolygonID:                farm.AgroPolygonID,
 			StartDate:                    startDateStr,
 			EndDate:                      endDateStr,
-			BasePolicyTriggerConditionID: uuid.Nil, // Will be set by trigger conditions
+			BasePolicyTriggerConditionID: cds.ConditionID,
 			MaxCloudCover:                100.0,
 			MaxImages:                    10,
 			IncludeComponents:            true,
@@ -455,7 +494,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	skipSummary := make(map[models.DataSourceParameterName]string)
 	var agroPolygonID string // Store polygon ID from weather API
 
-	for i := 0; i < len(dataSources); i++ {
+	for i := 0; i < len(conditionsWithDataSources); i++ {
 		resp := <-results
 
 		if resp.Err != nil {
@@ -514,14 +553,14 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	}
 
 	// Log summary
-	successCount := len(dataSources) - len(errorSummary) - len(skipSummary)
-	successRate := float64(successCount) / float64(len(dataSources)) * 100
+	successCount := len(conditionsWithDataSources) - len(errorSummary) - len(skipSummary)
+	successRate := float64(successCount) / float64(len(conditionsWithDataSources)) * 100
 
 	slog.Info("Farm monitoring data fetch completed",
 		"policy_id", policyID,
 		"farm_id", farmID,
 		"base_policy_id", basePolicyID,
-		"total_sources", len(dataSources),
+		"total_conditions", len(conditionsWithDataSources),
 		"successful", successCount,
 		"failed", len(errorSummary),
 		"skipped", len(skipSummary),
@@ -529,8 +568,8 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		"records_stored", len(allMonitoringData))
 
 	// Only fail if ALL sources failed
-	if len(errorSummary) == len(dataSources) {
-		return fmt.Errorf("all %d data sources failed to fetch", len(dataSources))
+	if len(errorSummary) == len(conditionsWithDataSources) {
+		return fmt.Errorf("all %d data sources failed to fetch", len(conditionsWithDataSources))
 	}
 
 	riskAnalysisJob := worker.JobPayload{
