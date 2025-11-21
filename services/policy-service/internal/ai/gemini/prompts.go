@@ -601,7 +601,7 @@ Analyze the provided multi-parameter data and generate a comprehensive risk asse
 - Owner ID: %s
 - Farm Name: %s
 - Farm Code: %s
-- Area (m²): %.2f
+- Area (ha): %.2f
 - Agro Polygon ID: %s
 
 **Geographic Information:**
