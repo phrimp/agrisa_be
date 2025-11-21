@@ -171,6 +171,12 @@ func (s *BasePolicyService) validateBasePolicy(policy *models.BasePolicy) error 
 	if policy.OverThresholdMultiplier < 0 {
 		return fmt.Errorf("over threshold multiplier cannot be negative")
 	}
+	if policy.EnrollmentStartDay == nil {
+		return fmt.Errorf("enrollment start day is required")
+	}
+	if policy.EnrollmentEndDay == nil {
+		return fmt.Errorf("enrollment end day is required")
+	}
 	if !s.isValidBasePolicyStatus(policy.Status) {
 		return fmt.Errorf("invalid status: %s", policy.Status)
 	}
