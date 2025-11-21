@@ -1047,8 +1047,10 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 	request.RegisteredPolicy.PremiumPaidByFarmer = false
 
 	calculatedTotalPremium := s.calculateFarmerPremium(farm.AreaSqm, completeBasePolicy.BasePolicy.PremiumBaseRate, completeBasePolicy.BasePolicy.FixPremiumAmount)
-	calculateCoverageAmount := s.calculateCoverageAmount(completeBasePolicy.BasePolicy.PayoutBaseRate, farm.AreaSqm, completeBasePolicy.BasePolicy.FixPayoutAmount, completeBasePolicy.BasePolicy.IsPerHectare)
-	request.RegisteredPolicy.CoverageAmount = calculateCoverageAmount
+	slog.Info("Total Calculated Premium", "premium", calculatedTotalPremium)
+	calculatedCoverageAmount := s.calculateCoverageAmount(completeBasePolicy.BasePolicy.PayoutBaseRate, farm.AreaSqm, completeBasePolicy.BasePolicy.FixPayoutAmount, completeBasePolicy.BasePolicy.IsPerHectare)
+	slog.Info("Total Coverage Amount", "coverage amount", calculatedCoverageAmount)
+	request.RegisteredPolicy.CoverageAmount = calculatedCoverageAmount
 
 	// validate register policy
 	err = s.validateRegisteredPolicy(&request.RegisteredPolicy, calculatedTotalPremium, completeBasePolicy.Metadata.TotalDataCost)
