@@ -98,13 +98,15 @@ func main() {
 		log.Printf("error connect to redis: %s", err)
 	}
 
-	keys := strings.Split(cfg.GeminiAPICfg.APIKey, ",")
-	for _, key := range keys {
+	keys := strings.SplitSeq(cfg.GeminiAPICfg.APIKey, ",")
+	for key := range keys {
 		geminiClient, err := gemini.NewGenAIClient(key, cfg.GeminiAPICfg.FlashName, cfg.GeminiAPICfg.ProName)
 		if err != nil {
 			slog.Error("error initializing gemini client", "error", err)
+		} else {
+			slog.Info("gemini client added", "key", key)
+			gemini.GeminiClients = append(gemini.GeminiClients, *geminiClient)
 		}
-		gemini.GeminiClients = append(gemini.GeminiClients, *geminiClient)
 	}
 
 	// Initialize MinIO client
