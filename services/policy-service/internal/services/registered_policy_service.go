@@ -282,6 +282,13 @@ type TimeRange struct {
 }
 
 // SatelliteAPIResponse matches the satellite-data-service response structure
+// StatValue represents a statistical value with unit and range
+type StatValue struct {
+	Value float64 `json:"value"`
+	Unit  string  `json:"unit"`
+	Range string  `json:"range,omitempty"`
+}
+
 type SatelliteAPIResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message"`
@@ -296,13 +303,21 @@ type SatelliteAPIResponse struct {
 				Value float64 `json:"value"`
 				Unit  string  `json:"unit"`
 			} `json:"cloud_cover"`
-			Statistics struct {
-				Mean   *float64 `json:"mean"`
-				Median *float64 `json:"median"`
-				Min    *float64 `json:"min"`
-				Max    *float64 `json:"max"`
-				Stddev *float64 `json:"stddev"`
-			} `json:"statistics"`
+			// Support both ndmi_statistics and ndvi_statistics formats
+			NDMIStatistics *struct {
+				Mean   *StatValue `json:"mean,omitempty"`
+				Median *StatValue `json:"median,omitempty"`
+				Min    *StatValue `json:"min,omitempty"`
+				Max    *StatValue `json:"max,omitempty"`
+				StdDev *StatValue `json:"std_dev,omitempty"`
+			} `json:"ndmi_statistics,omitempty"`
+			NDVIStatistics *struct {
+				Mean   *StatValue `json:"mean,omitempty"`
+				Median *StatValue `json:"median,omitempty"`
+				Min    *StatValue `json:"min,omitempty"`
+				Max    *StatValue `json:"max,omitempty"`
+				StdDev *StatValue `json:"std_dev,omitempty"`
+			} `json:"ndvi_statistics,omitempty"`
 			ComponentData *struct {
 				NIR  *float64 `json:"nir,omitempty"`
 				Red  *float64 `json:"red,omitempty"`
@@ -853,25 +868,62 @@ func convertToMonitoringData(
 	var monitoringData []models.FarmMonitoringData
 
 	for _, image := range apiResp.Data.Images {
+		// Determine which statistics field to use based on parameter type
+		var meanValue, medianValue, minValue, maxValue, stddevValue *float64
+
+		if image.NDMIStatistics != nil {
+			if image.NDMIStatistics.Mean != nil {
+				meanValue = &image.NDMIStatistics.Mean.Value
+			}
+			if image.NDMIStatistics.Median != nil {
+				medianValue = &image.NDMIStatistics.Median.Value
+			}
+			if image.NDMIStatistics.Min != nil {
+				minValue = &image.NDMIStatistics.Min.Value
+			}
+			if image.NDMIStatistics.Max != nil {
+				maxValue = &image.NDMIStatistics.Max.Value
+			}
+			if image.NDMIStatistics.StdDev != nil {
+				stddevValue = &image.NDMIStatistics.StdDev.Value
+			}
+		} else if image.NDVIStatistics != nil {
+			if image.NDVIStatistics.Mean != nil {
+				meanValue = &image.NDVIStatistics.Mean.Value
+			}
+			if image.NDVIStatistics.Median != nil {
+				medianValue = &image.NDVIStatistics.Median.Value
+			}
+			if image.NDVIStatistics.Min != nil {
+				minValue = &image.NDVIStatistics.Min.Value
+			}
+			if image.NDVIStatistics.Max != nil {
+				maxValue = &image.NDVIStatistics.Max.Value
+			}
+			if image.NDVIStatistics.StdDev != nil {
+				stddevValue = &image.NDVIStatistics.StdDev.Value
+			}
+		}
+
 		// Log full image details for debugging
 		slog.Info("Processing satellite image",
 			"parameter", req.DataSource.ParameterName,
 			"acquisition_date", image.AcquisitionDate,
 			"cloud_cover", image.CloudCover.Value,
-			"statistics_mean", image.Statistics.Mean,
-			"statistics_median", image.Statistics.Median,
-			"statistics_min", image.Statistics.Min,
-			"statistics_max", image.Statistics.Max)
+			"statistics_mean", meanValue,
+			"statistics_median", medianValue,
+			"statistics_min", minValue,
+			"statistics_max", maxValue)
 
 		// Skip images with no valid measurements
-		if image.Statistics.Mean == nil {
+		if meanValue == nil {
 			slog.Warn("Skipping image with no mean value",
 				"parameter", req.DataSource.ParameterName,
 				"acquisition_date", image.AcquisitionDate,
 				"cloud_cover", image.CloudCover.Value,
-				"has_median", image.Statistics.Median != nil,
-				"has_min", image.Statistics.Min != nil,
-				"has_max", image.Statistics.Max != nil)
+				"has_median", medianValue != nil,
+				"has_min", minValue != nil,
+				"has_max", maxValue != nil)
 			continue
 		}
 
@@ -900,10 +952,10 @@ func convertToMonitoringData(
 
 		// Add statistics to component data
 		componentData["statistics"] = map[string]interface{}{
-			"median": image.Statistics.Median,
-			"min":    image.Statistics.Min,
-			"max":    image.Statistics.Max,
-			"stddev": image.Statistics.Stddev,
+			"median": medianValue,
+			"min":    minValue,
+			"max":    maxValue,
+			"stddev": stddevValue,
 		}
 
 		// Determine data quality based on cloud cover
@@ -922,7 +974,7 @@ func convertToMonitoringData(
 			FarmID:                       req.FarmID,
 			BasePolicyTriggerConditionID: req.BasePolicyTriggerConditionID,
 			ParameterName:                req.DataSource.ParameterName,
-			MeasuredValue:                *image.Statistics.Mean,
+			MeasuredValue:                *meanValue,
 			Unit:                         req.DataSource.Unit,
 			MeasurementTimestamp:         acquisitionTime.Unix(),
 			ComponentData:                componentData,

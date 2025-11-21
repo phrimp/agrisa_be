@@ -292,10 +292,17 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 		}
 	}
 
+	// Log actual values for debugging numeric overflow
+	var scoreValue float64
+	if riskAnalysis.OverallRiskScore != nil {
+		scoreValue = *riskAnalysis.OverallRiskScore
+	}
+
 	slog.Info("Risk analysis parsed successfully",
 		"analysis_id", riskAnalysis.ID,
 		"analysis_status", riskAnalysis.AnalysisStatus,
-		"overall_risk_score", riskAnalysis.OverallRiskScore,
+		"overall_risk_score_value", scoreValue,
+		"analysis_timestamp_value", riskAnalysis.AnalysisTimestamp,
 		"overall_risk_level", riskAnalysis.OverallRiskLevel)
 
 	// 10. Persist risk analysis
@@ -353,6 +360,12 @@ func (s *RegisteredPolicyService) downloadFarmPhotosParallel(
 					"photo_url", p.PhotoURL)
 				return
 			}
+
+			slog.Info("Attempting to download photo",
+				"photo_id", p.ID,
+				"photo_url", p.PhotoURL,
+				"extracted_key", objectKey,
+				"bucket", minio.Storage.PolicyAttachments)
 
 			obj, err := s.minioClient.GetFile(ctx, minio.Storage.PolicyAttachments, objectKey)
 			if err != nil {
