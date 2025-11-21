@@ -88,6 +88,32 @@ func (s *PDFService) fillFormFields(pdfData []byte, values map[string]string) ([
 	reader := bytes.NewReader(pdfData)
 	conf := pdfcpuModel.NewDefaultConfiguration()
 
+	ctx, err := api.ReadContext(reader, conf)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read PDF context: %w", err)
+	}
+
+	if ctx.Form == nil || len(ctx.Form) == 0 {
+		return nil, errors.New("PDF has no form fields (AcroForm)")
+	}
+
+	// Log available fields
+	availableFields := make([]string, 0, len(ctx.Form))
+	for fieldName := range ctx.Form {
+		availableFields = append(availableFields, fieldName)
+	}
+	slog.Info("PDF form fields available", "fields", availableFields)
+
+	// Log provided keys
+	providedKeys := make([]string, 0, len(values))
+	for key := range values {
+		providedKeys = append(providedKeys, key)
+	}
+	slog.Info("Provided form data keys", "keys", providedKeys)
+
+	// Reset reader for FillForm
+	reader = bytes.NewReader(pdfData)
+
 	// Convert values map to JSON
 	jsonData, err := json.Marshal(values)
 	if err != nil {
