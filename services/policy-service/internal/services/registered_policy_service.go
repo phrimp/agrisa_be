@@ -793,6 +793,14 @@ func fetchSatelliteData(
 
 	// Create HTTP request
 	fullURL := endpoint + "?" + params.Encode()
+	slog.Info("Satellite API request",
+		"full_url", fullURL,
+		"parameter", req.DataSource.ParameterName,
+		"start_date", req.StartDate,
+		"end_date", req.EndDate,
+		"max_cloud_cover", req.MaxCloudCover,
+		"coordinates_length", len(string(coordsJSON)))
+
 	httpReq, err := http.NewRequest("GET", fullURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -845,11 +853,25 @@ func convertToMonitoringData(
 	var monitoringData []models.FarmMonitoringData
 
 	for _, image := range apiResp.Data.Images {
+		// Log full image details for debugging
+		slog.Info("Processing satellite image",
+			"parameter", req.DataSource.ParameterName,
+			"acquisition_date", image.AcquisitionDate,
+			"cloud_cover", image.CloudCover.Value,
+			"statistics_mean", image.Statistics.Mean,
+			"statistics_median", image.Statistics.Median,
+			"statistics_min", image.Statistics.Min,
+			"statistics_max", image.Statistics.Max)
+
 		// Skip images with no valid measurements
 		if image.Statistics.Mean == nil {
 			slog.Warn("Skipping image with no mean value",
 				"parameter", req.DataSource.ParameterName,
-				"acquisition_date", image.AcquisitionDate)
+				"acquisition_date", image.AcquisitionDate,
+				"cloud_cover", image.CloudCover.Value,
+				"has_median", image.Statistics.Median != nil,
+				"has_min", image.Statistics.Min != nil,
+				"has_max", image.Statistics.Max != nil)
 			continue
 		}
 
