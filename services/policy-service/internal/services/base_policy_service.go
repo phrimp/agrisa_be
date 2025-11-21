@@ -1233,6 +1233,10 @@ func (s *BasePolicyService) getDocumentInfo(
 		HasDocument: false,
 	}
 
+	if expiryHours <= 0 {
+		expiryHours = 1 // Default to 1 hour minimum
+	}
+
 	// Check if template document URL exists
 	if policy.TemplateDocumentURL == nil || *policy.TemplateDocumentURL == "" {
 		slog.Info("No template document URL found for policy",
