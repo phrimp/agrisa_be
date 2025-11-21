@@ -13,16 +13,18 @@ COPY services/policy-service/ .
 # Build the application
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/main.go
 # Final stage
-FROM alpine:latest
-# Install ca-certificates for HTTPS requests
-# Create app directory
+FROM debian:bookworm-slim
+# Install ca-certificates and pdftk for PDF form filling
 WORKDIR /app
-RUN apk add --no-cache tzdata pdftk-java
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    tzdata \
+    pdftk-java \
+    && rm -rf /var/lib/apt/lists/*
 ENV TZ=Asia/Ho_Chi_Minh
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-RUN apk --no-cache add ca-certificates && \
-    addgroup -g 1001 appgroup && \
-    adduser -D -u 1001 -G appgroup appuser
+RUN groupadd -g 1001 appgroup && \
+    useradd -u 1001 -g appgroup -s /bin/false appuser
 # Copy the binary from builder stage
 COPY --from=builder /app/main /app/
 RUN chown -R appuser:appgroup /app
