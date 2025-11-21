@@ -1121,14 +1121,18 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 		}
 		currentTime := time.Now()
 		previousYearTime := currentTime.AddDate(-1, 0, 0)
-		formattedTime := currentTime.Format("2006-01-02")
-		previousYearFormattedTime := previousYearTime.Format("2006-01-02")
 
 		// send job
 		fullYearJob := worker.JobPayload{
-			JobID:      uuid.NewString(),
-			Type:       "fetch-farm-monitoring-data",
-			Params:     map[string]any{"policy_id": request.RegisteredPolicy.ID, "base_policy_id": completeBasePolicy.BasePolicy.ID, "farm_id": farm.ID, "start_date": previousYearFormattedTime, "end_date": formattedTime},
+			JobID: uuid.NewString(),
+			Type:  "fetch-farm-monitoring-data",
+			Params: map[string]any{
+				"policy_id":      request.RegisteredPolicy.ID,
+				"base_policy_id": completeBasePolicy.BasePolicy.ID,
+				"farm_id":        farm.ID,
+				"start_date":     previousYearTime.Unix(), // int64
+				"end_date":       currentTime.Unix(),      // int64
+			},
 			MaxRetries: 10,
 			OneTime:    true,
 			RunNow:     true,
