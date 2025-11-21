@@ -281,16 +281,18 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 		riskAnalysis.AnalysisTimestamp = riskAnalysis.AnalysisTimestamp / 1000
 	}
 
-	// Validate risk score is within expected range (0-100)
+	// Validate and normalize risk score to 0-1 range for database storage
+	// AI returns 0-100, but DB schema expects DECIMAL(5,4) which is 0.0000-9.9999
 	if riskAnalysis.OverallRiskScore != nil {
 		score := *riskAnalysis.OverallRiskScore
 		if score < 0 {
-			zero := 0.0
-			riskAnalysis.OverallRiskScore = &zero
+			score = 0
 		} else if score > 100 {
-			hundred := 100.0
-			riskAnalysis.OverallRiskScore = &hundred
+			score = 100
 		}
+		// Normalize to 0-1 range (divide by 100)
+		normalized := score / 100.0
+		riskAnalysis.OverallRiskScore = &normalized
 	}
 
 	// Cap all nested risk_score values in JSON maps to prevent numeric overflow
@@ -518,7 +520,7 @@ func getMapKeys(m map[string]any) []string {
 	return keys
 }
 
-// capRiskScoresInMap recursively caps all risk_score values in a map to 100
+// capRiskScoresInMap recursively caps all score-related values in a map to 100
 func capRiskScoresInMap(m map[string]any) {
 	if m == nil {
 		return
@@ -527,9 +529,20 @@ func capRiskScoresInMap(m map[string]any) {
 	for key, value := range m {
 		switch v := value.(type) {
 		case float64:
-			// Cap risk_score, fraud_score, and similar fields
-			if strings.Contains(strings.ToLower(key), "score") && v > 100 {
+			// Cap any field containing "score" or "risk" in the name
+			lowerKey := strings.ToLower(key)
+			if (strings.Contains(lowerKey, "score") || strings.Contains(lowerKey, "risk")) && v > 100 {
+				slog.Debug("Capping score field", "key", key, "original", v, "capped", 100.0)
 				m[key] = 100.0
+			}
+		case json.Number:
+			// Handle json.Number type (when using decoder with UseNumber)
+			if f, err := v.Float64(); err == nil {
+				lowerKey := strings.ToLower(key)
+				if (strings.Contains(lowerKey, "score") || strings.Contains(lowerKey, "risk")) && f > 100 {
+					slog.Debug("Capping score field (json.Number)", "key", key, "original", f, "capped", 100.0)
+					m[key] = 100.0
+				}
 			}
 		case map[string]any:
 			capRiskScoresInMap(v)
