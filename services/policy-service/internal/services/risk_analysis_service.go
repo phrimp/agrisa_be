@@ -246,14 +246,16 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 		return fmt.Errorf("AI risk analysis failed: %w", err)
 	}
 
-	slog.Info("AI risk analysis response received", "response_keys", getMapKeys(aiResp))
-
 	// 9. Parse AI response into risk analysis structure
 	var riskAnalysis models.RegisteredPolicyRiskAnalysis
 	respBytes, err := json.Marshal(aiResp)
 	if err != nil {
 		return fmt.Errorf("failed to marshal AI response: %w", err)
 	}
+
+	slog.Info("AI risk analysis response received",
+		"response_keys", getMapKeys(aiResp),
+		"raw_response", string(respBytes))
 
 	if err := json.Unmarshal(respBytes, &riskAnalysis); err != nil {
 		slog.Error("Failed to unmarshal risk analysis response",
@@ -415,6 +417,7 @@ func (s *RegisteredPolicyService) downloadFarmPhotosParallel(
 func extractObjectKeyFromURL(photoURL string) string {
 	// Handle different URL formats:
 	// - Full URL: http://minio:9000/bucket/path/to/file.jpg
+	// - URL without protocol: hostname.com/bucket/path/to/file.jpg
 	// - Relative path: /bucket/path/to/file.jpg
 	// - Just the key: path/to/file.jpg
 
@@ -422,8 +425,9 @@ func extractObjectKeyFromURL(photoURL string) string {
 		return ""
 	}
 
-	// Remove protocol and host if present
 	url := photoURL
+
+	// Remove protocol and host if present
 	if strings.Contains(url, "://") {
 		parts := strings.SplitN(url, "://", 2)
 		if len(parts) == 2 {
@@ -433,6 +437,13 @@ func extractObjectKeyFromURL(photoURL string) string {
 			if slashIdx != -1 {
 				url = hostAndPath[slashIdx:]
 			}
+		}
+	} else {
+		// Handle URL without protocol (e.g., hostname.com/bucket/path)
+		// Check if first segment contains a dot (likely a hostname)
+		parts := strings.SplitN(url, "/", 2)
+		if len(parts) == 2 && strings.Contains(parts[0], ".") {
+			url = "/" + parts[1]
 		}
 	}
 
