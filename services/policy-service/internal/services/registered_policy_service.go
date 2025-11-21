@@ -375,7 +375,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		JobID:      uuid.NewString(),
 		Type:       "risk-analysis",
 		Params:     map[string]any{"registered_policy_id": policyID, "force_reanalysis": false},
-		MaxRetries: 10,
+		MaxRetries: 2,
 		OneTime:    true,
 		RunNow:     true,
 	}

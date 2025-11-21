@@ -1028,6 +1028,7 @@ Higher score = higher risk (concerning)
 - Flag limitations and data gaps explicitly
 - Prioritize fraud detection - it protects both farmers and insurers
 - When in doubt, recommend manual verification
+- Translate response value to Vietnamese
 
 **Current Analysis Parameters:**
 - Farm: %s (ID: %s)

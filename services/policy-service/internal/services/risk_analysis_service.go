@@ -8,7 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"policy-service/internal/ai/gemini"
-	"policy-service/internal/database/minio"
 	"policy-service/internal/models"
 	"strings"
 	"sync"
@@ -294,6 +293,11 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 		}
 	}
 
+	// Cap all nested risk_score values in JSON maps to prevent numeric overflow
+	capRiskScoresInMap(riskAnalysis.IdentifiedRisks)
+	capRiskScoresInMap(riskAnalysis.Recommendations)
+	capRiskScoresInMap(riskAnalysis.RawOutput)
+
 	// Log actual values for debugging numeric overflow
 	var scoreValue float64
 	if riskAnalysis.OverallRiskScore != nil {
@@ -354,22 +358,24 @@ func (s *RegisteredPolicyService) downloadFarmPhotosParallel(
 		go func(idx int, p models.FarmPhoto) {
 			defer wg.Done()
 
-			// Extract object key from URL
-			objectKey := extractObjectKeyFromURL(p.PhotoURL)
-			if objectKey == "" {
-				slog.Warn("Could not extract object key from photo URL",
+			// Extract bucket and object key from URL
+			bucket, objectKey := extractBucketAndKeyFromURL(p.PhotoURL)
+			if bucket == "" || objectKey == "" {
+				slog.Warn("Could not extract bucket/key from photo URL",
 					"photo_id", p.ID,
-					"photo_url", p.PhotoURL)
+					"photo_url", p.PhotoURL,
+					"extracted_bucket", bucket,
+					"extracted_key", objectKey)
 				return
 			}
 
 			slog.Info("Attempting to download photo",
 				"photo_id", p.ID,
 				"photo_url", p.PhotoURL,
-				"extracted_key", objectKey,
-				"bucket", minio.Storage.PolicyAttachments)
+				"bucket", bucket,
+				"extracted_key", objectKey)
 
-			obj, err := s.minioClient.GetFile(ctx, minio.Storage.PolicyAttachments, objectKey)
+			obj, err := s.minioClient.GetFile(ctx, bucket, objectKey)
 			if err != nil {
 				errChan <- fmt.Errorf("photo %d (%s): %w", idx, p.ID, err)
 				return
@@ -413,16 +419,17 @@ func (s *RegisteredPolicyService) downloadFarmPhotosParallel(
 	return result, nil
 }
 
-// extractObjectKeyFromURL extracts the object key from a MinIO URL
-func extractObjectKeyFromURL(photoURL string) string {
+// extractBucketAndKeyFromURL extracts the bucket name and object key from a MinIO URL
+// Returns bucket name and object key
+func extractBucketAndKeyFromURL(photoURL string) (string, string) {
 	// Handle different URL formats:
 	// - Full URL: http://minio:9000/bucket/path/to/file.jpg
 	// - URL without protocol: hostname.com/bucket/path/to/file.jpg
 	// - Relative path: /bucket/path/to/file.jpg
-	// - Just the key: path/to/file.jpg
+	// - Just bucket/key: bucket/path/to/file.jpg
 
 	if photoURL == "" {
-		return ""
+		return "", ""
 	}
 
 	url := photoURL
@@ -450,17 +457,13 @@ func extractObjectKeyFromURL(photoURL string) string {
 	// Remove leading slash
 	url = strings.TrimPrefix(url, "/")
 
-	// If URL contains bucket name, remove it
-	// Assuming bucket name is the first path segment
+	// Split into bucket and key
 	parts := strings.SplitN(url, "/", 2)
 	if len(parts) == 2 {
-		// Check if first part looks like a bucket name (no dots, reasonable length)
-		if len(parts[0]) > 0 && len(parts[0]) < 64 && !strings.Contains(parts[0], ".") {
-			return parts[1]
-		}
+		return parts[0], parts[1]
 	}
 
-	return url
+	return "", url
 }
 
 // determineUnderwritingStatus determines the underwriting status based on risk analysis
@@ -513,4 +516,29 @@ func getMapKeys(m map[string]any) []string {
 		keys = append(keys, k)
 	}
 	return keys
+}
+
+// capRiskScoresInMap recursively caps all risk_score values in a map to 100
+func capRiskScoresInMap(m map[string]any) {
+	if m == nil {
+		return
+	}
+
+	for key, value := range m {
+		switch v := value.(type) {
+		case float64:
+			// Cap risk_score, fraud_score, and similar fields
+			if strings.Contains(strings.ToLower(key), "score") && v > 100 {
+				m[key] = 100.0
+			}
+		case map[string]any:
+			capRiskScoresInMap(v)
+		case []any:
+			for _, item := range v {
+				if itemMap, ok := item.(map[string]any); ok {
+					capRiskScoresInMap(itemMap)
+				}
+			}
+		}
+	}
 }
