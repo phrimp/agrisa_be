@@ -1070,9 +1070,12 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 	documentLocation := completeBasePolicy.Document.DocumentURL
 	signedDocumentLocation, err := s.pdfDocumentService.FillFromStorageAndUpload(ctx, *documentLocation, request.PolicyTags)
 	if err != nil {
-		return nil, fmt.Errorf("error generate signed document: %w", err)
+		slog.Error("error generate signed document", "error", err)
+		// return nil, fmt.Errorf("error generate signed document: %w", err)
+		request.RegisteredPolicy.SignedPolicyDocumentURL = documentLocation
+	} else {
+		request.RegisteredPolicy.SignedPolicyDocumentURL = &signedDocumentLocation
 	}
-	request.RegisteredPolicy.SignedPolicyDocumentURL = &signedDocumentLocation
 
 	// create new register policy
 	err = s.registeredPolicyRepo.CreateTx(tx, &request.RegisteredPolicy)
