@@ -371,6 +371,20 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		return fmt.Errorf("no triggers found for base policy %s", basePolicyID)
 	}
 
+	riskAnalysisJob := worker.JobPayload{
+		JobID:      uuid.NewString(),
+		Type:       "risk-analysis",
+		Params:     map[string]any{"registered_policy_id": policyID, "force_reanalysis": false},
+		MaxRetries: 10,
+		OneTime:    true,
+		RunNow:     true,
+	}
+
+	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(policyID)
+	if !ok {
+		slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist")
+	}
+
 	// Build list of conditions with their data sources
 	type conditionWithDataSource struct {
 		ConditionID uuid.UUID
@@ -423,17 +437,31 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		endDate = time.Now().Add(24 * time.Hour).Unix()
 	}
 
-	// Check for existing data in range (skip if exists)
+	// Check for existing data and adjust start date to fetch only missing data
 	ctx := context.Background()
-	existingMonitorData, err := s.farmMonitoringDataRepo.CheckDataExistsInTimeRange(ctx, farmID, startDate, endDate)
+	latestTimestamp, err := s.farmMonitoringDataRepo.GetLatestTimestampByFarmID(ctx, farmID)
 	if err != nil {
-		slog.Error("error checking existing monitor farm data", "error", err)
-	}
-	if existingMonitorData {
-		slog.Info("existing monitor farm data found, skipping fetch job",
+		slog.Warn("error getting latest timestamp for farm data", "error", err)
+		// Continue with original startDate if error
+	} else if latestTimestamp > 0 {
+		// Adjust start date to day after latest data
+		adjustedStartDate := latestTimestamp + (24 * 60 * 60) // Add 1 day
+		if adjustedStartDate >= endDate {
+			slog.Info("existing monitor farm data is up to date, skipping fetch job",
+				"farm_id", farmID,
+				"latest_data", latestTimestamp,
+				"requested_end", endDate)
+
+			scheduler.AddJob(riskAnalysisJob)
+			return nil
+		}
+		slog.Info("adjusting start date to fetch only missing data",
 			"farm_id", farmID,
-			"date_range", fmt.Sprintf("%d to %d", startDate, endDate))
-		return nil
+			"original_start", startDate,
+			"adjusted_start", adjustedStartDate,
+			"latest_existing_data", latestTimestamp,
+			"end_date", endDate)
+		startDate = adjustedStartDate
 	}
 
 	// Load farm to get boundary coordinates
@@ -570,20 +598,6 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	// Only fail if ALL sources failed
 	if len(errorSummary) == len(conditionsWithDataSources) {
 		return fmt.Errorf("all %d data sources failed to fetch", len(conditionsWithDataSources))
-	}
-
-	riskAnalysisJob := worker.JobPayload{
-		JobID:      uuid.NewString(),
-		Type:       "risk-analysis",
-		Params:     map[string]any{"registered_policy_id": policyID, "force_reanalysis": false},
-		MaxRetries: 10,
-		OneTime:    true,
-		RunNow:     true,
-	}
-
-	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(policyID)
-	if !ok {
-		slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist")
 	}
 
 	scheduler.AddJob(riskAnalysisJob)

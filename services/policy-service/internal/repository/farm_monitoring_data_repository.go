@@ -509,3 +509,24 @@ func (r *FarmMonitoringDataRepository) GetCountByFarmID(ctx context.Context, far
 
 	return count, nil
 }
+
+// GetLatestTimestampByFarmID returns the latest measurement timestamp for a farm
+// Returns 0 if no data exists
+func (r *FarmMonitoringDataRepository) GetLatestTimestampByFarmID(ctx context.Context, farmID uuid.UUID) (int64, error) {
+	var timestamp sql.NullInt64
+	query := `SELECT MAX(measurement_timestamp) FROM farm_monitoring_data WHERE farm_id = $1`
+
+	err := r.db.GetContext(ctx, &timestamp, query, farmID)
+	if err != nil {
+		slog.Error("Failed to get latest timestamp by farm ID",
+			"farm_id", farmID,
+			"error", err)
+		return 0, fmt.Errorf("failed to get latest timestamp: %w", err)
+	}
+
+	if !timestamp.Valid {
+		return 0, nil
+	}
+
+	return timestamp.Int64, nil
+}
