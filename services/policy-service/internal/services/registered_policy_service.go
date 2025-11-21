@@ -351,16 +351,19 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		return fmt.Errorf("retrieve data sources from base policy id failed: %w", err)
 	}
 
-	startDate, ok := params["start_date"].(int64)
+	startDateFloat, ok := params["start_date"].(float64)
 	if !ok {
 		slog.Error("GetFarmPhotoJob: missing or invalid start_date parameter", "farm_id", farmID)
 		return fmt.Errorf("missing or invalid start_date parameter")
 	}
-	endDate, ok := params["end_date"].(int64)
+	startDate := int64(startDateFloat)
+
+	endDateFloat, ok := params["end_date"].(float64)
 	if !ok {
 		slog.Error("GetFarmPhotoJob: missing or invalid end_date parameter", "farm_id", farmID)
 		return fmt.Errorf("missing or invalid end_date parameter")
 	}
+	endDate := int64(endDateFloat)
 
 	if endDate == 0 {
 		endDate = time.Now().Add(24 * time.Hour).Unix()
