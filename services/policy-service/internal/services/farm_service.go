@@ -43,11 +43,11 @@ func (s *FarmService) GetFarmByOwnerID(ctx context.Context, userID string) ([]mo
 }
 
 func (s *FarmService) CreateFarm(farm *models.Farm, ownerID string) error {
-	// defer func() {
-	// 	if r := recover(); r != nil {
-	// 		slog.Error("panic recovered", "panic", r)
-	// 	}
-	// }()
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered", "panic", r)
+		}
+	}()
 
 	if farm.ID == uuid.Nil {
 		farm.ID = uuid.New()
@@ -143,6 +143,24 @@ func (s *FarmService) CreateFarmTx(farm *models.Farm, ownerID string, tx *sqlx.T
 	// } else if existingFarm != nil {
 	// 	return fmt.Errorf("badrequest: farmer has already owned a farm")
 	// }
+
+	// Get central_meridian
+	centralMeridian := utils.GetCentralMeridianByAddress(*farm.Address)
+
+	// Convert farm boundary to WGS84
+	errConvert := ConvertFarmBoundaryToWGS84(farm, 3, centralMeridian)
+	if errConvert != nil {
+		return errConvert
+	}
+
+	// Calculate center location to WGS84
+	centralPoint := CalculateFarmCenter(*farm.Boundary)
+	if farm.CenterLocation == nil {
+		farm.CenterLocation = &models.GeoJSONPoint{}
+		farm.CenterLocation.Type = "Point"
+	}
+	farm.CenterLocation.Coordinates = []float64{centralPoint.Lng, centralPoint.Lat}
+
 	err := s.farmRepository.CreateTx(tx, farm)
 	if err != nil {
 		return fmt.Errorf("error creating farm: %w", err)
