@@ -17,7 +17,7 @@ FROM alpine:latest
 # Install ca-certificates for HTTPS requests
 # Create app directory
 WORKDIR /app
-RUN apk add --no-cache tzdata
+RUN apk add --no-cache tzdata pdftk
 ENV TZ=Asia/Ho_Chi_Minh
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN apk --no-cache add ca-certificates && \
