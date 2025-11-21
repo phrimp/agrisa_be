@@ -1045,6 +1045,7 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 	request.RegisteredPolicy.CoverageStartDate = 0 // start day only start after underwriting
 	request.RegisteredPolicy.CoverageEndDate = int64(*completeBasePolicy.BasePolicy.InsuranceValidToDay)
 	request.RegisteredPolicy.PremiumPaidByFarmer = false
+	request.RegisteredPolicy.Status = models.PolicyPendingReview
 
 	calculatedTotalPremium := s.calculateFarmerPremium(farm.AreaSqm, completeBasePolicy.BasePolicy.PremiumBaseRate, completeBasePolicy.BasePolicy.FixPremiumAmount)
 	slog.Info("Total Calculated Premium", "premium", calculatedTotalPremium)
