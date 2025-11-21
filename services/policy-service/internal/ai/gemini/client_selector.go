@@ -54,7 +54,7 @@ func (s *GeminiClientSelector) TryAllClients(operation func(*GeminiClient, int) 
 	var lastErr error
 	errorsCollected := make([]string, 0, clientCount)
 
-	for attempt := 0; attempt < clientCount; attempt++ {
+	for attempt := range clientCount {
 		client, clientIdx := s.GetNextClient()
 
 		slog.Info("Attempting Gemini API request",
