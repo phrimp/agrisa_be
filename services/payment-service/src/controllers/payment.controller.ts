@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-floating-promises */
 import {
   Body,
   Controller,
@@ -26,6 +27,7 @@ import { paymentViewSchema } from 'src/types/payment.types';
 import z from 'zod';
 import type { OrderItemService } from 'src/services/order-item.service';
 import { payosConfig } from 'src/libs/payos.config';
+import { publisher } from 'src/events/publisher';
 
 @Controller()
 export class PaymentController {
@@ -200,6 +202,11 @@ export class PaymentController {
                 status: 'completed',
                 paid_at: new Date(),
               });
+              const publisher_payment =
+                await this.paymentService.findByOrderCode(
+                  parsed.data.data.orderCode.toString(),
+                );
+              publisher(publisher_payment);
               console.log('DATA:', parsed.data.data);
             }
           } else {
