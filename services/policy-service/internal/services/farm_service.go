@@ -579,7 +579,7 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 		objectName := fmt.Sprintf("farms/%s/satellite/%s_%d.png", farmID, img.AcquisitionDate, idx)
 
 		// Upload to MinIO
-		bucketName := "policy-service"
+		bucketName := minio.Storage.PolicyAttachments
 		contentType := "image/png"
 		err = s.minioClient.UploadBytes(context.Background(), bucketName, objectName, imageData, contentType)
 		if err != nil {

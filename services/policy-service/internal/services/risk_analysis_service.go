@@ -272,9 +272,24 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 		riskAnalysis.AnalysisType = models.RiskAnalysisTypeAIModel
 	}
 
-	// Ensure analysis timestamp is set
+	// Ensure analysis timestamp is set and in seconds (not milliseconds)
 	if riskAnalysis.AnalysisTimestamp == 0 {
 		riskAnalysis.AnalysisTimestamp = time.Now().Unix()
+	} else if riskAnalysis.AnalysisTimestamp > 9999999999 {
+		// Convert milliseconds to seconds if timestamp is too large
+		riskAnalysis.AnalysisTimestamp = riskAnalysis.AnalysisTimestamp / 1000
+	}
+
+	// Validate risk score is within expected range (0-100)
+	if riskAnalysis.OverallRiskScore != nil {
+		score := *riskAnalysis.OverallRiskScore
+		if score < 0 {
+			zero := 0.0
+			riskAnalysis.OverallRiskScore = &zero
+		} else if score > 100 {
+			hundred := 100.0
+			riskAnalysis.OverallRiskScore = &hundred
+		}
 	}
 
 	slog.Info("Risk analysis parsed successfully",
