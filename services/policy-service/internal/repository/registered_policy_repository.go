@@ -766,3 +766,14 @@ func (r *RegisteredPolicyRepository) UpdateStatus(policyID uuid.UUID, status mod
 	}
 	return nil
 }
+
+// count active registered policies by farmer_id
+func (r *RegisteredPolicyRepository) CountActivePoliciesByFarmerID(farmerID string) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM registered_policy WHERE farmer_id = $1 AND status = 'active'`
+	err := r.db.Get(&count, query, farmerID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count active policies: %w", err)
+	}
+	return count, nil
+}

@@ -898,3 +898,19 @@ func ValidateSoilType(soilType *string, cropType string) bool {
 		return false
 	}
 }
+
+func (s *FarmService) CountActiveFarmsByOwnerID(ownerID string) (int, error) {
+	activeFarmCount, err := s.farmRepository.CountActiveFarmsByOwnerID(ownerID)
+	if err != nil {
+		return 0, err
+	}
+	return activeFarmCount, nil
+}
+
+func (s *FarmService) CountInactiveFarmsByOwnerID(ownerID string) (int, error) {
+	inactiveFarmCount, err := s.farmRepository.CountInactiveFarmsByOwnerID(ownerID)
+	if err != nil {
+		return 0, err
+	}
+	return inactiveFarmCount, nil
+}

@@ -1407,3 +1407,28 @@ func (s *RegisteredPolicyService) GetRegisteredPoliciesWithFilters(ctx context.C
 		Filters:    filter,
 	}, nil
 }
+
+func (s *RegisteredPolicyService) GetStatsOverview(ownerID string) (models.FarmStatsOverview, error) {
+	activeFarmCount, err := s.farmService.CountActiveFarmsByOwnerID(ownerID)
+	if err != nil {
+		slog.Error("failed to count active farms", "owner_id", ownerID, "error", err)
+		return models.FarmStatsOverview{}, err
+	}
+
+	inactiveFarmCount, err := s.farmService.CountInactiveFarmsByOwnerID(ownerID)
+	if err != nil {
+		slog.Error("failed to count inactive farms", "owner_id", ownerID, "error", err)
+		return models.FarmStatsOverview{}, err
+	}
+
+	activeRegisteredPolicyCount, err := s.registeredPolicyRepo.CountActivePoliciesByFarmerID(ownerID)
+	if err != nil {
+		slog.Error("failed to count active registered policies", "owner_id", ownerID, "error", err)
+		return models.FarmStatsOverview{}, err
+	}
+	return models.FarmStatsOverview{
+		FarmActiveCount:       activeFarmCount,
+		FarmInactiveCount:     inactiveFarmCount,
+		RegisteredPolicyCount: activeRegisteredPolicyCount,
+	}, nil
+}

@@ -54,3 +54,9 @@ type FarmPhoto struct {
 	TakenAt   *int64    `json:"taken_at,omitempty" db:"taken_at"`
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
+
+type FarmStatsOverview struct {
+	RegisteredPolicyCount int `json:"registered_policy_count"`
+	FarmActiveCount       int `json:"farm_active_count"`
+	FarmInactiveCount     int `json:"farm_inactive_count"`
+}

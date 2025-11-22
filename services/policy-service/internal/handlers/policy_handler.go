@@ -42,6 +42,7 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 	farmerGroup := policyGroup.Group("/read-own")
 	farmerGroup.Get("/list", h.GetFarmerOwnPolicies)        // GET /policies/read-own/list
 	farmerGroup.Get("/detail/:id", h.GetFarmerPolicyDetail) // GET /policies/read-own/detail/:id
+	farmerGroup.Get("/stats/overview", h.GetStatsOverview)  // GET /policies/read-own/stats/overview
 
 	// Insurance Partner routes - read/manage partner's policies
 	partnerGroup := policyGroup.Group("/read-partner")
@@ -600,4 +601,21 @@ func (h *PolicyHandler) UpdatePolicyUnderwritingAdmin(c fiber.Ctx) error {
 		"underwriting_status": req.UnderwritingStatus,
 		"updated_by":          userID,
 	}))
+}
+
+func (h *PolicyHandler) GetStatsOverview(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	stats, err := h.registeredPolicyService.GetStatsOverview(userID)
+	if err != nil {
+		slog.Error("Failed to get stats overview", "user_id", userID, "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve statistics"))
+	}
+
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(stats))
 }

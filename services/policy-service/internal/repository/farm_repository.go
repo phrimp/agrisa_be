@@ -758,3 +758,25 @@ func (r *FarmRepository) DeleteFarmPhotosByFarmIDTx(tx *sqlx.Tx, farmID uuid.UUI
 
 	return nil
 }
+
+// count active farms by owner_id
+func (r *FarmRepository) CountActiveFarmsByOwnerID(ownerID string) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM farm WHERE owner_id = $1 AND status = 'active'`
+	err := r.db.Get(&count, query, ownerID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count active farms: %w", err)
+	}
+	return count, nil
+}
+
+// count inactive farms by owner_id
+func (r *FarmRepository) CountInactiveFarmsByOwnerID(ownerID string) (int, error) {
+	var count int
+	query := `SELECT COUNT(*) FROM farm WHERE owner_id = $1 AND status = 'inactive'`
+	err := r.db.Get(&count, query, ownerID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to count inactive farms: %w", err)
+	}
+	return count, nil
+}
