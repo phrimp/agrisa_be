@@ -124,6 +124,7 @@ func main() {
 	registeredPolicyRepo := repository.NewRegisteredPolicyRepository(db)
 	farmRepo := repository.NewFarmRepository(db)
 	farmMonitoringDataRepo := repository.NewFarmMonitoringDataRepository(db)
+	basePolicyTriggerRepo := repository.NewBasePolicyTriggerRepository(db, redisClient.GetClient())
 
 	// Initialize WorkerManagerV2
 	workerManager := worker.NewWorkerManagerV2(db, redisClient)
@@ -139,6 +140,7 @@ func main() {
 	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, geminiSelector)
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
+	basePolicyTriggerService := services.NewBasePolicyTriggerService(basePolicyTriggerRepo)
 
 	// Expiration Listener
 	ctx, cancel := context.WithCancel(context.Background())
@@ -191,6 +193,7 @@ func main() {
 	basePolicyHandler := handlers.NewBasePolicyHandler(basePolicyService, minioClient, workerManager)
 	farmHandler := handlers.NewFarmHandler(farmService, minioClient)
 	policyHandler := handlers.NewPolicyHandler(registeredPolicyService)
+	basePolicyTriggerHandler := handlers.NewBasePolicyTriggerHandler(basePolicyTriggerService)
 
 	// Register routes
 	dataTierHandler.Register(app)
@@ -198,6 +201,7 @@ func main() {
 	basePolicyHandler.Register(app)
 	farmHandler.RegisterRoutes(app)
 	policyHandler.Register(app)
+	basePolicyTriggerHandler.Register(app)
 
 	shutdownChan := make(chan os.Signal, 1)
 	doneChan := make(chan bool, 1)

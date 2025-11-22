@@ -206,3 +206,140 @@ func BuildDynamicUpdateQuery(
 		Args:  args,
 	}, nil
 }
+
+// BuildDinamicFilter
+type Condition struct {
+	Field    string      // Column name
+	Operator string      // Operator: =, !=, >, <, >=, <=, LIKE, IN, BETWEEN, is_null, is_not_null
+	Value    interface{} // Value (can be single value, slice for IN, or []interface{}{min, max} for BETWEEN)
+	Logic    string      // AND or OR (used to connect to the next condition)
+}
+
+// OrderBy represents sorting
+type OrderBy struct {
+	Column    string // Column name
+	Direction string // ASC or DESC
+}
+
+// QueryBuilder contains information to build a query
+type QueryBuilder struct {
+	TemplateQuery string
+	Conditions    []Condition
+	OrderBy       []string // Example: []string{"name ASC", "age DESC"}
+}
+
+// BuildQueryDynamicFilter creates a dynamic query with parameterized placeholders
+func (qb *QueryBuilder) BuildQueryDynamicFilter() (string, []interface{}, error) {
+	if qb.TemplateQuery == "" {
+		return "", nil, fmt.Errorf("template query is required")
+	}
+
+	query := qb.TemplateQuery
+	args := []interface{}{}
+	paramIndex := 1
+
+	// Build WHERE clause
+	if len(qb.Conditions) > 0 {
+		whereClause := " WHERE "
+		whereParts := []string{}
+
+		for i, cond := range qb.Conditions {
+			var condStr string
+
+			switch strings.ToUpper(cond.Operator) {
+			case "=", "!=", ">", "<", ">=", "<=":
+				condStr = fmt.Sprintf("%s %s $%d", cond.Field, cond.Operator, paramIndex)
+				args = append(args, cond.Value)
+				paramIndex++
+
+			case "LIKE":
+				condStr = fmt.Sprintf("%s LIKE $%d", cond.Field, paramIndex)
+				args = append(args, cond.Value)
+				paramIndex++
+
+			case "IN":
+				values, ok := cond.Value.([]interface{})
+				if !ok {
+					return "", nil, fmt.Errorf("IN operator requires []interface{} value for field %s", cond.Field)
+				}
+				if len(values) == 0 {
+					return "", nil, fmt.Errorf("IN operator requires at least one value for field %s", cond.Field)
+				}
+
+				placeholders := []string{}
+				for _, val := range values {
+					placeholders = append(placeholders, fmt.Sprintf("$%d", paramIndex))
+					args = append(args, val)
+					paramIndex++
+				}
+				condStr = fmt.Sprintf("%s IN (%s)", cond.Field, strings.Join(placeholders, ", "))
+
+			case "BETWEEN":
+				values, ok := cond.Value.([]interface{})
+				if !ok || len(values) != 2 {
+					return "", nil, fmt.Errorf("BETWEEN operator requires []interface{}{min, max} for field %s", cond.Field)
+				}
+				condStr = fmt.Sprintf("%s BETWEEN $%d AND $%d", cond.Field, paramIndex, paramIndex+1)
+				args = append(args, values[0], values[1])
+				paramIndex += 2
+
+			case "IS_NULL":
+				condStr = fmt.Sprintf("%s IS NULL", cond.Field)
+
+			case "IS_NOT_NULL":
+				condStr = fmt.Sprintf("%s IS NOT NULL", cond.Field)
+
+			default:
+				return "", nil, fmt.Errorf("unsupported operator: %s", cond.Operator)
+			}
+
+			whereParts = append(whereParts, condStr)
+
+			// Add logic operator (AND/OR) if not the last condition
+			if i < len(qb.Conditions)-1 {
+				logic := strings.ToUpper(strings.TrimSpace(cond.Logic))
+				if logic == "" {
+					logic = "AND" // Default is AND
+				}
+				if logic != "AND" && logic != "OR" {
+					return "", nil, fmt.Errorf("invalid logic operator: %s (must be AND or OR)", cond.Logic)
+				}
+				whereParts = append(whereParts, logic)
+			}
+		}
+
+		whereClause += strings.Join(whereParts, " ")
+		query += whereClause
+	}
+
+	// Build ORDER BY clause
+	if len(qb.OrderBy) > 0 {
+		validOrders := []string{}
+		for _, order := range qb.OrderBy {
+			order = strings.TrimSpace(order)
+			if order != "" {
+				// Validate format: "column ASC" or "column DESC"
+				parts := strings.Fields(order)
+				if len(parts) == 2 {
+					dir := strings.ToUpper(parts[1])
+					if dir == "ASC" || dir == "DESC" {
+						validOrders = append(validOrders, fmt.Sprintf("%s %s", parts[0], dir))
+					} else {
+						return "", nil, fmt.Errorf("invalid order direction: %s (must be ASC or DESC)", parts[1])
+					}
+				} else if len(parts) == 1 {
+					// If no direction is provided, default to ASC
+					validOrders = append(validOrders, fmt.Sprintf("%s ASC", parts[0]))
+				} else {
+					return "", nil, fmt.Errorf("invalid order format: %s", order)
+				}
+			}
+		}
+
+		if len(validOrders) > 0 {
+			query += " ORDER BY " + strings.Join(validOrders, ", ")
+		}
+	}
+
+	return query, args, nil
+}
