@@ -777,3 +777,192 @@ func (r *RegisteredPolicyRepository) CountActivePoliciesByFarmerID(farmerID stri
 	}
 	return count, nil
 }
+
+// ============================================================================
+// UNDERWRITING OPERATIONS
+// ============================================================================
+
+// CreateUnderwriting creates a new underwriting record for a registered policy
+func (r *RegisteredPolicyRepository) CreateUnderwriting(underwriting *models.RegisteredPolicyUnderwriting) error {
+	if underwriting.ID == uuid.Nil {
+		underwriting.ID = uuid.New()
+	}
+	underwriting.CreatedAt = time.Now()
+
+	slog.Info("Creating underwriting record",
+		"id", underwriting.ID,
+		"registered_policy_id", underwriting.RegisteredPolicyID,
+		"underwriting_status", underwriting.UnderwritingStatus)
+
+	query := `
+		INSERT INTO registered_policy_underwriting (
+			id, registered_policy_id, validation_timestamp, underwriting_status,
+			recommendations, reason, reason_evidence, validated_by, validation_notes, created_at
+		) VALUES (
+			:id, :registered_policy_id, :validation_timestamp, :underwriting_status,
+			:recommendations, :reason, :reason_evidence, :validated_by, :validation_notes, :created_at
+		)`
+
+	_, err := r.db.NamedExec(query, underwriting)
+	if err != nil {
+		slog.Error("Failed to create underwriting record",
+			"id", underwriting.ID,
+			"registered_policy_id", underwriting.RegisteredPolicyID,
+			"error", err)
+		return fmt.Errorf("failed to create underwriting: %w", err)
+	}
+
+	slog.Info("Successfully created underwriting record", "id", underwriting.ID)
+	return nil
+}
+
+// GetUnderwritingsByPolicyID retrieves all underwriting records for a specific registered policy
+func (r *RegisteredPolicyRepository) GetUnderwritingsByPolicyID(policyID uuid.UUID) ([]models.RegisteredPolicyUnderwriting, error) {
+	slog.Debug("Retrieving underwritings by policy ID", "registered_policy_id", policyID)
+
+	var underwritings []models.RegisteredPolicyUnderwriting
+	query := `
+		SELECT * FROM registered_policy_underwriting
+		WHERE registered_policy_id = $1
+		ORDER BY validation_timestamp DESC`
+
+	err := r.db.Select(&underwritings, query, policyID)
+	if err != nil {
+		slog.Error("Failed to get underwritings by policy ID",
+			"registered_policy_id", policyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get underwritings: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved underwritings",
+		"registered_policy_id", policyID,
+		"count", len(underwritings))
+	return underwritings, nil
+}
+
+// GetLatestUnderwriting retrieves the most recent underwriting for a policy
+func (r *RegisteredPolicyRepository) GetLatestUnderwriting(policyID uuid.UUID) (*models.RegisteredPolicyUnderwriting, error) {
+	slog.Debug("Retrieving latest underwriting", "registered_policy_id", policyID)
+
+	var underwriting models.RegisteredPolicyUnderwriting
+	query := `
+		SELECT * FROM registered_policy_underwriting
+		WHERE registered_policy_id = $1
+		ORDER BY validation_timestamp DESC
+		LIMIT 1`
+
+	err := r.db.Get(&underwriting, query, policyID)
+	if err != nil {
+		slog.Error("Failed to get latest underwriting",
+			"registered_policy_id", policyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get latest underwriting: %w", err)
+	}
+
+	return &underwriting, nil
+}
+
+// CreateClaim creates a new claim record
+func (r *RegisteredPolicyRepository) CreateClaim(claim *models.Claim) error {
+	slog.Debug("Creating claim", "claim_id", claim.ID, "policy_id", claim.RegisteredPolicyID)
+
+	if claim.ID == uuid.Nil {
+		claim.ID = uuid.New()
+	}
+	claim.CreatedAt = time.Now()
+	claim.UpdatedAt = time.Now()
+
+	query := `
+		INSERT INTO claims (
+			id, claim_number, registered_policy_id, base_policy_id, farm_id,
+			base_policy_trigger_id, trigger_timestamp, over_threshold_value,
+			calculated_fix_payout, calculated_threshold_payout, claim_amount,
+			status, auto_generated, partner_review_timestamp, partner_decision,
+			partner_notes, reviewed_by, auto_approval_deadline, auto_approved,
+			evidence_summary, created_at, updated_at
+		) VALUES (
+			:id, :claim_number, :registered_policy_id, :base_policy_id, :farm_id,
+			:base_policy_trigger_id, :trigger_timestamp, :over_threshold_value,
+			:calculated_fix_payout, :calculated_threshold_payout, :claim_amount,
+			:status, :auto_generated, :partner_review_timestamp, :partner_decision,
+			:partner_notes, :reviewed_by, :auto_approval_deadline, :auto_approved,
+			:evidence_summary, :created_at, :updated_at
+		)`
+
+	_, err := r.db.NamedExec(query, claim)
+	if err != nil {
+		slog.Error("Failed to create claim", "claim_id", claim.ID, "error", err)
+		return fmt.Errorf("failed to create claim: %w", err)
+	}
+
+	slog.Info("Successfully created claim", "claim_id", claim.ID, "claim_number", claim.ClaimNumber)
+	return nil
+}
+
+// GetClaimsByPolicyID retrieves all claims for a registered policy
+func (r *RegisteredPolicyRepository) GetClaimsByPolicyID(policyID uuid.UUID) ([]models.Claim, error) {
+	slog.Debug("Retrieving claims by policy ID", "registered_policy_id", policyID)
+
+	var claims []models.Claim
+	query := `
+		SELECT * FROM claims
+		WHERE registered_policy_id = $1
+		ORDER BY created_at DESC`
+
+	err := r.db.Select(&claims, query, policyID)
+	if err != nil {
+		slog.Error("Failed to get claims by policy ID",
+			"registered_policy_id", policyID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get claims: %w", err)
+	}
+
+	return claims, nil
+}
+
+// GetClaimByID retrieves a claim by its ID
+func (r *RegisteredPolicyRepository) GetClaimByID(claimID uuid.UUID) (*models.Claim, error) {
+	slog.Debug("Retrieving claim by ID", "claim_id", claimID)
+
+	var claim models.Claim
+	query := `SELECT * FROM claims WHERE id = $1`
+
+	err := r.db.Get(&claim, query, claimID)
+	if err != nil {
+		slog.Error("Failed to get claim by ID", "claim_id", claimID, "error", err)
+		return nil, fmt.Errorf("failed to get claim: %w", err)
+	}
+
+	return &claim, nil
+}
+
+// GetRecentClaimByPolicyAndTrigger checks if a claim was recently generated for the same policy and trigger
+func (r *RegisteredPolicyRepository) GetRecentClaimByPolicyAndTrigger(
+	policyID uuid.UUID,
+	triggerID uuid.UUID,
+	withinSeconds int64,
+) (*models.Claim, error) {
+	slog.Debug("Checking for recent claim",
+		"policy_id", policyID,
+		"trigger_id", triggerID,
+		"within_seconds", withinSeconds)
+
+	var claim models.Claim
+	cutoffTime := time.Now().Unix() - withinSeconds
+
+	query := `
+		SELECT * FROM claims
+		WHERE registered_policy_id = $1
+		AND base_policy_trigger_id = $2
+		AND trigger_timestamp > $3
+		ORDER BY trigger_timestamp DESC
+		LIMIT 1`
+
+	err := r.db.Get(&claim, query, policyID, triggerID, cutoffTime)
+	if err != nil {
+		// No recent claim found is not an error
+		return nil, nil
+	}
+
+	return &claim, nil
+}

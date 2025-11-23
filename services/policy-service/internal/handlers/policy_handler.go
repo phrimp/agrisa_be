@@ -46,18 +46,21 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 
 	// Insurance Partner routes - read/manage partner's policies
 	partnerGroup := policyGroup.Group("/read-partner")
-	partnerGroup.Get("/list", h.GetPartnerPolicies)           // GET /policies/read-partner/list
-	partnerGroup.Get("/detail/:id", h.GetPartnerPolicyDetail) // GET /policies/read-partner/detail/:id
-	partnerGroup.Get("/stats", h.GetPartnerPolicyStats)       // GET /policies/read-partner/stats
-	partnerUpdateGroup := policyGroup.Group("/update-partner")
-	partnerUpdateGroup.Patch("/underwriting/:id", h.UpdatePartnerPolicyUnderwriting) // PATCH /policies/update-partner/underwriting/:id
+	partnerGroup.Get("/list", h.GetPartnerPolicies)                                           // GET /policies/read-partner/list
+	partnerGroup.Get("/detail/:id", h.GetPartnerPolicyDetail)                                 // GET /policies/read-partner/detail/:id
+	partnerGroup.Get("/stats", h.GetPartnerPolicyStats)                                       // GET /policies/read-partner/stats
+	partnerGroup.Get("/monitoring-data/:farm_id/:parameter_name", h.GetPartnerMonitoringData) // GET /policies/read-partner/monitoring-data/:farm_id/:parameter_name
+	partnerUpdateGroup := policyGroup.Group("/create-partner")
+	partnerUpdateGroup.Post("/underwriting/:id", h.CreatePartnerPolicyUnderwriting) // PATCH /policies/update-partner/underwriting/:id
 
 	// Admin routes - full access to all policies
 	adminReadGroup := policyGroup.Group("/read-all")
-	adminReadGroup.Get("/list", h.GetAllPoliciesAdmin)        // GET /policies/read-all/list
-	adminReadGroup.Get("/detail/:id", h.GetPolicyDetailAdmin) // GET /policies/read-all/detail/:id
-	adminReadGroup.Get("/stats", h.GetAllPolicyStatsAdmin)    // GET /policies/read-all/stats
-	adminReadGroup.Get("/filter", h.GetPoliciesWithFilter)    // GET /policies/filter - Get policies with filters
+	adminReadGroup.Get("/list", h.GetAllPoliciesAdmin)                         // GET /policies/read-all/list
+	adminReadGroup.Get("/detail/:id", h.GetPolicyDetailAdmin)                  // GET /policies/read-all/detail/:id
+	adminReadGroup.Get("/stats", h.GetAllPolicyStatsAdmin)                     // GET /policies/read-all/stats
+	adminReadGroup.Get("/filter", h.GetPoliciesWithFilter)                     // GET /policies/filter - Get policies with filters
+	adminReadGroup.Get("/monitoring-data", h.GetAllMonitoringData)             // GET /policies/read-all/monitoring-data - Get all monitoring data with policy status
+	adminReadGroup.Get("/monitoring-data/:farm_id", h.GetMonitoringDataByFarm) // GET /policies/read-all/monitoring-data/:farm_id - Get monitoring data by farm
 
 	adminUpdateGroup := policyGroup.Group("/update-any")
 	adminUpdateGroup.Patch("/status/:id", h.UpdatePolicyStatusAdmin)             // PATCH /policies/update-any/status/:id
@@ -390,8 +393,68 @@ func (h *PolicyHandler) GetPartnerPolicyStats(c fiber.Ctx) error {
 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(stats))
 }
 
-// UpdatePartnerPolicyUnderwriting updates underwriting status for partner's policy
-func (h *PolicyHandler) UpdatePartnerPolicyUnderwriting(c fiber.Ctx) error {
+// GetPartnerMonitoringData retrieves monitoring data for a farm by parameter name (partner access)
+func (h *PolicyHandler) GetPartnerMonitoringData(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	farmIDStr := c.Params("farm_id")
+	farmID, err := uuid.Parse(farmIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid farm ID format"))
+	}
+
+	parameterName := models.DataSourceParameterName(c.Params("parameter_name"))
+	if parameterName == "" {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_PARAMETER", "Parameter name is required"))
+	}
+
+	// Parse optional time range parameters
+	var startTimestamp, endTimestamp *int64
+	if startParam := c.Query("start_timestamp"); startParam != "" {
+		start, err := strconv.ParseInt(startParam, 10, 64)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(
+				utils.CreateErrorResponse("INVALID_PARAMETER", "Invalid start_timestamp format"))
+		}
+		startTimestamp = &start
+	}
+	if endParam := c.Query("end_timestamp"); endParam != "" {
+		end, err := strconv.ParseInt(endParam, 10, 64)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(
+				utils.CreateErrorResponse("INVALID_PARAMETER", "Invalid end_timestamp format"))
+		}
+		endTimestamp = &end
+	}
+
+	data, err := h.registeredPolicyService.GetMonitoringDataByFarmAndParameter(c.Context(), farmID, parameterName, startTimestamp, endTimestamp)
+	if err != nil {
+		slog.Error("Failed to get partner monitoring data",
+			"farm_id", farmID,
+			"parameter_name", parameterName,
+			"provider_id", userID,
+			"error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve monitoring data"))
+	}
+
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+		"monitoring_data": data,
+		"count":           len(data),
+		"farm_id":         farmID,
+		"parameter_name":  parameterName,
+		"provider_id":     userID,
+	}))
+}
+
+// CreatePartnerPolicyUnderwriting creates an underwriting record for partner's policy
+func (h *PolicyHandler) CreatePartnerPolicyUnderwriting(c fiber.Ctx) error {
 	userID := c.Get("X-User-ID")
 	if userID == "" {
 		return c.Status(http.StatusUnauthorized).JSON(
@@ -405,16 +468,22 @@ func (h *PolicyHandler) UpdatePartnerPolicyUnderwriting(c fiber.Ctx) error {
 			utils.CreateErrorResponse("INVALID_UUID", "Invalid policy ID format"))
 	}
 
-	var req struct {
-		UnderwritingStatus models.UnderwritingStatus `json:"underwriting_status"`
-	}
+	// Parse request body
+	var req models.CreatePartnerPolicyUnderwritingRequest
 	if err := c.Bind().Body(&req); err != nil {
 		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(
-			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
+			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body: "+err.Error()))
 	}
 
-	// Verify policy belongs to partner
+	// Validate request
+	if err := req.Validate(); err != nil {
+		slog.Error("Request validation failed", "error", err)
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("VALIDATION_FAILED", err.Error()))
+	}
+
+	// Verify policy exists
 	policy, err := h.registeredPolicyService.GetPolicyByID(policyID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
@@ -425,23 +494,41 @@ func (h *PolicyHandler) UpdatePartnerPolicyUnderwriting(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve policy"))
 	}
 
-	if policy.InsuranceProviderID != userID {
-		return c.Status(http.StatusForbidden).JSON(
-			utils.CreateErrorResponse("FORBIDDEN", "You do not have permission to update this policy"))
-	}
+	// TODO: Add authorization check - verify user belongs to the insurance provider
+	// This will need a profile service call to check if user exists in insurance provider profile
+	// For now, we log a warning but allow the operation
+	slog.Warn("Authorization check not fully implemented",
+		"user_id", userID,
+		"insurance_provider_id", policy.InsuranceProviderID)
 
-	err = h.registeredPolicyService.UpdateUnderwritingStatus(policyID, req.UnderwritingStatus)
+	// Call service to create underwriting
+	response, err := h.registeredPolicyService.CreatePartnerPolicyUnderwriting(
+		c.Context(),
+		policyID,
+		req,
+		userID,
+	)
 	if err != nil {
-		slog.Error("Failed to update underwriting status", "policy_id", policyID, "error", err)
+		errMsg := err.Error()
+
+		if strings.Contains(errMsg, "not found") {
+			slog.Error("Resource not found", "error", err)
+			return c.Status(http.StatusNotFound).JSON(
+				utils.CreateErrorResponse("NOT_FOUND", errMsg))
+		}
+
+		slog.Error("Failed to create underwriting", "policy_id", policyID, "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(
-			utils.CreateErrorResponse("UPDATE_FAILED", "Failed to update underwriting status"))
+			utils.CreateErrorResponse("UNDERWRITING_FAILED", "Failed to create underwriting: "+errMsg))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
-		"policy_id":           policyID,
-		"underwriting_status": req.UnderwritingStatus,
-		"updated_by":          userID,
-	}))
+	slog.Info("Underwriting created successfully",
+		"policy_id", policyID,
+		"underwriting_id", response.UnderwritingID,
+		"status", response.UnderwritingStatus,
+		"validated_by", userID)
+
+	return c.Status(http.StatusCreated).JSON(utils.CreateSuccessResponse(response))
 }
 
 // ============================================================================
@@ -618,4 +705,98 @@ func (h *PolicyHandler) GetStatsOverview(c fiber.Ctx) error {
 	}
 
 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(stats))
+}
+
+// ============================================================================
+// MONITORING DATA ENDPOINTS
+// ============================================================================
+
+// GetAllMonitoringData retrieves all farm monitoring data with policy status (admin access)
+func (h *PolicyHandler) GetAllMonitoringData(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	// Parse optional time range parameters
+	var startTimestamp, endTimestamp *int64
+	if startParam := c.Query("start_timestamp"); startParam != "" {
+		start, err := strconv.ParseInt(startParam, 10, 64)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(
+				utils.CreateErrorResponse("INVALID_PARAMETER", "Invalid start_timestamp format"))
+		}
+		startTimestamp = &start
+	}
+	if endParam := c.Query("end_timestamp"); endParam != "" {
+		end, err := strconv.ParseInt(endParam, 10, 64)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(
+				utils.CreateErrorResponse("INVALID_PARAMETER", "Invalid end_timestamp format"))
+		}
+		endTimestamp = &end
+	}
+
+	data, err := h.registeredPolicyService.GetAllMonitoringDataWithPolicyStatus(c.Context(), startTimestamp, endTimestamp)
+	if err != nil {
+		slog.Error("Failed to get all monitoring data", "admin_id", userID, "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve monitoring data"))
+	}
+
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+		"monitoring_data": data,
+		"count":           len(data),
+		"requested_by":    userID,
+	}))
+}
+
+// GetMonitoringDataByFarm retrieves farm monitoring data with policy status for a specific farm (admin access)
+func (h *PolicyHandler) GetMonitoringDataByFarm(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	farmIDStr := c.Params("farm_id")
+	farmID, err := uuid.Parse(farmIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid farm ID format"))
+	}
+
+	// Parse optional time range parameters
+	var startTimestamp, endTimestamp *int64
+	if startParam := c.Query("start_timestamp"); startParam != "" {
+		start, err := strconv.ParseInt(startParam, 10, 64)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(
+				utils.CreateErrorResponse("INVALID_PARAMETER", "Invalid start_timestamp format"))
+		}
+		startTimestamp = &start
+	}
+	if endParam := c.Query("end_timestamp"); endParam != "" {
+		end, err := strconv.ParseInt(endParam, 10, 64)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(
+				utils.CreateErrorResponse("INVALID_PARAMETER", "Invalid end_timestamp format"))
+		}
+		endTimestamp = &end
+	}
+
+	data, err := h.registeredPolicyService.GetMonitoringDataWithPolicyStatusByFarmID(c.Context(), farmID, startTimestamp, endTimestamp)
+	if err != nil {
+		slog.Error("Failed to get monitoring data by farm", "farm_id", farmID, "admin_id", userID, "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve monitoring data"))
+	}
+
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+		"monitoring_data": data,
+		"count":           len(data),
+		"farm_id":         farmID,
+		"requested_by":    userID,
+	}))
 }

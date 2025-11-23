@@ -847,3 +847,34 @@ type RegisterAPolicyResponse struct {
 	RegisterPolicyID             string
 	SignedPolicyDocumentLocation string
 }
+
+// CreatePartnerPolicyUnderwritingRequest contains the request data for creating a policy underwriting
+type CreatePartnerPolicyUnderwritingRequest struct {
+	UnderwritingStatus UnderwritingStatus `json:"underwriting_status"`
+	Recommendations    utils.JSONMap      `json:"recommendations,omitempty"`
+	Reason             *string            `json:"reason,omitempty"`
+	ReasonEvidence     utils.JSONMap      `json:"reason_evidence,omitempty"`
+	ValidationNotes    *string            `json:"validation_notes,omitempty"`
+}
+
+// Validate validates the underwriting request
+func (r *CreatePartnerPolicyUnderwritingRequest) Validate() error {
+	if r.UnderwritingStatus == "" {
+		return fmt.Errorf("underwriting_status is required")
+	}
+	if r.UnderwritingStatus != UnderwritingPending &&
+		r.UnderwritingStatus != UnderwritingApproved &&
+		r.UnderwritingStatus != UnderwritingRejected {
+		return fmt.Errorf("invalid underwriting_status: must be pending, approved, or rejected")
+	}
+	return nil
+}
+
+// CreatePartnerPolicyUnderwritingResponse contains the response data for creating a policy underwriting
+type CreatePartnerPolicyUnderwritingResponse struct {
+	UnderwritingID     string             `json:"underwriting_id"`
+	PolicyID           string             `json:"policy_id"`
+	UnderwritingStatus UnderwritingStatus `json:"underwriting_status"`
+	ValidatedBy        string             `json:"validated_by"`
+	Message            string             `json:"message"`
+}

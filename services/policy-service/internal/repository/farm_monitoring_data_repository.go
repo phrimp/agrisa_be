@@ -530,3 +530,188 @@ func (r *FarmMonitoringDataRepository) GetLatestTimestampByFarmID(ctx context.Co
 
 	return timestamp.Int64, nil
 }
+
+// GetAllWithPolicyStatus retrieves all monitoring data with associated policy status
+func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatus(ctx context.Context, startTimestamp, endTimestamp *int64) ([]models.FarmMonitoringDataWithPolicyStatus, error) {
+	slog.Debug("Retrieving all farm monitoring data with policy status",
+		"start_timestamp", startTimestamp,
+		"end_timestamp", endTimestamp)
+
+	var dataList []models.FarmMonitoringDataWithPolicyStatus
+	var args []interface{}
+	argIndex := 1
+
+	query := `
+		SELECT
+			fmd.id,
+			fmd.farm_id,
+			fmd.base_policy_trigger_condition_id,
+			fmd.parameter_name,
+			fmd.measured_value,
+			fmd.unit,
+			fmd.measurement_timestamp,
+			fmd.component_data,
+			fmd.data_quality,
+			fmd.confidence_score,
+			fmd.measurement_source,
+			fmd.distance_from_farm_meters,
+			fmd.cloud_cover_percentage,
+			fmd.created_at,
+			rp.id as registered_policy_id,
+			rp.status as policy_status,
+			rp.policy_number
+		FROM farm_monitoring_data fmd
+		LEFT JOIN registered_policies rp ON fmd.farm_id = rp.farm_id
+		WHERE 1=1`
+
+	if startTimestamp != nil {
+		query += fmt.Sprintf(" AND fmd.measurement_timestamp >= $%d", argIndex)
+		args = append(args, *startTimestamp)
+		argIndex++
+	}
+	if endTimestamp != nil {
+		query += fmt.Sprintf(" AND fmd.measurement_timestamp <= $%d", argIndex)
+		args = append(args, *endTimestamp)
+	}
+
+	query += " ORDER BY fmd.measurement_timestamp DESC"
+
+	err := r.db.SelectContext(ctx, &dataList, query, args...)
+	if err != nil {
+		slog.Error("Failed to get all farm monitoring data with policy status", "error", err)
+		return nil, fmt.Errorf("failed to get farm monitoring data with policy status: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved farm monitoring data with policy status", "count", len(dataList))
+	return dataList, nil
+}
+
+// GetAllWithPolicyStatusByFarmID retrieves monitoring data for a specific farm with policy status
+func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatusByFarmID(ctx context.Context, farmID uuid.UUID, startTimestamp, endTimestamp *int64) ([]models.FarmMonitoringDataWithPolicyStatus, error) {
+	slog.Debug("Retrieving farm monitoring data with policy status by farm ID",
+		"farm_id", farmID,
+		"start_timestamp", startTimestamp,
+		"end_timestamp", endTimestamp)
+
+	var dataList []models.FarmMonitoringDataWithPolicyStatus
+	var args []interface{}
+	args = append(args, farmID)
+	argIndex := 2
+
+	query := `
+		SELECT
+			fmd.id,
+			fmd.farm_id,
+			fmd.base_policy_trigger_condition_id,
+			fmd.parameter_name,
+			fmd.measured_value,
+			fmd.unit,
+			fmd.measurement_timestamp,
+			fmd.component_data,
+			fmd.data_quality,
+			fmd.confidence_score,
+			fmd.measurement_source,
+			fmd.distance_from_farm_meters,
+			fmd.cloud_cover_percentage,
+			fmd.created_at,
+			rp.id as registered_policy_id,
+			rp.status as policy_status,
+			rp.policy_number
+		FROM farm_monitoring_data fmd
+		LEFT JOIN registered_policies rp ON fmd.farm_id = rp.farm_id
+		WHERE fmd.farm_id = $1`
+
+	if startTimestamp != nil {
+		query += fmt.Sprintf(" AND fmd.measurement_timestamp >= $%d", argIndex)
+		args = append(args, *startTimestamp)
+		argIndex++
+	}
+	if endTimestamp != nil {
+		query += fmt.Sprintf(" AND fmd.measurement_timestamp <= $%d", argIndex)
+		args = append(args, *endTimestamp)
+	}
+
+	query += " ORDER BY fmd.measurement_timestamp DESC"
+
+	err := r.db.SelectContext(ctx, &dataList, query, args...)
+	if err != nil {
+		slog.Error("Failed to get farm monitoring data with policy status by farm ID",
+			"farm_id", farmID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get farm monitoring data with policy status: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved farm monitoring data with policy status",
+		"farm_id", farmID,
+		"count", len(dataList))
+	return dataList, nil
+}
+
+// GetByFarmIDAndParameterNameWithPolicyStatus retrieves monitoring data for a farm and parameter with policy status
+func (r *FarmMonitoringDataRepository) GetByFarmIDAndParameterNameWithPolicyStatus(
+	ctx context.Context,
+	farmID uuid.UUID,
+	parameterName models.DataSourceParameterName,
+	startTimestamp, endTimestamp *int64,
+) ([]models.FarmMonitoringDataWithPolicyStatus, error) {
+	slog.Debug("Retrieving farm monitoring data by farm ID and parameter name with policy status",
+		"farm_id", farmID,
+		"parameter_name", parameterName,
+		"start_timestamp", startTimestamp,
+		"end_timestamp", endTimestamp)
+
+	var dataList []models.FarmMonitoringDataWithPolicyStatus
+	var args []interface{}
+	args = append(args, farmID, parameterName)
+	argIndex := 3
+
+	query := `
+		SELECT
+			fmd.id,
+			fmd.farm_id,
+			fmd.base_policy_trigger_condition_id,
+			fmd.parameter_name,
+			fmd.measured_value,
+			fmd.unit,
+			fmd.measurement_timestamp,
+			fmd.component_data,
+			fmd.data_quality,
+			fmd.confidence_score,
+			fmd.measurement_source,
+			fmd.distance_from_farm_meters,
+			fmd.cloud_cover_percentage,
+			fmd.created_at,
+			rp.id as registered_policy_id,
+			rp.status as policy_status,
+			rp.policy_number
+		FROM farm_monitoring_data fmd
+		LEFT JOIN registered_policies rp ON fmd.farm_id = rp.farm_id
+		WHERE fmd.farm_id = $1 AND fmd.parameter_name = $2`
+
+	if startTimestamp != nil {
+		query += fmt.Sprintf(" AND fmd.measurement_timestamp >= $%d", argIndex)
+		args = append(args, *startTimestamp)
+		argIndex++
+	}
+	if endTimestamp != nil {
+		query += fmt.Sprintf(" AND fmd.measurement_timestamp <= $%d", argIndex)
+		args = append(args, *endTimestamp)
+	}
+
+	query += " ORDER BY fmd.measurement_timestamp DESC"
+
+	err := r.db.SelectContext(ctx, &dataList, query, args...)
+	if err != nil {
+		slog.Error("Failed to get farm monitoring data by farm ID and parameter name",
+			"farm_id", farmID,
+			"parameter_name", parameterName,
+			"error", err)
+		return nil, fmt.Errorf("failed to get farm monitoring data: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved farm monitoring data",
+		"farm_id", farmID,
+		"parameter_name", parameterName,
+		"count", len(dataList))
+	return dataList, nil
+}

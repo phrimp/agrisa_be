@@ -361,6 +361,9 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		return fmt.Errorf("invalid farm_id format: %w", err)
 	}
 
+	// Extract optional check_policy parameter (defaults to false)
+	checkPolicy, _ := params["check_policy"].(bool)
+
 	// Get triggers and conditions for this base policy
 	triggers, err := s.basePolicyRepo.GetBasePolicyTriggersByPolicyID(basePolicyID)
 	if err != nil {
@@ -600,9 +603,804 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		return fmt.Errorf("all %d data sources failed to fetch", len(conditionsWithDataSources))
 	}
 
+	// Check policy trigger conditions if enabled
+	if checkPolicy && len(allMonitoringData) > 0 {
+		slog.Info("Checking policy trigger conditions",
+			"policy_id", policyID,
+			"farm_id", farmID,
+			"data_points", len(allMonitoringData))
+
+		// Evaluate trigger conditions against fetched data
+		triggeredConditions := s.evaluateTriggerConditions(ctx, triggers, allMonitoringData, farmID)
+
+		if len(triggeredConditions) > 0 {
+			slog.Info("Trigger conditions satisfied",
+				"policy_id", policyID,
+				"triggered_conditions", len(triggeredConditions))
+
+			// Generate Claim
+			claim, err := s.generateClaimFromTrigger(ctx, policyID, basePolicyID, farmID, triggers[0].ID, triggeredConditions)
+			if err != nil {
+				slog.Error("Failed to generate claim from trigger",
+					"policy_id", policyID,
+					"error", err)
+			} else {
+				slog.Info("Claim generated successfully",
+					"claim_id", claim.ID,
+					"claim_number", claim.ClaimNumber,
+					"claim_amount", claim.ClaimAmount,
+					"policy_id", policyID)
+
+				// ================================================================
+				// NOTIFICATION PLACEHOLDER - User will implement notifications
+				// ================================================================
+				// TODO: Send notification to farmer about claim generation
+				// notification.SendToFarmer(claim.FarmerID, NotificationClaimGenerated, claim)
+
+				// TODO: Send notification to insurance provider for review
+				// notification.SendToProvider(policy.InsuranceProviderID, NotificationClaimPendingReview, claim)
+
+				// TODO: Send notification to system administrators if claim amount exceeds threshold
+				// if claim.ClaimAmount > HIGH_VALUE_CLAIM_THRESHOLD {
+				//     notification.SendToAdmins(NotificationHighValueClaim, claim)
+				// }
+				// ================================================================
+
+				for _, tc := range triggeredConditions {
+					slog.Info("Triggered condition details",
+						"claim_id", claim.ID,
+						"condition_id", tc.ConditionID,
+						"parameter", tc.ParameterName,
+						"measured_value", tc.MeasuredValue,
+						"threshold_value", tc.ThresholdValue,
+						"operator", tc.Operator,
+						"consecutive_days", tc.ConsecutiveDays,
+						"is_early_warning", tc.IsEarlyWarning)
+				}
+			}
+		}
+	}
+
 	scheduler.AddJob(riskAnalysisJob)
 
 	return nil
+}
+
+// TriggeredCondition represents a condition that has been satisfied
+type TriggeredCondition struct {
+	ConditionID           uuid.UUID
+	ParameterName         models.DataSourceParameterName
+	MeasuredValue         float64
+	ThresholdValue        float64
+	Operator              models.ThresholdOperator
+	Timestamp             int64
+	BaselineValue         *float64 // Baseline value for change-based conditions
+	ConsecutiveDays       int      // Number of consecutive days condition was met
+	IsEarlyWarning        bool     // True if only early warning threshold was breached
+	EarlyWarningThreshold *float64 // Early warning threshold value if applicable
+}
+
+// generateClaimFromTrigger creates a claim when trigger conditions are satisfied
+func (s *RegisteredPolicyService) generateClaimFromTrigger(
+	ctx context.Context,
+	policyID uuid.UUID,
+	basePolicyID uuid.UUID,
+	farmID uuid.UUID,
+	triggerID uuid.UUID,
+	triggeredConditions []TriggeredCondition,
+) (*models.Claim, error) {
+	slog.Info("Generating claim from trigger",
+		"policy_id", policyID,
+		"trigger_id", triggerID,
+		"conditions_count", len(triggeredConditions))
+
+	// Check for duplicate claim within the last 24 hours
+	recentClaim, err := s.registeredPolicyRepo.GetRecentClaimByPolicyAndTrigger(
+		policyID,
+		triggerID,
+		24*60*60, // 24 hours in seconds
+	)
+	if err != nil {
+		slog.Warn("Failed to check for recent claims", "error", err)
+		// Continue anyway - better to potentially duplicate than miss a claim
+	}
+	if recentClaim != nil {
+		slog.Info("Skipping claim generation - recent claim exists",
+			"policy_id", policyID,
+			"trigger_id", triggerID,
+			"existing_claim_id", recentClaim.ID,
+			"existing_claim_number", recentClaim.ClaimNumber,
+			"existing_trigger_timestamp", recentClaim.TriggerTimestamp)
+		return recentClaim, nil // Return existing claim instead of creating duplicate
+	}
+
+	// Get registered policy for coverage amount
+	policy, err := s.registeredPolicyRepo.GetByID(policyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get registered policy: %w", err)
+	}
+
+	// Get base policy for payout calculation parameters
+	basePolicy, err := s.basePolicyRepo.GetBasePolicyByID(basePolicyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get base policy: %w", err)
+	}
+
+	// Calculate payout amounts
+	fixPayout, thresholdPayout, totalPayout, overThresholdValue := s.calculateClaimPayouts(
+		policy,
+		basePolicy,
+		triggeredConditions,
+	)
+
+	// Build evidence summary from triggered conditions
+	evidenceSummary := s.buildEvidenceSummary(triggeredConditions)
+
+	// Generate claim number
+	claimNumber := "CLM" + utils.GenerateRandomStringWithLength(9)
+
+	// Set auto-approval deadline (e.g., 7 days from now)
+	autoApprovalDeadline := time.Now().AddDate(0, 0, 7).Unix()
+
+	// Create the claim
+	claim := &models.Claim{
+		ID:                        uuid.New(),
+		ClaimNumber:               claimNumber,
+		RegisteredPolicyID:        policyID,
+		BasePolicyID:              basePolicyID,
+		FarmID:                    farmID,
+		BasePolicyTriggerID:       triggerID,
+		TriggerTimestamp:          time.Now().Unix(),
+		OverThresholdValue:        overThresholdValue,
+		CalculatedFixPayout:       &fixPayout,
+		CalculatedThresholdPayout: &thresholdPayout,
+		ClaimAmount:               totalPayout,
+		Status:                    models.ClaimGenerated,
+		AutoGenerated:             true,
+		AutoApprovalDeadline:      &autoApprovalDeadline,
+		AutoApproved:              false,
+		EvidenceSummary:           evidenceSummary,
+	}
+
+	// Save claim to database
+	if err := s.registeredPolicyRepo.CreateClaim(claim); err != nil {
+		return nil, fmt.Errorf("failed to create claim: %w", err)
+	}
+
+	slog.Info("Claim generated and saved",
+		"claim_id", claim.ID,
+		"claim_number", claim.ClaimNumber,
+		"fix_payout", fixPayout,
+		"threshold_payout", thresholdPayout,
+		"total_payout", totalPayout,
+		"over_threshold_value", overThresholdValue)
+
+	return claim, nil
+}
+
+// calculateClaimPayouts calculates the payout amounts for a claim
+func (s *RegisteredPolicyService) calculateClaimPayouts(
+	policy *models.RegisteredPolicy,
+	basePolicy *models.BasePolicy,
+	triggeredConditions []TriggeredCondition,
+) (fixPayout float64, thresholdPayout float64, totalPayout float64, overThresholdValue *float64) {
+	// Calculate fix payout (base payout amount)
+	fixPayout = float64(basePolicy.FixPayoutAmount) * basePolicy.PayoutBaseRate
+
+	// Calculate over-threshold payout based on how much the condition exceeded the threshold
+	var maxOverThreshold float64
+	for _, tc := range triggeredConditions {
+		if tc.IsEarlyWarning {
+			continue // Skip early warnings for payout calculation
+		}
+
+		// Calculate how much the measured value exceeded the threshold
+		var overAmount float64
+		switch tc.Operator {
+		case models.ThresholdGT, models.ThresholdGTE, models.ThresholdChangeGT:
+			// For "greater than" operators, the over amount is measured - threshold
+			overAmount = tc.MeasuredValue - tc.ThresholdValue
+		case models.ThresholdLT, models.ThresholdLTE, models.ThresholdChangeLT:
+			// For "less than" operators, the over amount is threshold - measured
+			overAmount = tc.ThresholdValue - tc.MeasuredValue
+		}
+
+		if overAmount > maxOverThreshold {
+			maxOverThreshold = overAmount
+		}
+	}
+
+	if maxOverThreshold > 0 {
+		overThresholdValue = &maxOverThreshold
+		// Calculate threshold payout using the over-threshold multiplier
+		thresholdPayout = maxOverThreshold * basePolicy.OverThresholdMultiplier
+	}
+
+	// Total payout is fix + threshold payout
+	totalPayout = fixPayout + thresholdPayout
+
+	// Apply payout cap if specified
+	if basePolicy.PayoutCap != nil && totalPayout > float64(*basePolicy.PayoutCap) {
+		totalPayout = float64(*basePolicy.PayoutCap)
+		slog.Info("Payout capped",
+			"original_total", fixPayout+thresholdPayout,
+			"capped_total", totalPayout,
+			"payout_cap", *basePolicy.PayoutCap)
+	}
+
+	// Ensure payout doesn't exceed coverage amount
+	if totalPayout > policy.CoverageAmount {
+		totalPayout = policy.CoverageAmount
+		slog.Info("Payout limited to coverage amount",
+			"calculated_total", fixPayout+thresholdPayout,
+			"coverage_amount", policy.CoverageAmount)
+	}
+
+	return fixPayout, thresholdPayout, totalPayout, overThresholdValue
+}
+
+// buildEvidenceSummary creates a JSON summary of triggered conditions for the claim
+func (s *RegisteredPolicyService) buildEvidenceSummary(triggeredConditions []TriggeredCondition) utils.JSONMap {
+	evidence := utils.JSONMap{
+		"triggered_at":      time.Now().Unix(),
+		"conditions_count":  len(triggeredConditions),
+		"generation_method": "automatic",
+	}
+
+	conditions := make([]map[string]interface{}, 0, len(triggeredConditions))
+	for _, tc := range triggeredConditions {
+		condEvidence := map[string]interface{}{
+			"condition_id":    tc.ConditionID.String(),
+			"parameter":       string(tc.ParameterName),
+			"measured_value":  tc.MeasuredValue,
+			"threshold_value": tc.ThresholdValue,
+			"operator":        string(tc.Operator),
+			"timestamp":       tc.Timestamp,
+			"is_early_warning": tc.IsEarlyWarning,
+		}
+
+		if tc.BaselineValue != nil {
+			condEvidence["baseline_value"] = *tc.BaselineValue
+		}
+
+		if tc.ConsecutiveDays > 0 {
+			condEvidence["consecutive_days"] = tc.ConsecutiveDays
+		}
+
+		if tc.EarlyWarningThreshold != nil {
+			condEvidence["early_warning_threshold"] = *tc.EarlyWarningThreshold
+		}
+
+		conditions = append(conditions, condEvidence)
+	}
+
+	evidence["conditions"] = conditions
+
+	return evidence
+}
+
+// evaluateTriggerConditions checks if fetched monitoring data satisfies trigger conditions
+func (s *RegisteredPolicyService) evaluateTriggerConditions(
+	ctx context.Context,
+	triggers []models.BasePolicyTrigger,
+	monitoringData []models.FarmMonitoringData,
+	farmID uuid.UUID,
+) []TriggeredCondition {
+	var triggeredConditions []TriggeredCondition
+	currentTime := time.Now()
+
+	for _, trigger := range triggers {
+		// Check blackout periods - skip evaluation during blackout
+		if s.isInBlackoutPeriod(trigger.BlackoutPeriods, currentTime) {
+			slog.Info("Skipping trigger evaluation during blackout period",
+				"trigger_id", trigger.ID,
+				"current_time", currentTime)
+			continue
+		}
+
+		conditions, err := s.basePolicyRepo.GetBasePolicyTriggerConditionsByTriggerID(trigger.ID)
+		if err != nil {
+			slog.Warn("Failed to get conditions for trigger evaluation",
+				"trigger_id", trigger.ID,
+				"error", err)
+			continue
+		}
+
+		// Sort conditions by ConditionOrder for proper evaluation sequence
+		sortConditionsByOrder(conditions)
+
+		// Fetch historical data from database for comprehensive evaluation
+		historicalData, err := s.farmMonitoringDataRepo.GetByFarmID(ctx, farmID)
+		if err != nil {
+			slog.Warn("Failed to get historical monitoring data",
+				"farm_id", farmID,
+				"error", err)
+			// Continue with just the fetched data
+			historicalData = nil
+		}
+
+		// Merge fetched data with historical data, avoiding duplicates
+		allData := s.mergeMonitoringData(monitoringData, historicalData)
+
+		// Group all monitoring data by condition ID
+		dataByCondition := make(map[uuid.UUID][]models.FarmMonitoringData)
+		for _, data := range allData {
+			dataByCondition[data.BasePolicyTriggerConditionID] = append(
+				dataByCondition[data.BasePolicyTriggerConditionID],
+				data,
+			)
+		}
+
+		// Evaluate each condition in order
+		var conditionResults []bool
+		var triggerConditionsForThisTrigger []TriggeredCondition
+
+		for _, cond := range conditions {
+			condData := dataByCondition[cond.ID]
+			if len(condData) == 0 {
+				slog.Debug("No data for condition", "condition_id", cond.ID)
+				conditionResults = append(conditionResults, false)
+				continue
+			}
+
+			// Sort data by timestamp for proper chronological analysis
+			sortMonitoringDataByTimestamp(condData)
+
+			// Apply aggregation function to get the current value
+			aggregatedValue := s.applyAggregation(condData, cond.AggregationFunction, cond.AggregationWindowDays)
+
+			// Calculate baseline if required for change-based operators
+			var baselineValue *float64
+			if cond.BaselineWindowDays != nil && cond.BaselineFunction != nil {
+				baseline := s.calculateBaseline(condData, *cond.BaselineWindowDays, *cond.BaselineFunction, cond.AggregationWindowDays)
+				baselineValue = &baseline
+
+				// For change operators, calculate the change from baseline
+				if cond.ThresholdOperator == models.ThresholdChangeGT || cond.ThresholdOperator == models.ThresholdChangeLT {
+					aggregatedValue = aggregatedValue - baseline
+				}
+			}
+
+			// Check if main threshold is satisfied
+			isSatisfied := s.checkThreshold(aggregatedValue, cond.ThresholdValue, cond.ThresholdOperator)
+
+			// Check early warning threshold if main threshold not satisfied
+			isEarlyWarning := false
+			if !isSatisfied && cond.EarlyWarningThreshold != nil {
+				isEarlyWarning = s.checkThreshold(aggregatedValue, *cond.EarlyWarningThreshold, cond.ThresholdOperator)
+			}
+
+			// Check consecutive days requirement
+			consecutiveDays := 0
+			if cond.ConsecutiveRequired && isSatisfied {
+				consecutiveDays = s.countConsecutiveDays(condData, cond.ThresholdValue, cond.ThresholdOperator, cond.AggregationFunction)
+				// For consecutive requirement, we need at least ValidationWindowDays consecutive days
+				if consecutiveDays < cond.ValidationWindowDays {
+					slog.Info("Consecutive days requirement not met",
+						"condition_id", cond.ID,
+						"consecutive_days", consecutiveDays,
+						"required_days", cond.ValidationWindowDays)
+					isSatisfied = false
+				}
+			}
+
+			// Validate within validation window if specified
+			if isSatisfied && cond.ValidationWindowDays > 0 && !cond.ConsecutiveRequired {
+				// Check if condition was satisfied within the validation window
+				validationCutoff := currentTime.AddDate(0, 0, -cond.ValidationWindowDays).Unix()
+				latestTimestamp := condData[len(condData)-1].MeasurementTimestamp
+				if latestTimestamp < validationCutoff {
+					slog.Info("Condition data outside validation window",
+						"condition_id", cond.ID,
+						"latest_data", latestTimestamp,
+						"validation_cutoff", validationCutoff)
+					isSatisfied = false
+				}
+			}
+
+			if isSatisfied || isEarlyWarning {
+				tc := TriggeredCondition{
+					ConditionID:           cond.ID,
+					ParameterName:         condData[0].ParameterName,
+					MeasuredValue:         aggregatedValue,
+					ThresholdValue:        cond.ThresholdValue,
+					Operator:              cond.ThresholdOperator,
+					Timestamp:             condData[len(condData)-1].MeasurementTimestamp,
+					BaselineValue:         baselineValue,
+					ConsecutiveDays:       consecutiveDays,
+					IsEarlyWarning:        isEarlyWarning && !isSatisfied,
+					EarlyWarningThreshold: cond.EarlyWarningThreshold,
+				}
+				triggerConditionsForThisTrigger = append(triggerConditionsForThisTrigger, tc)
+			}
+
+			conditionResults = append(conditionResults, isSatisfied)
+		}
+
+		// Check logical operator (AND/OR) for trigger
+		triggerSatisfied := s.evaluateLogicalOperator(trigger.LogicalOperator, conditionResults)
+		if triggerSatisfied {
+			triggeredConditions = append(triggeredConditions, triggerConditionsForThisTrigger...)
+		} else {
+			// Log early warnings even if trigger not fully satisfied
+			for _, tc := range triggerConditionsForThisTrigger {
+				if tc.IsEarlyWarning {
+					slog.Info("Early warning threshold breached (trigger not fully satisfied)",
+						"condition_id", tc.ConditionID,
+						"parameter", tc.ParameterName,
+						"measured_value", tc.MeasuredValue,
+						"early_warning_threshold", tc.EarlyWarningThreshold)
+				}
+			}
+		}
+	}
+
+	return triggeredConditions
+}
+
+// isInBlackoutPeriod checks if current time falls within any blackout period
+func (s *RegisteredPolicyService) isInBlackoutPeriod(blackoutPeriods utils.JSONMap, currentTime time.Time) bool {
+	if blackoutPeriods == nil {
+		return false
+	}
+
+	// Blackout periods expected format: {"periods": [{"start": "MM-DD", "end": "MM-DD"}, ...]}
+	periods, ok := blackoutPeriods["periods"].([]interface{})
+	if !ok {
+		return false
+	}
+
+	currentMonthDay := currentTime.Format("01-02")
+
+	for _, p := range periods {
+		period, ok := p.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		start, startOk := period["start"].(string)
+		end, endOk := period["end"].(string)
+		if !startOk || !endOk {
+			continue
+		}
+
+		// Simple string comparison for MM-DD format
+		if start <= end {
+			// Normal range (e.g., 03-01 to 05-31)
+			if currentMonthDay >= start && currentMonthDay <= end {
+				return true
+			}
+		} else {
+			// Wrapping range (e.g., 11-01 to 02-28)
+			if currentMonthDay >= start || currentMonthDay <= end {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+// sortConditionsByOrder sorts conditions by their ConditionOrder field
+func sortConditionsByOrder(conditions []models.BasePolicyTriggerCondition) {
+	for i := 0; i < len(conditions)-1; i++ {
+		for j := i + 1; j < len(conditions); j++ {
+			if conditions[i].ConditionOrder > conditions[j].ConditionOrder {
+				conditions[i], conditions[j] = conditions[j], conditions[i]
+			}
+		}
+	}
+}
+
+// sortMonitoringDataByTimestamp sorts monitoring data by timestamp ascending
+func sortMonitoringDataByTimestamp(data []models.FarmMonitoringData) {
+	for i := 0; i < len(data)-1; i++ {
+		for j := i + 1; j < len(data); j++ {
+			if data[i].MeasurementTimestamp > data[j].MeasurementTimestamp {
+				data[i], data[j] = data[j], data[i]
+			}
+		}
+	}
+}
+
+// mergeMonitoringData merges fetched data with historical data, avoiding duplicates
+func (s *RegisteredPolicyService) mergeMonitoringData(
+	fetched []models.FarmMonitoringData,
+	historical []models.FarmMonitoringData,
+) []models.FarmMonitoringData {
+	if historical == nil {
+		return fetched
+	}
+
+	// Create a map of existing IDs from fetched data
+	existingIDs := make(map[uuid.UUID]bool)
+	for _, d := range fetched {
+		existingIDs[d.ID] = true
+	}
+
+	// Add historical data that's not in fetched
+	result := make([]models.FarmMonitoringData, len(fetched))
+	copy(result, fetched)
+
+	for _, d := range historical {
+		if !existingIDs[d.ID] {
+			result = append(result, d)
+		}
+	}
+
+	return result
+}
+
+// calculateBaseline calculates the baseline value using historical data
+func (s *RegisteredPolicyService) calculateBaseline(
+	data []models.FarmMonitoringData,
+	baselineWindowDays int,
+	baselineFunction models.AggregationFunction,
+	aggregationWindowDays int,
+) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+
+	// Baseline window is calculated before the aggregation window
+	// e.g., if aggregation is last 7 days, baseline is the 30 days before that
+	aggregationCutoff := time.Now().AddDate(0, 0, -aggregationWindowDays).Unix()
+	baselineCutoff := time.Now().AddDate(0, 0, -(aggregationWindowDays + baselineWindowDays)).Unix()
+
+	var baselineData []float64
+	for _, d := range data {
+		if d.MeasurementTimestamp >= baselineCutoff && d.MeasurementTimestamp < aggregationCutoff {
+			baselineData = append(baselineData, d.MeasuredValue)
+		}
+	}
+
+	if len(baselineData) == 0 {
+		return 0
+	}
+
+	// Apply baseline aggregation function
+	switch baselineFunction {
+	case models.AggregationSum:
+		var sum float64
+		for _, v := range baselineData {
+			sum += v
+		}
+		return sum
+	case models.AggregationAvg:
+		var sum float64
+		for _, v := range baselineData {
+			sum += v
+		}
+		return sum / float64(len(baselineData))
+	case models.AggregationMin:
+		minVal := baselineData[0]
+		for _, v := range baselineData[1:] {
+			if v < minVal {
+				minVal = v
+			}
+		}
+		return minVal
+	case models.AggregationMax:
+		maxVal := baselineData[0]
+		for _, v := range baselineData[1:] {
+			if v > maxVal {
+				maxVal = v
+			}
+		}
+		return maxVal
+	default:
+		// Return average as default
+		var sum float64
+		for _, v := range baselineData {
+			sum += v
+		}
+		return sum / float64(len(baselineData))
+	}
+}
+
+// countConsecutiveDays counts how many consecutive days the condition was met
+func (s *RegisteredPolicyService) countConsecutiveDays(
+	data []models.FarmMonitoringData,
+	thresholdValue float64,
+	operator models.ThresholdOperator,
+	aggFunc models.AggregationFunction,
+) int {
+	if len(data) == 0 {
+		return 0
+	}
+
+	// Group data by day
+	dataByDay := make(map[string][]float64)
+	for _, d := range data {
+		day := time.Unix(d.MeasurementTimestamp, 0).Format("2006-01-02")
+		dataByDay[day] = append(dataByDay[day], d.MeasuredValue)
+	}
+
+	// Sort days
+	var days []string
+	for day := range dataByDay {
+		days = append(days, day)
+	}
+	for i := 0; i < len(days)-1; i++ {
+		for j := i + 1; j < len(days); j++ {
+			if days[i] > days[j] {
+				days[i], days[j] = days[j], days[i]
+			}
+		}
+	}
+
+	// Count consecutive days from the most recent
+	consecutiveCount := 0
+	for i := len(days) - 1; i >= 0; i-- {
+		dayData := dataByDay[days[i]]
+
+		// Aggregate the day's data
+		var dayValue float64
+		switch aggFunc {
+		case models.AggregationSum:
+			for _, v := range dayData {
+				dayValue += v
+			}
+		case models.AggregationAvg:
+			for _, v := range dayData {
+				dayValue += v
+			}
+			dayValue /= float64(len(dayData))
+		case models.AggregationMin:
+			dayValue = dayData[0]
+			for _, v := range dayData[1:] {
+				if v < dayValue {
+					dayValue = v
+				}
+			}
+		case models.AggregationMax:
+			dayValue = dayData[0]
+			for _, v := range dayData[1:] {
+				if v > dayValue {
+					dayValue = v
+				}
+			}
+		default:
+			dayValue = dayData[len(dayData)-1]
+		}
+
+		// Check if this day meets the threshold
+		if s.checkThreshold(dayValue, thresholdValue, operator) {
+			consecutiveCount++
+		} else {
+			break // Consecutive streak broken
+		}
+
+		// Check if days are actually consecutive
+		if i > 0 {
+			currentDay, _ := time.Parse("2006-01-02", days[i])
+			prevDay, _ := time.Parse("2006-01-02", days[i-1])
+			if currentDay.Sub(prevDay).Hours() > 48 { // Allow for 1 day gap
+				break
+			}
+		}
+	}
+
+	return consecutiveCount
+}
+
+// applyAggregation applies the aggregation function to monitoring data
+func (s *RegisteredPolicyService) applyAggregation(
+	data []models.FarmMonitoringData,
+	aggFunc models.AggregationFunction,
+	windowDays int,
+) float64 {
+	if len(data) == 0 {
+		return 0
+	}
+
+	// Filter data within aggregation window
+	cutoffTime := time.Now().AddDate(0, 0, -windowDays).Unix()
+	var windowData []float64
+	for _, d := range data {
+		if d.MeasurementTimestamp >= cutoffTime {
+			windowData = append(windowData, d.MeasuredValue)
+		}
+	}
+
+	if len(windowData) == 0 {
+		return 0
+	}
+
+	switch aggFunc {
+	case models.AggregationSum:
+		var sum float64
+		for _, v := range windowData {
+			sum += v
+		}
+		return sum
+	case models.AggregationAvg:
+		var sum float64
+		for _, v := range windowData {
+			sum += v
+		}
+		return sum / float64(len(windowData))
+	case models.AggregationMin:
+		minVal := windowData[0]
+		for _, v := range windowData[1:] {
+			if v < minVal {
+				minVal = v
+			}
+		}
+		return minVal
+	case models.AggregationMax:
+		maxVal := windowData[0]
+		for _, v := range windowData[1:] {
+			if v > maxVal {
+				maxVal = v
+			}
+		}
+		return maxVal
+	case models.AggregationChange:
+		if len(windowData) < 2 {
+			return 0
+		}
+		return windowData[len(windowData)-1] - windowData[0]
+	default:
+		return windowData[len(windowData)-1] // Return latest value
+	}
+}
+
+// checkThreshold checks if the measured value satisfies the threshold condition
+func (s *RegisteredPolicyService) checkThreshold(
+	measuredValue float64,
+	thresholdValue float64,
+	operator models.ThresholdOperator,
+) bool {
+	switch operator {
+	case models.ThresholdLT:
+		return measuredValue < thresholdValue
+	case models.ThresholdGT:
+		return measuredValue > thresholdValue
+	case models.ThresholdLTE:
+		return measuredValue <= thresholdValue
+	case models.ThresholdGTE:
+		return measuredValue >= thresholdValue
+	case models.ThresholdEQ:
+		return measuredValue == thresholdValue
+	case models.ThresholdNE:
+		return measuredValue != thresholdValue
+	case models.ThresholdChangeGT:
+		return measuredValue > thresholdValue
+	case models.ThresholdChangeLT:
+		return measuredValue < thresholdValue
+	default:
+		return false
+	}
+}
+
+// evaluateLogicalOperator evaluates conditions based on the logical operator
+func (s *RegisteredPolicyService) evaluateLogicalOperator(
+	operator models.LogicalOperator,
+	results []bool,
+) bool {
+	if len(results) == 0 {
+		return false
+	}
+
+	switch operator {
+	case models.LogicalAND:
+		for _, r := range results {
+			if !r {
+				return false
+			}
+		}
+		return true
+	case models.LogicalOR:
+		for _, r := range results {
+			if r {
+				return true
+			}
+		}
+		return false
+	default:
+		return results[0]
+	}
 }
 
 // ============================================================================
@@ -1430,5 +2228,193 @@ func (s *RegisteredPolicyService) GetStatsOverview(ownerID string) (models.FarmS
 		FarmActiveCount:       activeFarmCount,
 		FarmInactiveCount:     inactiveFarmCount,
 		RegisteredPolicyCount: activeRegisteredPolicyCount,
+	}, nil
+}
+
+// GetAllMonitoringDataWithPolicyStatus retrieves all farm monitoring data with associated policy status
+func (s *RegisteredPolicyService) GetAllMonitoringDataWithPolicyStatus(ctx context.Context, startTimestamp, endTimestamp *int64) ([]models.FarmMonitoringDataWithPolicyStatus, error) {
+	slog.Info("Getting all farm monitoring data with policy status",
+		"start_timestamp", startTimestamp,
+		"end_timestamp", endTimestamp)
+
+	data, err := s.farmMonitoringDataRepo.GetAllWithPolicyStatus(ctx, startTimestamp, endTimestamp)
+	if err != nil {
+		slog.Error("Failed to get monitoring data with policy status", "error", err)
+		return nil, fmt.Errorf("failed to get monitoring data with policy status: %w", err)
+	}
+
+	slog.Info("Successfully retrieved monitoring data with policy status", "count", len(data))
+	return data, nil
+}
+
+// GetMonitoringDataWithPolicyStatusByFarmID retrieves farm monitoring data with policy status for a specific farm
+func (s *RegisteredPolicyService) GetMonitoringDataWithPolicyStatusByFarmID(ctx context.Context, farmID uuid.UUID, startTimestamp, endTimestamp *int64) ([]models.FarmMonitoringDataWithPolicyStatus, error) {
+	slog.Info("Getting farm monitoring data with policy status",
+		"farm_id", farmID,
+		"start_timestamp", startTimestamp,
+		"end_timestamp", endTimestamp)
+
+	data, err := s.farmMonitoringDataRepo.GetAllWithPolicyStatusByFarmID(ctx, farmID, startTimestamp, endTimestamp)
+	if err != nil {
+		slog.Error("Failed to get monitoring data with policy status by farm ID", "farm_id", farmID, "error", err)
+		return nil, fmt.Errorf("failed to get monitoring data with policy status: %w", err)
+	}
+
+	slog.Info("Successfully retrieved monitoring data with policy status", "farm_id", farmID, "count", len(data))
+	return data, nil
+}
+
+// GetMonitoringDataByFarmAndParameter retrieves monitoring data filtered by farm ID and parameter name
+func (s *RegisteredPolicyService) GetMonitoringDataByFarmAndParameter(
+	ctx context.Context,
+	farmID uuid.UUID,
+	parameterName models.DataSourceParameterName,
+	startTimestamp, endTimestamp *int64,
+) ([]models.FarmMonitoringDataWithPolicyStatus, error) {
+	slog.Info("Getting farm monitoring data by farm and parameter",
+		"farm_id", farmID,
+		"parameter_name", parameterName,
+		"start_timestamp", startTimestamp,
+		"end_timestamp", endTimestamp)
+
+	data, err := s.farmMonitoringDataRepo.GetByFarmIDAndParameterNameWithPolicyStatus(ctx, farmID, parameterName, startTimestamp, endTimestamp)
+	if err != nil {
+		slog.Error("Failed to get monitoring data by farm and parameter",
+			"farm_id", farmID,
+			"parameter_name", parameterName,
+			"error", err)
+		return nil, fmt.Errorf("failed to get monitoring data: %w", err)
+	}
+
+	slog.Info("Successfully retrieved monitoring data",
+		"farm_id", farmID,
+		"parameter_name", parameterName,
+		"count", len(data))
+	return data, nil
+}
+
+// CreatePartnerPolicyUnderwriting creates an underwriting record, updates policy status, and dispatches monitoring job
+func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
+	ctx context.Context,
+	policyID uuid.UUID,
+	req models.CreatePartnerPolicyUnderwritingRequest,
+	validatedBy string,
+) (*models.CreatePartnerPolicyUnderwritingResponse, error) {
+	slog.Info("Creating partner policy underwriting",
+		"policy_id", policyID,
+		"underwriting_status", req.UnderwritingStatus,
+		"validated_by", validatedBy)
+
+	// 1. Get the policy to verify it exists and get required info
+	policy, err := s.registeredPolicyRepo.GetByID(policyID)
+	if err != nil {
+		slog.Error("Failed to get policy for underwriting", "policy_id", policyID, "error", err)
+		return nil, fmt.Errorf("failed to get policy: %w", err)
+	}
+
+	// 2. Create underwriting record
+	underwriting := &models.RegisteredPolicyUnderwriting{
+		ID:                  uuid.New(),
+		RegisteredPolicyID:  policyID,
+		ValidationTimestamp: time.Now().Unix(),
+		UnderwritingStatus:  req.UnderwritingStatus,
+		Recommendations:     req.Recommendations,
+		Reason:              req.Reason,
+		ReasonEvidence:      req.ReasonEvidence,
+		ValidatedBy:         &validatedBy,
+		ValidationNotes:     req.ValidationNotes,
+	}
+
+	if err := s.registeredPolicyRepo.CreateUnderwriting(underwriting); err != nil {
+		slog.Error("Failed to create underwriting record", "policy_id", policyID, "error", err)
+		return nil, fmt.Errorf("failed to create underwriting: %w", err)
+	}
+
+	// 3. Update registered policy underwriting status
+	if err := s.registeredPolicyRepo.UpdateUnderwritingStatus(policyID, req.UnderwritingStatus); err != nil {
+		slog.Error("Failed to update policy underwriting status", "policy_id", policyID, "error", err)
+		return nil, fmt.Errorf("failed to update policy underwriting status: %w", err)
+	}
+
+	// 4. If approved, update policy status and start insurance process
+	responseMessage := "Underwriting record created"
+	if req.UnderwritingStatus == models.UnderwritingApproved {
+		// Update policy status to active and set coverage start date
+		policy.Status = models.PolicyActive
+		policy.CoverageStartDate = time.Now().Unix()
+		if err := s.registeredPolicyRepo.Update(policy); err != nil {
+			slog.Error("Failed to update policy status to active", "policy_id", policyID, "error", err)
+			return nil, fmt.Errorf("failed to update policy status: %w", err)
+		}
+
+		// Get scheduler and dispatch FetchFarmMonitoringDataJob with check_policy=true
+		scheduler, ok := s.workerManager.GetSchedulerByPolicyID(policyID)
+		if !ok {
+			slog.Warn("Scheduler not found for policy, attempting to create worker infrastructure",
+				"policy_id", policyID)
+			// Try to recover/create worker infrastructure
+			if err := s.recoverPolicyInfrastructure(ctx, policyID); err != nil {
+				slog.Error("Failed to recover policy infrastructure", "policy_id", policyID, "error", err)
+				// Don't fail the entire operation, just log warning
+			} else {
+				scheduler, ok = s.workerManager.GetSchedulerByPolicyID(policyID)
+			}
+		}
+
+		if ok && scheduler != nil {
+			currentTime := time.Now()
+			// Fetch last 30 days of data with policy checking enabled
+			startTime := currentTime.AddDate(0, 0, -30)
+
+			monitoringJob := worker.JobPayload{
+				JobID: uuid.NewString(),
+				Type:  "fetch-farm-monitoring-data",
+				Params: map[string]any{
+					"policy_id":      policyID.String(),
+					"base_policy_id": policy.BasePolicyID.String(),
+					"farm_id":        policy.FarmID.String(),
+					"start_date":     startTime.Unix(),
+					"end_date":       currentTime.Unix(),
+					"check_policy":   true, // Enable policy trigger checking
+				},
+				MaxRetries: 3,
+				OneTime:    true,
+				RunNow:     true,
+			}
+
+			scheduler.AddJob(monitoringJob)
+			slog.Info("Dispatched FetchFarmMonitoringDataJob with check_policy=true",
+				"policy_id", policyID,
+				"job_id", monitoringJob.JobID,
+				"start_date", startTime.Unix(),
+				"end_date", currentTime.Unix())
+
+			responseMessage = "Underwriting approved, policy activated, and monitoring job dispatched"
+		} else {
+			slog.Warn("Could not dispatch monitoring job - scheduler not available", "policy_id", policyID)
+			responseMessage = "Underwriting approved, policy activated (monitoring job dispatch skipped)"
+		}
+	} else if req.UnderwritingStatus == models.UnderwritingRejected {
+		// Update policy status to rejected
+		policy.Status = models.PolicyRejected
+		if err := s.registeredPolicyRepo.Update(policy); err != nil {
+			slog.Error("Failed to update policy status to rejected", "policy_id", policyID, "error", err)
+			return nil, fmt.Errorf("failed to update policy status: %w", err)
+		}
+		responseMessage = "Underwriting rejected, policy rejected"
+	}
+
+	slog.Info("Successfully created partner policy underwriting",
+		"underwriting_id", underwriting.ID,
+		"policy_id", policyID,
+		"status", req.UnderwritingStatus,
+		"message", responseMessage)
+
+	return &models.CreatePartnerPolicyUnderwritingResponse{
+		UnderwritingID:     underwriting.ID.String(),
+		PolicyID:           policyID.String(),
+		UnderwritingStatus: req.UnderwritingStatus,
+		ValidatedBy:        validatedBy,
+		Message:            responseMessage,
 	}, nil
 }
