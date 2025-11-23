@@ -2,6 +2,11 @@ import {
   PaymentLinkDto,
   CreatePaymentLinkData,
   PaymentLinkResponse,
+  PayoutDto,
+  CreatePayoutData,
+  CreateBatchPayoutData,
+  PayoutAccountBalanceDto,
+  EstimateCreditDto,
 } from '../types/payos.types';
 
 type ServiceResponse<T = unknown> = {
@@ -26,4 +31,25 @@ export interface PayosService {
   ): PaymentLinkDto | Record<string, unknown>;
   confirmWebhook(webhook_url: string): Promise<ServiceResponse<null>>;
   getExpiredDuration(): string;
+  getOrderCodeLength(): number;
+
+  // Payout methods
+  createPayout(data: CreatePayoutData): Promise<ServiceResponse<PayoutDto>>;
+  createBatchPayout(
+    data: CreateBatchPayoutData,
+  ): Promise<ServiceResponse<PayoutDto>>;
+  getPayout(payoutId: string): Promise<ServiceResponse<PayoutDto>>;
+  getPayouts(options?: {
+    limit?: number;
+    offset?: number;
+    referenceId?: string;
+    approvalState?: string;
+    category?: string;
+    fromDate?: string;
+    toDate?: string;
+  }): Promise<ServiceResponse<{ payouts: PayoutDto[]; pagination: any }>>;
+  estimatePayoutCredit(
+    data: CreateBatchPayoutData,
+  ): Promise<ServiceResponse<EstimateCreditDto>>;
+  getPayoutAccountBalance(): Promise<ServiceResponse<PayoutAccountBalanceDto>>;
 }

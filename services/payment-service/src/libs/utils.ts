@@ -18,12 +18,10 @@ const toSnakeCase = (str: string): string =>
 const transformKeys = (obj: any, transform: (key: string) => string): any => {
   if (obj === null || typeof obj !== 'object') return obj;
   if (Array.isArray(obj))
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
     return obj.map((item: any) => transformKeys(item, transform));
   const transformed: any = {};
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
       transformed[transform(key)] = transformKeys(obj[key], transform);
     }
   }
@@ -37,10 +35,19 @@ const checkPermissions = (
   return required.every((perm) => permissions.includes(perm));
 };
 
+const generateReferenceId = (prefix: string = 'payout'): string => {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000)
+    .toString()
+    .padStart(3, '0');
+  return `${prefix}_${timestamp}_${random}`;
+};
+
 export {
   generateRandomString,
   toCamelCase,
   toSnakeCase,
   transformKeys,
   checkPermissions,
+  generateReferenceId,
 };

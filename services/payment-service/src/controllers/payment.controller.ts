@@ -18,11 +18,21 @@ import type { Response } from 'express';
 import {
   createPaymentLinkSchema,
   webhookPayloadSchema,
+  createPayoutDataSchema,
+  createBatchPayoutDataSchema,
 } from '../types/payos.types';
-import type { CreatePaymentLinkData } from '../types/payos.types';
+import type {
+  CreatePaymentLinkData,
+  CreatePayoutData,
+  CreateBatchPayoutData,
+} from '../types/payos.types';
 import type { PayosService } from '../services/payos.service';
 import type { PaymentService } from '../services/payment.service';
-import { checkPermissions, generateRandomString } from 'src/libs/utils';
+import {
+  checkPermissions,
+  generateRandomString,
+  generateReferenceId,
+} from 'src/libs/utils';
 import { paymentViewSchema } from 'src/types/payment.types';
 import z from 'zod';
 import type { OrderItemService } from 'src/services/order-item.service';
@@ -290,5 +300,212 @@ export class PaymentController {
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
       });
+  }
+
+  // Payout endpoints
+  @Post('protected/payout')
+  async createPayout(@Body() body: CreatePayoutData) {
+    const parsed = createPayoutDataSchema.safeParse(body);
+    if (!parsed.success) {
+      this.logger.warn('Invalid createPayout payload', parsed.error.format());
+      throw new HttpException('Dữ liệu không hợp lệ', HttpStatus.BAD_REQUEST);
+    }
+
+    // Auto-generate referenceId if not provided
+    const payoutData = {
+      ...parsed.data,
+      referenceId: parsed.data.referenceId || generateReferenceId('payout'),
+    };
+
+    try {
+      const payout_response = await this.payosService.createPayout(payoutData);
+
+      if (payout_response.error !== 0) {
+        this.logger.error('PayOS createPayout failed', payout_response);
+        throw new HttpException(
+          payout_response.message || 'Tạo lệnh chi thất bại',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      return payout_response.data;
+    } catch (error) {
+      this.logger.error('Failed to create payout', error);
+      throw new HttpException(
+        'Tạo lệnh chi thất bại',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('protected/payout/batch')
+  async createBatchPayout(@Body() body: CreateBatchPayoutData) {
+    const parsed = createBatchPayoutDataSchema.safeParse(body);
+    if (!parsed.success) {
+      this.logger.warn(
+        'Invalid createBatchPayout payload',
+        parsed.error.format(),
+      );
+      throw new HttpException('Dữ liệu không hợp lệ', HttpStatus.BAD_REQUEST);
+    }
+
+    // Auto-generate referenceIds if not provided
+    const batchData = {
+      ...parsed.data,
+      referenceId: parsed.data.referenceId || generateReferenceId('batch'),
+      payouts: parsed.data.payouts.map((payout, index) => ({
+        ...payout,
+        referenceId: payout.referenceId || generateReferenceId(`item_${index}`),
+      })),
+    };
+
+    try {
+      const payout_response =
+        await this.payosService.createBatchPayout(batchData);
+
+      if (payout_response.error !== 0) {
+        this.logger.error('PayOS createBatchPayout failed', payout_response);
+        throw new HttpException(
+          payout_response.message || 'Tạo lệnh chi hàng loạt thất bại',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      return payout_response.data;
+    } catch (error) {
+      this.logger.error('Failed to create batch payout', error);
+      throw new HttpException(
+        'Tạo lệnh chi hàng loạt thất bại',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('protected/payout/:payoutId')
+  async getPayout(@Param('payoutId') payoutId: string) {
+    try {
+      const payout_response = await this.payosService.getPayout(payoutId);
+
+      if (payout_response.error !== 0) {
+        throw new HttpException(
+          payout_response.message || 'Lấy thông tin lệnh chi thất bại',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      return payout_response.data;
+    } catch (error) {
+      this.logger.error('Failed to get payout', error);
+      throw new HttpException(
+        'Lấy thông tin lệnh chi thất bại',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('protected/payouts')
+  async getPayouts(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('referenceId') referenceId?: string,
+    @Query('approvalState') approvalState?: string,
+    @Query('category') category?: string,
+    @Query('fromDate') fromDate?: string,
+    @Query('toDate') toDate?: string,
+  ) {
+    try {
+      const options = {
+        limit: limit ? parseInt(limit) : undefined,
+        offset: offset ? parseInt(offset) : undefined,
+        referenceId,
+        approvalState,
+        category,
+        fromDate,
+        toDate,
+      };
+
+      const payout_response = await this.payosService.getPayouts(options);
+
+      if (payout_response.error !== 0) {
+        throw new HttpException(
+          payout_response.message || 'Lấy danh sách lệnh chi thất bại',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      return payout_response.data;
+    } catch (error) {
+      this.logger.error('Failed to get payouts', error);
+      throw new HttpException(
+        'Lấy danh sách lệnh chi thất bại',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Post('protected/payout/estimate-credit')
+  async estimatePayoutCredit(@Body() body: CreateBatchPayoutData) {
+    const parsed = createBatchPayoutDataSchema.safeParse(body);
+    if (!parsed.success) {
+      this.logger.warn(
+        'Invalid estimatePayoutCredit payload',
+        parsed.error.format(),
+      );
+      throw new HttpException('Dữ liệu không hợp lệ', HttpStatus.BAD_REQUEST);
+    }
+
+    // Auto-generate referenceIds if not provided
+    const estimateData = {
+      ...parsed.data,
+      referenceId: parsed.data.referenceId || generateReferenceId('estimate'),
+      payouts: parsed.data.payouts.map((payout, index) => ({
+        ...payout,
+        referenceId:
+          payout.referenceId || generateReferenceId(`est_item_${index}`),
+      })),
+    };
+
+    try {
+      const estimate_response =
+        await this.payosService.estimatePayoutCredit(estimateData);
+
+      if (estimate_response.error !== 0) {
+        throw new HttpException(
+          estimate_response.message || 'Ước tính chi phí thất bại',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      return estimate_response.data;
+    } catch (error) {
+      this.logger.error('Failed to estimate payout credit', error);
+      throw new HttpException(
+        'Ước tính chi phí thất bại',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  @Get('protected/payout/account/balance')
+  async getPayoutAccountBalance() {
+    try {
+      const balance_response =
+        await this.payosService.getPayoutAccountBalance();
+
+      if (balance_response.error !== 0) {
+        throw new HttpException(
+          balance_response.message || 'Lấy thông tin số dư thất bại',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      return balance_response.data;
+    } catch (error) {
+      this.logger.error('Failed to get payout account balance', error);
+      throw new HttpException(
+        'Lấy thông tin số dư thất bại',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }

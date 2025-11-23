@@ -146,6 +146,146 @@
           ]
         }
       }
+    },
+    {
+      "name": "Create Payout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"amount\": 100000,\n  \"description\": \"Thanh toán lương\",\n  \"toBin\": \"970415\",\n  \"toAccountNumber\": \"123456789\",\n  \"category\": [\"salary\"]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payment/protected/payout",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "protected", "payout"]
+        }
+      }
+    },
+    {
+      "name": "Create Batch Payout",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category\": [\"salary\", \"bonus\"],\n  \"validateDestination\": true,\n  \"payouts\": [\n    {\n      \"amount\": 100000,\n      \"description\": \"Thanh toán lương tháng 1\",\n      \"toBin\": \"970415\",\n      \"toAccountNumber\": \"123456789\"\n    },\n    {\n      \"amount\": 50000,\n      \"description\": \"Thưởng tháng 1\",\n      \"toBin\": \"970415\",\n      \"toAccountNumber\": \"987654321\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payment/protected/payout/batch",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "protected", "payout", "batch"]
+        }
+      }
+    },
+    {
+      "name": "Get Payout",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/payment/protected/payout/:payoutId",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "protected", "payout", ":payoutId"],
+          "variable": [
+            {
+              "key": "payoutId",
+              "value": "payout_123"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Payouts",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/payment/protected/payouts?limit=10&offset=0",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "protected", "payouts"],
+          "query": [
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "offset",
+              "value": "0"
+            },
+            {
+              "key": "referenceId",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "approvalState",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "category",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "fromDate",
+              "value": "",
+              "disabled": true
+            },
+            {
+              "key": "toDate",
+              "value": "",
+              "disabled": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Estimate Payout Credit",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"category\": [\"salary\"],\n  \"validateDestination\": true,\n  \"payouts\": [\n    {\n      \"amount\": 100000,\n      \"description\": \"Thanh toán lương tháng 1\",\n      \"toBin\": \"970415\",\n      \"toAccountNumber\": \"123456789\"\n    }\n  ]\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/payment/protected/payout/estimate-credit",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "protected", "payout", "estimate-credit"]
+        }
+      }
+    },
+    {
+      "name": "Get Payout Account Balance",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/payment/protected/payout/account/balance",
+          "host": ["{{base_url}}"],
+          "path": ["payment", "protected", "payout", "account", "balance"]
+        }
+      }
     }
   ],
   "variable": [

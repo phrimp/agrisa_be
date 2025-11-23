@@ -122,3 +122,72 @@ export const webhookPayloadSchema = z.object({
   }),
   signature: z.string(),
 });
+
+// Payout types
+export const payoutTransactionSchema = z.object({
+  id: z.string(),
+  referenceId: z.string(),
+  amount: z.number(),
+  description: z.string(),
+  toBin: z.string(),
+  toAccountNumber: z.string(),
+  toAccountName: z.string().nullable(),
+  reference: z.string().nullable(),
+  transactionDatetime: z.string().nullable(),
+  errorMessage: z.string().nullable(),
+  errorCode: z.string().nullable(),
+  state: z.enum(['PENDING', 'PROCESSING', 'SUCCEEDED', 'FAILED', 'CANCELLED']),
+});
+
+export const payoutSchema = z.object({
+  id: z.string(),
+  referenceId: z.string(),
+  transactions: z.array(payoutTransactionSchema),
+  category: z.array(z.string()),
+  approvalState: z.enum(['PENDING', 'APPROVED', 'REJECTED']),
+  createdAt: z.string(),
+});
+
+export const createPayoutDataSchema = z.object({
+  referenceId: z.string().optional(),
+  amount: z.number(),
+  description: z.string(),
+  toBin: z.string(),
+  toAccountNumber: z.string(),
+  category: z.array(z.string()).optional(),
+});
+
+export const createBatchPayoutDataSchema = z.object({
+  referenceId: z.string().optional(),
+  category: z.array(z.string()).optional(),
+  validateDestination: z.boolean().optional(),
+  payouts: z.array(
+    z.object({
+      referenceId: z.string().optional(),
+      amount: z.number(),
+      description: z.string(),
+      toBin: z.string(),
+      toAccountNumber: z.string(),
+    }),
+  ),
+});
+
+export const payoutAccountBalanceSchema = z.object({
+  accountNumber: z.string(),
+  accountName: z.string(),
+  currency: z.string(),
+  balance: z.string(),
+});
+
+export const estimateCreditSchema = z.object({
+  estimateCredit: z.number(),
+});
+
+export type PayoutTransactionDto = z.infer<typeof payoutTransactionSchema>;
+export type PayoutDto = z.infer<typeof payoutSchema>;
+export type CreatePayoutData = z.infer<typeof createPayoutDataSchema>;
+export type CreateBatchPayoutData = z.infer<typeof createBatchPayoutDataSchema>;
+export type PayoutAccountBalanceDto = z.infer<
+  typeof payoutAccountBalanceSchema
+>;
+export type EstimateCreditDto = z.infer<typeof estimateCreditSchema>;
