@@ -4,6 +4,7 @@ import (
 	"auth-service/internal/models"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -28,6 +29,7 @@ type IUserRepository interface {
 	CheckPasswordHash(password, hash string) bool
 	UpdateUserKycStatus(userID string, kycVerified bool) error
 	UpdateUserStatus(userID string, status models.UserStatus, lockedUntil *int64) error
+	CheckExistEmailOrPhone(value string) (bool, error)
 }
 
 type UserRepository struct {
@@ -370,4 +372,20 @@ func (r *UserRepository) UpdateUserStatus(userID string, status models.UserStatu
 	}
 
 	return nil
+}
+
+func (r *UserRepository) CheckExistEmailOrPhone(value string) (bool, error) {
+	var exists bool
+	query := `
+        SELECT EXISTS(
+            SELECT 1 FROM users 
+            WHERE email = $1 OR phone_number = $1
+        )
+    `
+	err := r.db.Get(&exists, query, value)
+	if err != nil {
+		slog.Error("Error checking existence of email or phone", "error", err)
+		return false, fmt.Errorf("failed to check existence of email or phone: %w", err)
+	}
+	return exists, nil
 }

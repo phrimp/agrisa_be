@@ -7,6 +7,7 @@ import (
 	"auth-service/utils"
 	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -34,6 +35,7 @@ func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
 	// Public routes
 	authGrPub.POST("/register", a.Register)
 	authGrPub.POST("/login", a.Login)
+	authGrPub.POST("/verify-identifier", a.VerifyIdentifier)
 
 	authGrPro := router.Group("/auth/protected/api/v2")
 	accountGr := router.Group("/account")
@@ -439,6 +441,38 @@ func (a *AuthHandler) VerifyLandCertificate(c *gin.Context) {
 
 	response := utils.CreateSuccessResponse(map[string]bool{
 		"is_valid": isValid,
+	})
+	c.JSON(http.StatusOK, response)
+}
+
+func (a *AuthHandler) VerifyIdentifier(c *gin.Context) {
+	var req models.VerifyIdentifierRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		slog.Error("Invalid verify identifier request format: %v", err)
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse{
+			Success: false,
+			Error: utils.APIError{
+				Code:    "INVALID_REQUEST",
+				Message: "Invalid request format",
+			},
+		})
+		return
+	}
+
+	exists, err := a.userService.CheckExistEmailOrPhone(req.Identifier)
+	if err != nil {
+		slog.Error("Error checking identifier existence: %v", err)
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse{
+			Success: false,
+			Error: utils.APIError{
+				Code:    "INTERNAL_ERROR",
+				Message: "Failed to verify identifier",
+			},
+		})
+		return
+	}
+	response := utils.CreateSuccessResponse(map[string]bool{
+		"available": exists,
 	})
 	c.JSON(http.StatusOK, response)
 }
