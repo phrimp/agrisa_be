@@ -602,6 +602,26 @@ func (r *RegisteredPolicyRepository) DeleteRiskAnalysis(id uuid.UUID) error {
 	return nil
 }
 
+// GetAllRiskAnalyses retrieves all risk analyses with pagination
+func (r *RegisteredPolicyRepository) GetAllRiskAnalyses(limit, offset int) ([]models.RegisteredPolicyRiskAnalysis, error) {
+	slog.Debug("Retrieving all risk analyses", "limit", limit, "offset", offset)
+
+	var analyses []models.RegisteredPolicyRiskAnalysis
+	query := `
+		SELECT * FROM registered_policy_risk_analysis
+		ORDER BY analysis_timestamp DESC
+		LIMIT $1 OFFSET $2`
+
+	err := r.db.Select(&analyses, query, limit, offset)
+	if err != nil {
+		slog.Error("Failed to get all risk analyses", "error", err)
+		return nil, fmt.Errorf("failed to get risk analyses: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved risk analyses", "count", len(analyses))
+	return analyses, nil
+}
+
 // GetWithFilters retrieves registered policies based on filter criteria
 func (r *RegisteredPolicyRepository) GetWithFilters(filter models.RegisteredPolicyFilterRequest) ([]models.RegisteredPolicy, error) {
 	slog.Info("Querying registered policies with filters", "filter", filter)

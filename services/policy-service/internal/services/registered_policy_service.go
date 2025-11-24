@@ -440,32 +440,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		endDate = time.Now().Add(24 * time.Hour).Unix()
 	}
 
-	// Check for existing data and adjust start date to fetch only missing data
 	ctx := context.Background()
-	latestTimestamp, err := s.farmMonitoringDataRepo.GetLatestTimestampByFarmID(ctx, farmID)
-	if err != nil {
-		slog.Warn("error getting latest timestamp for farm data", "error", err)
-		// Continue with original startDate if error
-	} else if latestTimestamp > 0 {
-		// Adjust start date to day after latest data
-		adjustedStartDate := latestTimestamp + (24 * 60 * 60) // Add 1 day
-		if adjustedStartDate >= endDate {
-			slog.Info("existing monitor farm data is up to date, skipping fetch job",
-				"farm_id", farmID,
-				"latest_data", latestTimestamp,
-				"requested_end", endDate)
-
-			scheduler.AddJob(riskAnalysisJob)
-			return nil
-		}
-		slog.Info("adjusting start date to fetch only missing data",
-			"farm_id", farmID,
-			"original_start", startDate,
-			"adjusted_start", adjustedStartDate,
-			"latest_existing_data", latestTimestamp,
-			"end_date", endDate)
-		startDate = adjustedStartDate
-	}
 
 	// Load farm to get boundary coordinates
 	farm, err := s.farmService.GetByFarmID(ctx, farmID.String())
@@ -483,8 +458,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		return fmt.Errorf("invalid farm boundary: need at least 3 coordinates")
 	}
 
-	// Convert Unix timestamps to YYYY-MM-DD format
-	startDateStr := unixToDateString(startDate)
+	// Convert end date to YYYY-MM-DD format (start date is calculated per-parameter)
 	endDateStr := unixToDateString(endDate)
 
 	// Initialize worker pool
@@ -503,21 +477,67 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	}
 
 	// Enqueue jobs for each condition with data source
+	// Track how many jobs were actually enqueued (some may be skipped if up to date)
+	jobsEnqueued := 0
 	for _, cds := range conditionsWithDataSources {
+		// Check for existing data per parameter and adjust start date to fetch only missing data
+		parameterName := string(cds.DataSource.ParameterName)
+		paramStartDate := startDate
+
+		latestTimestamp, err := s.farmMonitoringDataRepo.GetLatestTimestampByFarmIDAndParameterName(ctx, farmID, parameterName)
+		if err != nil {
+			slog.Warn("error getting latest timestamp for farm data by parameter",
+				"farm_id", farmID,
+				"parameter_name", parameterName,
+				"error", err)
+			// Continue with original startDate if error
+		} else if latestTimestamp > 0 {
+			// Adjust start date to day after latest data
+			adjustedStartDate := latestTimestamp + (24 * 60 * 60) // Add 1 day
+			if adjustedStartDate >= endDate {
+				slog.Info("existing monitor farm data is up to date for parameter, skipping",
+					"farm_id", farmID,
+					"parameter_name", parameterName,
+					"latest_data", latestTimestamp,
+					"requested_end", endDate)
+				continue // Skip this parameter, already up to date
+			}
+			slog.Info("adjusting start date to fetch only missing data for parameter",
+				"farm_id", farmID,
+				"parameter_name", parameterName,
+				"original_start", startDate,
+				"adjusted_start", adjustedStartDate,
+				"latest_existing_data", latestTimestamp,
+				"end_date", endDate)
+			paramStartDate = adjustedStartDate
+		}
+
+		// Convert adjusted start date to string format
+		paramStartDateStr := unixToDateString(paramStartDate)
+
 		jobs <- DataRequest{
 			DataSource:                   cds.DataSource,
 			FarmID:                       farmID,
 			FarmCoordinates:              farmCoordinates,
 			AgroPolygonID:                farm.AgroPolygonID,
-			StartDate:                    startDateStr,
+			StartDate:                    paramStartDateStr,
 			EndDate:                      endDateStr,
 			BasePolicyTriggerConditionID: cds.ConditionID,
 			MaxCloudCover:                100.0,
 			MaxImages:                    10,
 			IncludeComponents:            true,
 		}
+		jobsEnqueued++
 	}
 	close(jobs)
+
+	// If all parameters are up to date, schedule risk analysis and return
+	if jobsEnqueued == 0 {
+		slog.Info("all parameters are up to date, skipping fetch and scheduling risk analysis",
+			"farm_id", farmID)
+		scheduler.AddJob(riskAnalysisJob)
+		return nil
+	}
 
 	// Collect results from all workers
 	allMonitoringData := []models.FarmMonitoringData{}
@@ -525,7 +545,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	skipSummary := make(map[models.DataSourceParameterName]string)
 	var agroPolygonID string // Store polygon ID from weather API
 
-	for i := 0; i < len(conditionsWithDataSources); i++ {
+	for i := 0; i < jobsEnqueued; i++ {
 		resp := <-results
 
 		if resp.Err != nil {
@@ -850,12 +870,12 @@ func (s *RegisteredPolicyService) buildEvidenceSummary(triggeredConditions []Tri
 	conditions := make([]map[string]interface{}, 0, len(triggeredConditions))
 	for _, tc := range triggeredConditions {
 		condEvidence := map[string]interface{}{
-			"condition_id":    tc.ConditionID.String(),
-			"parameter":       string(tc.ParameterName),
-			"measured_value":  tc.MeasuredValue,
-			"threshold_value": tc.ThresholdValue,
-			"operator":        string(tc.Operator),
-			"timestamp":       tc.Timestamp,
+			"condition_id":     tc.ConditionID.String(),
+			"parameter":        string(tc.ParameterName),
+			"measured_value":   tc.MeasuredValue,
+			"threshold_value":  tc.ThresholdValue,
+			"operator":         string(tc.Operator),
+			"timestamp":        tc.Timestamp,
 			"is_early_warning": tc.IsEarlyWarning,
 		}
 
@@ -2116,7 +2136,12 @@ func (s *RegisteredPolicyService) UpdateUnderwritingStatus(policyID uuid.UUID, s
 
 // GetPolicyByID retrieves a single policy by ID
 func (s *RegisteredPolicyService) GetPolicyByID(policyID uuid.UUID) (*models.RegisteredPolicy, error) {
-	return s.registeredPolicyRepo.GetByID(policyID)
+	policy, err := s.registeredPolicyRepo.GetByID(policyID)
+	if err != nil {
+		return nil, err
+	}
+	s.minioClient.GetPresignedURL(context.Background(), minio.Storage.PolicyDocuments, *policy.SignedPolicyDocumentURL, 24*time.Hour)
+	return policy, nil
 }
 
 // GetPoliciesByFarmerID retrieves all policies for a specific farmer
@@ -2287,6 +2312,96 @@ func (s *RegisteredPolicyService) GetMonitoringDataByFarmAndParameter(
 	}
 
 	slog.Info("Successfully retrieved monitoring data",
+		"farm_id", farmID,
+		"parameter_name", parameterName,
+		"count", len(data))
+	return data, nil
+}
+
+// GetFarmerMonitoringData retrieves monitoring data for a farmer's own farm with ownership verification
+func (s *RegisteredPolicyService) GetFarmerMonitoringData(
+	ctx context.Context,
+	userID string,
+	farmID uuid.UUID,
+	startTimestamp, endTimestamp *int64,
+) ([]models.FarmMonitoringDataWithPolicyStatus, error) {
+	slog.Info("Getting farmer monitoring data",
+		"user_id", userID,
+		"farm_id", farmID,
+		"start_timestamp", startTimestamp,
+		"end_timestamp", endTimestamp)
+
+	// Verify farm ownership
+	farm, err := s.farmService.GetByFarmID(ctx, farmID.String())
+	if err != nil {
+		slog.Error("Failed to get farm for ownership verification", "farm_id", farmID, "error", err)
+		return nil, fmt.Errorf("failed to verify farm ownership: %w", err)
+	}
+
+	if farm.OwnerID != userID {
+		slog.Warn("User does not own farm",
+			"user_id", userID,
+			"farm_id", farmID,
+			"farm_owner_id", farm.OwnerID)
+		return nil, fmt.Errorf("user does not own this farm")
+	}
+
+	// Get monitoring data
+	data, err := s.farmMonitoringDataRepo.GetAllWithPolicyStatusByFarmID(ctx, farmID, startTimestamp, endTimestamp)
+	if err != nil {
+		slog.Error("Failed to get farmer monitoring data", "farm_id", farmID, "error", err)
+		return nil, fmt.Errorf("failed to get monitoring data: %w", err)
+	}
+
+	slog.Info("Successfully retrieved farmer monitoring data",
+		"user_id", userID,
+		"farm_id", farmID,
+		"count", len(data))
+	return data, nil
+}
+
+// GetFarmerMonitoringDataByParameter retrieves monitoring data for a specific parameter from a farmer's own farm
+func (s *RegisteredPolicyService) GetFarmerMonitoringDataByParameter(
+	ctx context.Context,
+	userID string,
+	farmID uuid.UUID,
+	parameterName models.DataSourceParameterName,
+	startTimestamp, endTimestamp *int64,
+) ([]models.FarmMonitoringDataWithPolicyStatus, error) {
+	slog.Info("Getting farmer monitoring data by parameter",
+		"user_id", userID,
+		"farm_id", farmID,
+		"parameter_name", parameterName,
+		"start_timestamp", startTimestamp,
+		"end_timestamp", endTimestamp)
+
+	// Verify farm ownership
+	farm, err := s.farmService.GetByFarmID(ctx, farmID.String())
+	if err != nil {
+		slog.Error("Failed to get farm for ownership verification", "farm_id", farmID, "error", err)
+		return nil, fmt.Errorf("failed to verify farm ownership: %w", err)
+	}
+
+	if farm.OwnerID != userID {
+		slog.Warn("User does not own farm",
+			"user_id", userID,
+			"farm_id", farmID,
+			"farm_owner_id", farm.OwnerID)
+		return nil, fmt.Errorf("user does not own this farm")
+	}
+
+	// Get monitoring data by parameter
+	data, err := s.farmMonitoringDataRepo.GetByFarmIDAndParameterNameWithPolicyStatus(ctx, farmID, parameterName, startTimestamp, endTimestamp)
+	if err != nil {
+		slog.Error("Failed to get farmer monitoring data by parameter",
+			"farm_id", farmID,
+			"parameter_name", parameterName,
+			"error", err)
+		return nil, fmt.Errorf("failed to get monitoring data: %w", err)
+	}
+
+	slog.Info("Successfully retrieved farmer monitoring data by parameter",
+		"user_id", userID,
 		"farm_id", farmID,
 		"parameter_name", parameterName,
 		"count", len(data))

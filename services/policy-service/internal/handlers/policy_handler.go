@@ -40,9 +40,11 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 
 	// Farmer routes - read own policies only
 	farmerGroup := policyGroup.Group("/read-own")
-	farmerGroup.Get("/list", h.GetFarmerOwnPolicies)        // GET /policies/read-own/list
-	farmerGroup.Get("/detail/:id", h.GetFarmerPolicyDetail) // GET /policies/read-own/detail/:id
-	farmerGroup.Get("/stats/overview", h.GetStatsOverview)  // GET /policies/read-own/stats/overview
+	farmerGroup.Get("/list", h.GetFarmerOwnPolicies)                                                   // GET /policies/read-own/list
+	farmerGroup.Get("/detail/:id", h.GetFarmerPolicyDetail)                                            // GET /policies/read-own/detail/:id
+	farmerGroup.Get("/stats/overview", h.GetStatsOverview)                                             // GET /policies/read-own/stats/overview
+	farmerGroup.Get("/monitoring-data/:farm_id", h.GetFarmerMonitoringData)                            // GET /policies/read-own/monitoring-data/:farm_id
+	farmerGroup.Get("/monitoring-data/:farm_id/:parameter_name", h.GetFarmerMonitoringDataByParameter) // GET /policies/read-own/monitoring-data/:farm_id/:parameter_name
 
 	// Insurance Partner routes - read/manage partner's policies
 	partnerGroup := policyGroup.Group("/read-partner")
@@ -705,6 +707,123 @@ func (h *PolicyHandler) GetStatsOverview(c fiber.Ctx) error {
 	}
 
 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(stats))
+}
+
+// GetFarmerMonitoringData retrieves monitoring data for a farmer's own farm
+func (h *PolicyHandler) GetFarmerMonitoringData(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	farmIDStr := c.Params("farm_id")
+	farmID, err := uuid.Parse(farmIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid farm ID format"))
+	}
+
+	// Parse optional time range parameters
+	var startTimestamp, endTimestamp *int64
+	if startParam := c.Query("start_timestamp"); startParam != "" {
+		start, err := strconv.ParseInt(startParam, 10, 64)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(
+				utils.CreateErrorResponse("INVALID_PARAMETER", "Invalid start_timestamp format"))
+		}
+		startTimestamp = &start
+	}
+	if endParam := c.Query("end_timestamp"); endParam != "" {
+		end, err := strconv.ParseInt(endParam, 10, 64)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(
+				utils.CreateErrorResponse("INVALID_PARAMETER", "Invalid end_timestamp format"))
+		}
+		endTimestamp = &end
+	}
+
+	// Get monitoring data - service will verify farm ownership
+	data, err := h.registeredPolicyService.GetFarmerMonitoringData(c.Context(), userID, farmID, startTimestamp, endTimestamp)
+	if err != nil {
+		if strings.Contains(err.Error(), "not authorized") || strings.Contains(err.Error(), "does not own") {
+			return c.Status(http.StatusForbidden).JSON(
+				utils.CreateErrorResponse("FORBIDDEN", "You do not have access to this farm's monitoring data"))
+		}
+		slog.Error("Failed to get farmer monitoring data", "farm_id", farmID, "user_id", userID, "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve monitoring data"))
+	}
+
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+		"monitoring_data": data,
+		"count":           len(data),
+		"farm_id":         farmID,
+	}))
+}
+
+// GetFarmerMonitoringDataByParameter retrieves monitoring data for a specific parameter from a farmer's own farm
+func (h *PolicyHandler) GetFarmerMonitoringDataByParameter(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	farmIDStr := c.Params("farm_id")
+	farmID, err := uuid.Parse(farmIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid farm ID format"))
+	}
+
+	parameterName := models.DataSourceParameterName(c.Params("parameter_name"))
+	if parameterName == "" {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_PARAMETER", "Parameter name is required"))
+	}
+
+	// Parse optional time range parameters
+	var startTimestamp, endTimestamp *int64
+	if startParam := c.Query("start_timestamp"); startParam != "" {
+		start, err := strconv.ParseInt(startParam, 10, 64)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(
+				utils.CreateErrorResponse("INVALID_PARAMETER", "Invalid start_timestamp format"))
+		}
+		startTimestamp = &start
+	}
+	if endParam := c.Query("end_timestamp"); endParam != "" {
+		end, err := strconv.ParseInt(endParam, 10, 64)
+		if err != nil {
+			return c.Status(http.StatusBadRequest).JSON(
+				utils.CreateErrorResponse("INVALID_PARAMETER", "Invalid end_timestamp format"))
+		}
+		endTimestamp = &end
+	}
+
+	// Get monitoring data - service will verify farm ownership
+	data, err := h.registeredPolicyService.GetFarmerMonitoringDataByParameter(c.Context(), userID, farmID, parameterName, startTimestamp, endTimestamp)
+	if err != nil {
+		if strings.Contains(err.Error(), "not authorized") || strings.Contains(err.Error(), "does not own") {
+			return c.Status(http.StatusForbidden).JSON(
+				utils.CreateErrorResponse("FORBIDDEN", "You do not have access to this farm's monitoring data"))
+		}
+		slog.Error("Failed to get farmer monitoring data by parameter",
+			"farm_id", farmID,
+			"parameter_name", parameterName,
+			"user_id", userID,
+			"error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve monitoring data"))
+	}
+
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+		"monitoring_data": data,
+		"count":           len(data),
+		"farm_id":         farmID,
+		"parameter_name":  parameterName,
+	}))
 }
 
 // ============================================================================

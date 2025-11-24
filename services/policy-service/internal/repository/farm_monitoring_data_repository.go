@@ -531,6 +531,28 @@ func (r *FarmMonitoringDataRepository) GetLatestTimestampByFarmID(ctx context.Co
 	return timestamp.Int64, nil
 }
 
+// GetLatestTimestampByFarmIDAndParameterName returns the latest measurement timestamp for a farm and specific parameter
+// Returns 0 if no data exists
+func (r *FarmMonitoringDataRepository) GetLatestTimestampByFarmIDAndParameterName(ctx context.Context, farmID uuid.UUID, parameterName string) (int64, error) {
+	var timestamp sql.NullInt64
+	query := `SELECT MAX(measurement_timestamp) FROM farm_monitoring_data WHERE farm_id = $1 AND parameter_name = $2`
+
+	err := r.db.GetContext(ctx, &timestamp, query, farmID, parameterName)
+	if err != nil {
+		slog.Error("Failed to get latest timestamp by farm ID and parameter name",
+			"farm_id", farmID,
+			"parameter_name", parameterName,
+			"error", err)
+		return 0, fmt.Errorf("failed to get latest timestamp: %w", err)
+	}
+
+	if !timestamp.Valid {
+		return 0, nil
+	}
+
+	return timestamp.Int64, nil
+}
+
 // GetAllWithPolicyStatus retrieves all monitoring data with associated policy status
 func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatus(ctx context.Context, startTimestamp, endTimestamp *int64) ([]models.FarmMonitoringDataWithPolicyStatus, error) {
 	slog.Debug("Retrieving all farm monitoring data with policy status",

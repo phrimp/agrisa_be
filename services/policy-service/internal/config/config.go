@@ -34,6 +34,7 @@ type PostgresConfig struct {
 }
 
 type RabbitMQConfig struct {
+	Host     string
 	Username string
 	Password string
 	Port     string
@@ -64,6 +65,7 @@ func New() *PolicyServiceConfig {
 			Port:     getEnvOrDefault("POSTGRES_PORT", "5432"),
 		},
 		RabbitMQCfg: RabbitMQConfig{
+			Host:     getEnvOrDefault("RABBITMQ_HOST", "rabbitmq"),
 			Username: getEnvOrDefault("RABBITMQ_USER", "admin"),
 			Password: getEnvOrDefault("RABBITMQ_PWD", "admin"),
 			Port:     getEnvOrDefault("RABBITMQ_PORT", "5672"),
