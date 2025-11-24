@@ -2140,7 +2140,11 @@ func (s *RegisteredPolicyService) GetPolicyByID(policyID uuid.UUID) (*models.Reg
 	if err != nil {
 		return nil, err
 	}
-	s.minioClient.GetPresignedURL(context.Background(), minio.Storage.PolicyDocuments, *policy.SignedPolicyDocumentURL, 24*time.Hour)
+	link, err := s.minioClient.GetPresignedURL(context.Background(), minio.Storage.PolicyDocuments, *policy.SignedPolicyDocumentURL, 24*time.Hour)
+	if err != nil {
+		return nil, err
+	}
+	policy.SignedPolicyDocumentURL = &link
 	return policy, nil
 }
 
