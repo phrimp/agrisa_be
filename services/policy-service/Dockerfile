@@ -14,13 +14,16 @@ COPY services/policy-service/ .
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/main.go
 # Final stage
 FROM debian:bookworm-slim
-# Install ca-certificates and pdftk for PDF form filling
+# Install ca-certificates, pdftk, and fonts for PDF form filling with Unicode/Vietnamese support
 WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     tzdata \
     pdftk-java \
-    && rm -rf /var/lib/apt/lists/*
+    fonts-dejavu-core \
+    fontconfig \
+    && rm -rf /var/lib/apt/lists/* \
+    && fc-cache -fv
 ENV TZ=Asia/Ho_Chi_Minh
 RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 RUN groupadd -g 1001 appgroup && \
