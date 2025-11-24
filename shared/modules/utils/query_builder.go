@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -117,6 +118,7 @@ func BuildDynamicUpdateQuery(
 	for field, value := range updateData {
 		// Kiểm tra field có được phép update không
 		if !allowedFields[field] {
+			slog.Error("Field not allowed to be updated", "field", field)
 			return nil, fmt.Errorf("field %s is not allowed to be updated", field)
 		}
 
@@ -158,6 +160,7 @@ func BuildDynamicUpdateQuery(
 				args = append(args, pq.Array(strArr))
 				argPosition++
 			} else {
+				slog.Error("Field should be an array", "field", field)
 				return nil, fmt.Errorf("field %s should be an array", field)
 			}
 		} else {
@@ -343,3 +346,71 @@ func (qb *QueryBuilder) BuildQueryDynamicFilter() (string, []interface{}, error)
 
 	return query, args, nil
 }
+
+// func BuildUpdateQuery(
+// 	updateProfileRequestBody map[string]interface{},
+// 	allowedUpdateInsuranceProfileFields map[string]bool,
+// 	arrayInsuranceProfileFields map[string]bool,
+// 	criteriaField string,
+// 	table string,
+// ) (string, []interface{}, error) {
+// 	setClauses := []string{}
+// 	args := []interface{}{}
+// 	argPosition := 1
+
+// 	for field, value := range updateProfileRequestBody {
+
+// 		if !allowedUpdateInsuranceProfileFields[field] {
+// 			slog.Error("Field not allowed to be updated", "field", field)
+// 			return "", nil, fmt.Errorf("bad request: field %s is not allowed to be updated", field)
+// 		}
+
+// 		if arrayInsuranceProfileFields[field] {
+
+// 			if arr, ok := value.([]interface{}); ok {
+// 				strArr := make([]string, len(arr))
+// 				for i, v := range arr {
+// 					strArr[i] = fmt.Sprintf("%v", v)
+// 				}
+// 				setClauses = append(setClauses, fmt.Sprintf("%s = $%d", field, argPosition))
+// 				args = append(args, pq.Array(strArr))
+// 				argPosition++
+// 			}
+// 		} else {
+
+// 			setClauses = append(setClauses, fmt.Sprintf("%s = $%d", field, argPosition))
+// 			args = append(args, value)
+// 			argPosition++
+// 		}
+// 	}
+
+// 	if len(setClauses) == 0 {
+// 		slog.Error("No fields to update for insurance partner ID", "partner_id", criteriaField)
+// 		return "", nil, fmt.Errorf("bad request: no fields to update for insurance partner ID %s", criteriaField)
+// 	}
+
+// 	hasUpdatedAt := false
+// 	for field := range updateProfileRequestBody {
+// 		if field == "updated_at" {
+// 			hasUpdatedAt = true
+// 			break
+// 		}
+// 	}
+// 	if !hasUpdatedAt {
+// 		setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argPosition))
+// 		args = append(args, time.Now())
+// 		argPosition++
+// 	}
+
+// 	args = append(args, criteriaField)
+
+// 	query := fmt.Sprintf(
+// 		"UPDATE %s SET %s WHERE %s = $%d",
+// 		table,
+// 		strings.Join(setClauses, ", "),
+// 		criteriaField,
+// 		argPosition,
+// 	)
+
+// 	return query, args, nil
+// }

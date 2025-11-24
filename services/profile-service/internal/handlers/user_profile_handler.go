@@ -24,6 +24,7 @@ func (h *UserProfileHandler) RegisterRoutes(router *gin.Engine) {
 	userProfilePubGr.POST("/farmers", h.CreateFarmerProfile)
 
 	userProfileProGr := router.Group("/profile/protected/api/v1")
+	userProfileProGr.PUT("/users", h.UpdateUserProfile)
 	userProfileProGr.GET("/me", h.GetUserProfileByUserID)
 	userProfileProGr.POST("/users", h.CreateUserProfile)
 }
@@ -78,4 +79,26 @@ func (h *UserProfileHandler) CreateFarmerProfile(c *gin.Context) {
 	}
 	successResponse := utils.CreateSuccessResponse("Farmer profile created successfully")
 	c.JSON(201, successResponse)
+}
+
+func (h *UserProfileHandler) UpdateUserProfile(c *gin.Context) {
+	var updateProfileRequestBody map[string]interface{}
+	if err := c.ShouldBindJSON(&updateProfileRequestBody); err != nil {
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
+		c.JSON(400, errorResponse)
+		return
+	}
+
+	userID := c.GetHeader("X-User-ID")
+
+	updatedProfile, err := h.UserService.UpdateUserProfile(updateProfileRequestBody, userID, "")
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+
+	successResponse := utils.CreateSuccessResponse(updatedProfile)
+	c.JSON(200, successResponse)
 }
