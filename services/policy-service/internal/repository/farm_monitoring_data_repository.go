@@ -640,7 +640,7 @@ func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatusByFarmID(ctx contex
 			rp.status as policy_status,
 			rp.policy_number
 		FROM farm_monitoring_data fmd
-		LEFT JOIN registered_policies rp ON fmd.farm_id = rp.farm_id
+		LEFT JOIN registered_policy rp ON fmd.farm_id = rp.farm_id
 		WHERE fmd.farm_id = $1`
 
 	if startTimestamp != nil {
@@ -707,7 +707,7 @@ func (r *FarmMonitoringDataRepository) GetByFarmIDAndParameterNameWithPolicyStat
 			rp.status as policy_status,
 			rp.policy_number
 		FROM farm_monitoring_data fmd
-		LEFT JOIN registered_policies rp ON fmd.farm_id = rp.farm_id
+		LEFT JOIN registered_policy rp ON fmd.farm_id = rp.farm_id
 		WHERE fmd.farm_id = $1 AND fmd.parameter_name = $2`
 
 	if startTimestamp != nil {
