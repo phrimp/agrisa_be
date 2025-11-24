@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     tzdata \
     pdftk-java \
     fonts-dejavu-core \
-    fonts-noto-core \
+    fontconfig \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -fv
 ENV TZ=Asia/Ho_Chi_Minh
