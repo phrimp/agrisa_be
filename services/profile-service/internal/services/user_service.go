@@ -60,7 +60,7 @@ func (s *UserService) UpdateUserProfile(updateProfileRequestBody map[string]inte
 
 	specialFields := make(map[string]*utils.FieldTransformer)
 
-	queryBuilderResult, err := utils.BuildDynamicUpdateQuery("user_profiles", updateProfileRequestBody, allowedUpdateUserProfileFields, arrayUserProfileFields, specialFields, "user_id", userID, true)
+	queryBuilderResult, err := utils.BuildDynamicUpdateQuery("user_profiles", updateProfileRequestBody, allowedUpdateUserProfileFields, arrayUserProfileFields, specialFields, "user_id", userID, true, userID)
 	if err != nil {
 		return nil, err
 	}

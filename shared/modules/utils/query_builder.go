@@ -14,11 +14,11 @@ type QueryBuildResult struct {
 	Args  []interface{}
 }
 
-// FieldTransformer định nghĩa cách transform một field đặc biệt
+// FieldTransformer defines how to transform a special field
 type FieldTransformer struct {
-	// SQLFunc là hàm SQL cần wrap giá trị, ví dụ: "ST_GeomFromText"
+	// SQLFunc is the SQL function to wrap the value, e.g., "ST_GeomFromText"
 	SQLFunc string
-	// ConvertValue là hàm để convert giá trị trước khi truyền vào SQL
+	// ConvertValue is a function to convert the value before passing to SQL
 	ConvertValue func(value interface{}) (interface{}, error)
 }
 
@@ -90,16 +90,16 @@ func GeoJSONToWKT(geoJSON interface{}) (string, error) {
 	}
 }
 
-// BuildDynamicUpdateQuery xây dựng câu query UPDATE động
+// BuildDynamicUpdateQuery builds a dynamic UPDATE query
 // Parameters:
-//   - tableName: tên bảng cần update
-//   - updateData: map chứa các field và giá trị cần update
-//   - allowedFields: map các field được phép update
-//   - arrayFields: map các field có kiểu array
-//   - specialFields: map các field cần xử lý đặc biệt (PostGIS, JSON functions, etc.)
-//   - whereField: tên field dùng trong WHERE clause
-//   - whereValue: giá trị cho WHERE clause
-//   - autoAddUpdatedAt: tự động thêm updated_at nếu true
+//   - tableName: the name of the table to update
+//   - updateData: a map containing the fields and values to update
+//   - allowedFields: a map of fields that are allowed to be updated
+//   - arrayFields: a map of fields that have array types
+//   - specialFields: a map of fields that require special handling (PostGIS, JSON functions, etc.)
+//   - whereField: the field name used in the WHERE clause
+//   - whereValue: the value for the WHERE clause
+//   - autoAddUpdatedAt: automatically adds updated_at if true
 func BuildDynamicUpdateQuery(
 	tableName string,
 	updateData map[string]interface{},
@@ -109,25 +109,26 @@ func BuildDynamicUpdateQuery(
 	whereField string,
 	whereValue interface{},
 	autoAddUpdatedAt bool,
+	updatedBy string,
 ) (*QueryBuildResult, error) {
 	setClauses := []string{}
 	args := []interface{}{}
 	argPosition := 1
 
-	// Duyệt qua các field cần update
+	// Iterate through fields to update
 	for field, value := range updateData {
-		// Kiểm tra field có được phép update không
+		// Check if the field is allowed to be updated
 		if !allowedFields[field] {
 			slog.Error("Field not allowed to be updated", "field", field)
 			return nil, fmt.Errorf("field %s is not allowed to be updated", field)
 		}
 
-		// Xử lý các field đặc biệt (PostGIS, JSON functions, etc.)
+		// Handle special fields (PostGIS, JSON functions, etc.)
 		if transformer, isSpecial := specialFields[field]; isSpecial {
 			var processedValue interface{}
 			var err error
 
-			// Nếu có hàm convert, dùng hàm đó
+			// If there is a convert function, use it
 			if transformer.ConvertValue != nil {
 				processedValue, err = transformer.ConvertValue(value)
 				if err != nil {
@@ -137,7 +138,7 @@ func BuildDynamicUpdateQuery(
 				processedValue = value
 			}
 
-			// Tạo SET clause với SQL function
+			// Create SET clause with SQL function
 			if transformer.SQLFunc != "" {
 				setClauses = append(setClauses, fmt.Sprintf("%s = %s($%d)", field, transformer.SQLFunc, argPosition))
 			} else {
@@ -148,9 +149,9 @@ func BuildDynamicUpdateQuery(
 			continue
 		}
 
-		// Xử lý các field có kiểu array
+		// handle array fields
 		if arrayFields[field] {
-			// Chuyển đổi slice interface{} thành []string
+			// Convert slice of interface{} to []string
 			if arr, ok := value.([]interface{}); ok {
 				strArr := make([]string, len(arr))
 				for i, v := range arr {
@@ -164,19 +165,19 @@ func BuildDynamicUpdateQuery(
 				return nil, fmt.Errorf("field %s should be an array", field)
 			}
 		} else {
-			// Xử lý các field thông thường
+			// handle regular fields
 			setClauses = append(setClauses, fmt.Sprintf("%s = $%d", field, argPosition))
 			args = append(args, value)
 			argPosition++
 		}
 	}
 
-	// Kiểm tra có field nào để update không
+	// check if there are fields to update
 	if len(setClauses) == 0 {
 		return nil, fmt.Errorf("no fields to update")
 	}
 
-	// Tự động thêm updated_at nếu cần
+	// auto add updated_at if enabled
 	if autoAddUpdatedAt {
 		hasUpdatedAt := false
 		for field := range updateData {
@@ -192,10 +193,17 @@ func BuildDynamicUpdateQuery(
 		}
 	}
 
-	// Thêm giá trị cho WHERE clause
+	// add updated_by if provided
+	if updatedBy != "" {
+		setClauses = append(setClauses, fmt.Sprintf("updated_by = $%d", argPosition))
+		args = append(args, updatedBy)
+		argPosition++
+	}
+
+	// add where value
 	args = append(args, whereValue)
 
-	// Xây dựng query cuối cùng
+	// build final query
 	query := fmt.Sprintf(
 		"UPDATE %s SET %s WHERE %s = $%d",
 		tableName,
