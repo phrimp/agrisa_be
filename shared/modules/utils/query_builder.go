@@ -110,6 +110,7 @@ func BuildDynamicUpdateQuery(
 	whereValue interface{},
 	autoAddUpdatedAt bool,
 	updatedBy string,
+	updatedByFieldName string,
 ) (*QueryBuildResult, error) {
 	setClauses := []string{}
 	args := []interface{}{}
@@ -195,7 +196,7 @@ func BuildDynamicUpdateQuery(
 
 	// add updated_by if provided
 	if updatedBy != "" {
-		setClauses = append(setClauses, fmt.Sprintf("updated_by = $%d", argPosition))
+		setClauses = append(setClauses, fmt.Sprintf("%s = $%d", updatedByFieldName, argPosition))
 		args = append(args, updatedBy)
 		argPosition++
 	}
