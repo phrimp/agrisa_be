@@ -81,7 +81,11 @@ func (s *PDFService) FillPDFTemplate(pdfData []byte, values map[string]string) (
 	return filledPDF, nil
 }
 
-// fillFormFields fills PDF form fields using pdftk
+// ReplacementFontPath is the path to the font file used for Unicode/Vietnamese character support
+// This font must be installed in the Docker container
+const ReplacementFontPath = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
+
+// fillFormFields fills PDF form fields using pdftk with XFDF format for Unicode support
 func (s *PDFService) fillFormFields(pdfData []byte, values map[string]string) ([]byte, error) {
 	// Create temporary files for pdftk
 	inputFile, err := os.CreateTemp("", "pdf_input_*.pdf")
@@ -91,12 +95,13 @@ func (s *PDFService) fillFormFields(pdfData []byte, values map[string]string) ([
 	defer os.Remove(inputFile.Name())
 	defer inputFile.Close()
 
-	fdfFile, err := os.CreateTemp("", "pdf_fdf_*.fdf")
+	// Use XFDF format for better UTF-8/Unicode support
+	xfdfFile, err := os.CreateTemp("", "pdf_xfdf_*.xfdf")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create temp FDF file: %w", err)
+		return nil, fmt.Errorf("failed to create temp XFDF file: %w", err)
 	}
-	defer os.Remove(fdfFile.Name())
-	defer fdfFile.Close()
+	defer os.Remove(xfdfFile.Name())
+	defer xfdfFile.Close()
 
 	outputFile, err := os.CreateTemp("", "pdf_output_*.pdf")
 	if err != nil {
@@ -130,15 +135,24 @@ func (s *PDFService) fillFormFields(pdfData []byte, values map[string]string) ([
 	}
 	slog.Info("Provided form data keys", "keys", providedKeys)
 
-	// Generate FDF content
-	fdfContent := generateFDF(values)
-	if _, err := fdfFile.WriteString(fdfContent); err != nil {
-		return nil, fmt.Errorf("failed to write FDF file: %w", err)
+	// Generate XFDF content for better Unicode/Vietnamese support
+	xfdfContent := generateXFDF(values)
+	if _, err := xfdfFile.WriteString(xfdfContent); err != nil {
+		return nil, fmt.Errorf("failed to write XFDF file: %w", err)
 	}
-	fdfFile.Close()
+	xfdfFile.Close()
 
-	// Run pdftk to fill form and flatten
-	cmd := exec.Command("pdftk", inputFile.Name(), "fill_form", fdfFile.Name(), "output", outputFile.Name(), "flatten")
+	slog.Info("Generated XFDF content", "xfdf_size", len(xfdfContent))
+
+	// Run pdftk-java with replacement_font for Unicode support and flatten
+	// pdftk-java >= 3.3.0 supports replacement_font option for UTF-8 characters
+	cmd := exec.Command("pdftk",
+		inputFile.Name(),
+		"fill_form", xfdfFile.Name(),
+		"output", outputFile.Name(),
+		"replacement_font", ReplacementFontPath,
+		"flatten",
+	)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -152,7 +166,9 @@ func (s *PDFService) fillFormFields(pdfData []byte, values map[string]string) ([
 		return nil, fmt.Errorf("failed to read filled PDF: %w", err)
 	}
 
-	slog.Info("Successfully filled PDF form fields", "field_count", len(values))
+	slog.Info("Successfully filled PDF form fields with Unicode support",
+		"field_count", len(values),
+		"output_size", len(filledPDF))
 	return filledPDF, nil
 }
 
@@ -184,7 +200,43 @@ func (s *PDFService) getFormFieldNames(pdfPath string) ([]string, error) {
 	return fieldNames, nil
 }
 
-// generateFDF generates FDF content for pdftk
+// generateXFDF generates XFDF content for pdftk with UTF-8 support
+// XFDF format provides better Unicode/Vietnamese character support than FDF
+func generateXFDF(values map[string]string) string {
+	var builder strings.Builder
+
+	// XFDF header with UTF-8 encoding
+	builder.WriteString(`<?xml version="1.0" encoding="UTF-8"?>`)
+	builder.WriteString("\n")
+	builder.WriteString(`<xfdf xmlns="http://ns.adobe.com/xfdf/" xml:space="preserve">`)
+	builder.WriteString("\n<fields>\n")
+
+	// Add field values with XML escaping
+	for key, value := range values {
+		escapedKey := escapeXML(key)
+		escapedValue := escapeXML(value)
+		builder.WriteString(fmt.Sprintf(`<field name="%s"><value>%s</value></field>`,
+			escapedKey, escapedValue))
+		builder.WriteString("\n")
+	}
+
+	// XFDF footer
+	builder.WriteString("</fields>\n</xfdf>")
+
+	return builder.String()
+}
+
+// escapeXML escapes special characters for XML format
+func escapeXML(s string) string {
+	s = strings.ReplaceAll(s, "&", "&amp;")
+	s = strings.ReplaceAll(s, "<", "&lt;")
+	s = strings.ReplaceAll(s, ">", "&gt;")
+	s = strings.ReplaceAll(s, "\"", "&quot;")
+	s = strings.ReplaceAll(s, "'", "&apos;")
+	return s
+}
+
+// generateFDF generates FDF content for pdftk (legacy, kept for compatibility)
 func generateFDF(values map[string]string) string {
 	var builder strings.Builder
 
