@@ -12,6 +12,7 @@ import (
 type IUserRepository interface {
 	GetUserProfileByUserID(userID string) (*models.UserProfile, error)
 	CreateUserProfile(req *models.CreateUserProfileRequest, createdByID, createdByName string) error
+	UpdateUserProfile(query string, args ...interface{}) error
 }
 
 type UserRepository struct {
@@ -101,5 +102,12 @@ func (r *UserRepository) CreateUserProfile(req *models.CreateUserProfileRequest,
 		return fmt.Errorf("failed to create user profile: %w", err)
 	}
 
+	return nil
+}
+
+func (r *UserRepository) UpdateUserProfile(query string, args ...interface{}) error {
+	if err := utils.ExecWithCheck(r.db, query, utils.ExecUpdate, args...); err != nil {
+		return fmt.Errorf("failed to update insurance partner: %w", err)
+	}
 	return nil
 }
