@@ -468,7 +468,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 	// Create HTTP client with timeout
 	httpClient := &http.Client{
-		Timeout: 120 * time.Second,
+		Timeout: 300 * time.Second,
 	}
 
 	// Start workers
