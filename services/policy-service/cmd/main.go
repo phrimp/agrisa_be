@@ -152,6 +152,7 @@ func main() {
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, geminiSelector)
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
 	basePolicyTriggerService := services.NewBasePolicyTriggerService(basePolicyTriggerRepo)
+	riskAnalysisService := services.NewRiskAnalysisCRUDService(registeredPolicyRepo)
 
 	// Expiration Listener
 	ctx, cancel := context.WithCancel(context.Background())
@@ -216,6 +217,7 @@ func main() {
 	farmHandler := handlers.NewFarmHandler(farmService, minioClient)
 	policyHandler := handlers.NewPolicyHandler(registeredPolicyService)
 	basePolicyTriggerHandler := handlers.NewBasePolicyTriggerHandler(basePolicyTriggerService)
+	riskAnalysisHandler := handlers.NewRiskAnalysisHandler(riskAnalysisService)
 
 	// Register routes
 	dataTierHandler.Register(app)
@@ -224,6 +226,7 @@ func main() {
 	farmHandler.RegisterRoutes(app)
 	policyHandler.Register(app)
 	basePolicyTriggerHandler.Register(app)
+	riskAnalysisHandler.Register(app)
 
 	shutdownChan := make(chan os.Signal, 1)
 	doneChan := make(chan bool, 1)
