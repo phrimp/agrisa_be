@@ -2,6 +2,7 @@ package repository
 
 import (
 	utils "agrisa_utils"
+	"context"
 	"fmt"
 	"log/slog"
 	"policy-service/internal/models"
@@ -466,6 +467,44 @@ func (r *RegisteredPolicyRepository) CreateRiskAnalysis(analysis *models.Registe
 		)`
 
 	_, err := r.db.NamedExec(query, analysis)
+	if err != nil {
+		slog.Error("Failed to create risk analysis record",
+			"id", analysis.ID,
+			"registered_policy_id", analysis.RegisteredPolicyID,
+			"error", err)
+		return fmt.Errorf("failed to create risk analysis: %w", err)
+	}
+
+	slog.Info("Successfully created risk analysis record", "id", analysis.ID)
+	return nil
+}
+
+func (r *RegisteredPolicyRepository) CreateRiskAnalysisTX(analysis *models.RegisteredPolicyRiskAnalysis, tx *sqlx.Tx) error {
+	if analysis.ID == uuid.Nil {
+		analysis.ID = uuid.New()
+	}
+	analysis.CreatedAt = time.Now()
+
+	slog.Info("Creating risk analysis record",
+		"id", analysis.ID,
+		"registered_policy_id", analysis.RegisteredPolicyID,
+		"analysis_status", analysis.AnalysisStatus,
+		"analysis_type", analysis.AnalysisType)
+
+	query := `
+		INSERT INTO registered_policy_risk_analysis (
+			id, registered_policy_id, analysis_status, analysis_type,
+			analysis_source, analysis_timestamp, overall_risk_score,
+			overall_risk_level, identified_risks, recommendations,
+			raw_output, analysis_notes, created_at
+		) VALUES (
+			:id, :registered_policy_id, :analysis_status, :analysis_type,
+			:analysis_source, :analysis_timestamp, :overall_risk_score,
+			:overall_risk_level, :identified_risks, :recommendations,
+			:raw_output, :analysis_notes, :created_at
+		)`
+
+	_, err := tx.ExecContext(context.Background(), query, analysis)
 	if err != nil {
 		slog.Error("Failed to create risk analysis record",
 			"id", analysis.ID,
