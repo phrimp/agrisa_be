@@ -9,7 +9,7 @@ import (
 
 // InsurancePartner
 type InsurancePartner struct {
-	PartnerID                  string         `db:"partner_id"`
+	PartnerID                  uuid.UUID      `db:"partner_id"`
 	LegalCompanyName           string         `db:"legal_company_name"`
 	PartnerTradingName         string         `db:"partner_trading_name"`
 	PartnerDisplayName         string         `db:"partner_display_name"`
@@ -84,7 +84,7 @@ type UserProfile struct {
 	ProfileID         uuid.UUID  `json:"profile_id" db:"profile_id"`
 	UserID            string     `json:"user_id" db:"user_id"`
 	RoleID            string     `json:"role_id" db:"role_id"`
-	PartnerID         *string    `json:"partner_id" db:"partner_id"`
+	PartnerID         *uuid.UUID `json:"partner_id" db:"partner_id"`
 	FullName          string     `json:"full_name" db:"full_name"`
 	DisplayName       string     `json:"display_name" db:"display_name"`
 	DateOfBirth       *time.Time `json:"date_of_birth" db:"date_of_birth"`

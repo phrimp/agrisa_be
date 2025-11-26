@@ -123,7 +123,6 @@ func (r *InsurancePartnerRepository) CreateInsurancePartner(req models.CreateIns
 
 	query := `
 		INSERT INTO insurance_partners (
-			partner_id,
 			legal_company_name,
 			partner_trading_name,
 			partner_display_name,

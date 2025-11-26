@@ -3,12 +3,12 @@ package models
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
 
 // request
 type CreateInsurancePartnerRequest struct {
-	PartnerID                  string    `json:"partner_id"`
 	LegalCompanyName           string    `json:"legal_company_name"`
 	PartnerTradingName         string    `json:"partner_trading_name"`
 	PartnerDisplayName         string    `json:"partner_display_name"`
@@ -49,12 +49,12 @@ type CreateInsurancePartnerRequest struct {
 // response
 type PublicPartnerProfile struct {
 	// A. Brand Identity Information
-	PartnerID          string `db:"partner_id" json:"partner_id"`
-	PartnerDisplayName string `db:"partner_display_name" json:"partner_display_name"`
-	PartnerLogoURL     string `db:"partner_logo_url" json:"partner_logo_url"`
-	CoverPhotoURL      string `db:"cover_photo_url" json:"cover_photo_url"`
-	PartnerTagline     string `db:"partner_tagline" json:"partner_tagline"`
-	PartnerDescription string `db:"partner_description" json:"partner_description"`
+	PartnerID          uuid.UUID `db:"partner_id" json:"partner_id"`
+	PartnerDisplayName string    `db:"partner_display_name" json:"partner_display_name"`
+	PartnerLogoURL     string    `db:"partner_logo_url" json:"partner_logo_url"`
+	CoverPhotoURL      string    `db:"cover_photo_url" json:"cover_photo_url"`
+	PartnerTagline     string    `db:"partner_tagline" json:"partner_tagline"`
+	PartnerDescription string    `db:"partner_description" json:"partner_description"`
 
 	// B. Public Contact Information
 	PartnerPhone           string `db:"partner_phone" json:"partner_phone"`
@@ -89,12 +89,12 @@ type PublicPartnerProfile struct {
 type PrivatePartnerProfile struct {
 	// ========== PUBLIC INFORMATION (similar to PublicPartnerProfile) ==========
 	// A. Brand Identification Information
-	PartnerID          string `db:"partner_id" json:"partner_id"`
-	PartnerDisplayName string `db:"partner_display_name" json:"partner_display_name"`
-	PartnerLogoURL     string `db:"partner_logo_url" json:"partner_logo_url"`
-	CoverPhotoURL      string `db:"cover_photo_url" json:"cover_photo_url"`
-	PartnerTagline     string `db:"partner_tagline" json:"partner_tagline"`
-	PartnerDescription string `db:"partner_description" json:"partner_description"`
+	PartnerID          uuid.UUID `db:"partner_id" json:"partner_id"`
+	PartnerDisplayName string    `db:"partner_display_name" json:"partner_display_name"`
+	PartnerLogoURL     string    `db:"partner_logo_url" json:"partner_logo_url"`
+	CoverPhotoURL      string    `db:"cover_photo_url" json:"cover_photo_url"`
+	PartnerTagline     string    `db:"partner_tagline" json:"partner_tagline"`
+	PartnerDescription string    `db:"partner_description" json:"partner_description"`
 
 	// B. Public Contact Information
 	PartnerPhone           string `db:"partner_phone" json:"partner_phone"`
@@ -159,7 +159,7 @@ type CreateUserProfileRequest struct {
 	RoleID string `json:"role_id" db:"role_id"`
 
 	// Company Association
-	PartnerID *string `json:"partner_id,omitempty" db:"partner_id"`
+	PartnerID *uuid.UUID `json:"partner_id,omitempty" db:"partner_id"`
 
 	// Basic Personal Information
 	FullName    string  `json:"full_name" db:"full_name"`
