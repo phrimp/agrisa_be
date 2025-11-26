@@ -986,3 +986,35 @@ func (r *RegisteredPolicyRepository) GetRecentClaimByPolicyAndTrigger(
 
 	return &claim, nil
 }
+
+func (r *RegisteredPolicyRepository) GetMonthlyDataCostByProvider(
+	providerID string,
+	year int,
+	month int,
+) ([]models.BasePolicyDataCost, error) {
+	var costs []models.BasePolicyDataCost
+	query := `
+        SELECT 
+            bp.id as base_policy_id,
+            bp.product_name,
+            COUNT(rp.id) as active_policy_count,
+            COALESCE(SUM(rp.total_data_cost), 0) as sum_total_data_cost,
+            COALESCE(SUM(rp.monthly_data_cost), 0) as sum_monthly_data_cost
+        FROM base_policy bp
+        INNER JOIN registered_policy rp ON rp.base_policy_id = bp.id
+        WHERE bp.insurance_provider_id = $1
+            AND rp.status = 'active'
+            AND rp.underwriting_status = 'approved'
+            AND rp.premium_paid_by_farmer = true
+            AND EXTRACT(YEAR FROM TO_TIMESTAMP(rp.coverage_start_date)) = $2
+            AND EXTRACT(MONTH FROM TO_TIMESTAMP(rp.coverage_start_date)) = $3
+        GROUP BY bp.id, bp.product_name
+        ORDER BY sum_total_data_cost DESC`
+
+	err := r.db.Select(&costs, query, providerID, year, month)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get monthly data cost: %w", err)
+	}
+
+	return costs, nil
+}
