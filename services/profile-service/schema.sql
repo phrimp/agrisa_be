@@ -1,7 +1,7 @@
 -- Bảng 1: insurance_partners
 -- Lưu trữ thông tin về các đối tác bảo hiểm
 CREATE TABLE insurance_partners (
-    partner_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    partner_id VARCHAR PRIMARY KEY NOT NULL,
     legal_company_name VARCHAR(255) NOT NULL,
     partner_trading_name VARCHAR(255),
     partner_display_name VARCHAR(255),

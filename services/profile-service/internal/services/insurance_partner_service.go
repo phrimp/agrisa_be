@@ -238,7 +238,7 @@ func (s *InsurancePartnerService) UpdateInsurancePartner(updateProfileRequestBod
 		return nil, fmt.Errorf("forbidden: user ID %s is not associated with any partner", updateByID)
 	}
 
-	if updateUser.PartnerID.String() != partnerID {
+	if *updateUser.PartnerID != partnerID {
 		log.Printf("User ID %s is not authorized to update partner ID %s", updateByID, partnerID)
 		return nil, fmt.Errorf("forbidden: Bạn không có quyền cập nhật hồ sơ của đối tác bảo hiểm này")
 	}
@@ -1009,7 +1009,7 @@ func (s *InsurancePartnerService) GetPrivateProfile(userID string) (*models.Priv
 		return nil, err
 	}
 	partnerID := staff.PartnerID
-	return s.repo.GetPrivateProfile(partnerID.String())
+	return s.repo.GetPrivateProfile(*partnerID)
 }
 
 func (s *InsurancePartnerService) GetPrivateProfileByPartnerID(partnerID string) (*models.PrivatePartnerProfile, error) {
