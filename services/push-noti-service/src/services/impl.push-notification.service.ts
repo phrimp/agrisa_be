@@ -2,15 +2,15 @@
 /* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/restrict-template-expressions */
-import { Injectable, Logger, Inject } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import * as webpush from 'web-push';
+import type { Subscriber } from '../entities/subscriber.entity';
 import type {
   IPushNotificationService,
   NotificationPayload,
 } from './push-notification.service';
 import type { ISubscriberService } from './subscriber.service';
-import type { Subscriber } from '../entities/subscriber.entity';
 
 @Injectable()
 export class ImplPushNotificationService implements IPushNotificationService {
@@ -198,14 +198,30 @@ export class ImplPushNotificationService implements IPushNotificationService {
       },
     };
 
-    const payload = JSON.stringify({
-      title: notification.title,
-      body: notification.body,
-      data: notification.data || {},
-    });
+    const payload = {
+      aps: {
+        alert: {
+          title: notification.title,
+          body: notification.body,
+        },
+        sound: 'default',
+      },
+      url: notification.data?.url || '/',
+    };
 
     try {
-      await webpush.sendNotification(pushSubscription, payload);
+      await webpush.sendNotification(
+        pushSubscription,
+        JSON.stringify(payload),
+        {
+          headers: {
+            Topic: 'agrisa-web', // BẮT BUỘC CHO iOS
+            Urgency: 'normal',
+          },
+          contentEncoding: 'aes128gcm', // BẮT BUỘC CHO iOS
+          TTL: 2419200,
+        },
+      );
       this.logger.log(
         `Web push notification sent to user ${subscriber.user_id}`,
       );
