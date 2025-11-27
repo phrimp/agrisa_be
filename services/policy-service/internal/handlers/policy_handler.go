@@ -326,10 +326,19 @@ func (h *PolicyHandler) GetPartnerPolicies(c fiber.Ctx) error {
 			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
 	}
 
-	// userID is the insurance provider ID for partners
-	policies, err := h.registeredPolicyService.GetPoliciesByProviderID(userID)
+	// calling api to get profile by token
+	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(userID)
 	if err != nil {
-		slog.Error("Failed to get partner policies", "provider_id", userID, "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+	}
+
+	partnerProfileID := partnerProfileData["partner_id"].(string)
+
+	// userID is the insurance provider ID for partners
+	policies, err := h.registeredPolicyService.GetPoliciesByProviderID(partnerProfileID)
+	if err != nil {
+		slog.Error("Failed to get partner policies", "provider_id", partnerProfileID, "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve policies"))
 	}

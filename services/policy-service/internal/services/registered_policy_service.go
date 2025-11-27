@@ -2537,3 +2537,42 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 		Message:            responseMessage,
 	}, nil
 }
+
+func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]interface{}, error) {
+
+	url := "https://agrisa-api.phrimp.io.vn/profile/protected/api/v1/insurance-partners/me/profile"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		slog.Error("Error creating request for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Add("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error("Error making request for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		slog.Error("Error reading response body for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error reading response: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Error("Unexpected status code for insurance partner profile", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		slog.Error("Error parsing JSON for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error parsing JSON: %v", err)
+	}
+
+	return result, nil
+}
