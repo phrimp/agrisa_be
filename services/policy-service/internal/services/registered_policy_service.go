@@ -2005,7 +2005,7 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 	request.RegisteredPolicy.PolicyNumber = "AGP" + utils.GenerateRandomStringWithLength(9)
 	request.RegisteredPolicy.UnderwritingStatus = models.UnderwritingPending
 
-	request.RegisteredPolicy.CoverageStartDate = 0 // start day only start after underwriting
+	request.RegisteredPolicy.CoverageStartDate = 0 // start day only start after payment
 	request.RegisteredPolicy.CoverageEndDate = int64(*completeBasePolicy.BasePolicy.InsuranceValidToDay)
 	request.RegisteredPolicy.PremiumPaidByFarmer = false
 	request.RegisteredPolicy.Status = models.PolicyPendingReview
@@ -2499,4 +2499,8 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 		ValidatedBy:        validatedBy,
 		Message:            responseMessage,
 	}, nil
+}
+
+func (s *RegisteredPolicyService) UpdateRegisteredPolicy(policy *models.RegisteredPolicy) error {
+	return s.registeredPolicyRepo.Update(policy)
 }

@@ -54,6 +54,13 @@ const (
 	PaymentRefunded  PaymentStatus = "refunded"
 )
 
+type PaymentType string
+
+const (
+	PaymentTypePolicyRegistration PaymentType = "policy_registration_payment"
+	PaymentTypePolicyRenewal      PaymentType = "policy_renewal_payment"
+)
+
 type ValidationStatus string
 
 const (

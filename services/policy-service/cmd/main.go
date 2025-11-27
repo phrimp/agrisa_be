@@ -166,7 +166,7 @@ func main() {
 
 	// Start payment event consumer
 	if rabbitConn != nil {
-		paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyService)
+		paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyService, registeredPolicyRepo, workerManager)
 		paymentConsumer := event.NewPaymentConsumer(rabbitConn, paymentHandler)
 		if err := paymentConsumer.Start(ctx); err != nil {
 			log.Printf("error starting payment consumer: %v", err)
