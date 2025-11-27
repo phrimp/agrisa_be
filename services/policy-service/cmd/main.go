@@ -13,6 +13,7 @@ import (
 	"policy-service/internal/database/minio"
 	"policy-service/internal/database/postgres"
 	"policy-service/internal/database/redis"
+	"policy-service/internal/event"
 	"policy-service/internal/handlers"
 	"policy-service/internal/repository"
 	"policy-service/internal/services"
@@ -98,6 +99,16 @@ func main() {
 		log.Printf("error connect to redis: %s", err)
 	}
 
+	// Initialize RabbitMQ connection
+	rabbitConn, err := event.ConnectRabbitMQ(cfg.RabbitMQCfg)
+	if err != nil {
+		log.Printf("error connecting to RabbitMQ: %s", err)
+		log.Println("Warning: Payment event consumer will be disabled")
+	}
+	if rabbitConn != nil {
+		defer rabbitConn.Close()
+	}
+
 	keys := strings.SplitSeq(cfg.GeminiAPICfg.APIKey, ",")
 	for key := range keys {
 		geminiClient, err := gemini.NewGenAIClient(key, cfg.GeminiAPICfg.FlashName, cfg.GeminiAPICfg.ProName)
@@ -141,6 +152,7 @@ func main() {
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, geminiSelector)
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
 	basePolicyTriggerService := services.NewBasePolicyTriggerService(basePolicyTriggerRepo)
+	riskAnalysisService := services.NewRiskAnalysisCRUDService(registeredPolicyRepo)
 
 	// Expiration Listener
 	ctx, cancel := context.WithCancel(context.Background())
@@ -151,6 +163,17 @@ func main() {
 			log.Printf("Expiration service error: %v", err)
 		}
 	}()
+
+	// Start payment event consumer
+	if rabbitConn != nil {
+		paymentHandler := event.NewDefaultPaymentEventHandler()
+		paymentConsumer := event.NewPaymentConsumer(rabbitConn, paymentHandler)
+		if err := paymentConsumer.Start(ctx); err != nil {
+			log.Printf("error starting payment consumer: %v", err)
+		} else {
+			log.Println("Payment event consumer started successfully")
+		}
+	}
 
 	go func() {
 		retryWait := 0.5
@@ -194,6 +217,7 @@ func main() {
 	farmHandler := handlers.NewFarmHandler(farmService, minioClient)
 	policyHandler := handlers.NewPolicyHandler(registeredPolicyService)
 	basePolicyTriggerHandler := handlers.NewBasePolicyTriggerHandler(basePolicyTriggerService)
+	riskAnalysisHandler := handlers.NewRiskAnalysisHandler(riskAnalysisService)
 
 	// Register routes
 	dataTierHandler.Register(app)
@@ -202,6 +226,7 @@ func main() {
 	farmHandler.RegisterRoutes(app)
 	policyHandler.Register(app)
 	basePolicyTriggerHandler.Register(app)
+	riskAnalysisHandler.Register(app)
 
 	shutdownChan := make(chan os.Signal, 1)
 	doneChan := make(chan bool, 1)

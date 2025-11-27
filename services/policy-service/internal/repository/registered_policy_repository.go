@@ -2,6 +2,7 @@ package repository
 
 import (
 	utils "agrisa_utils"
+	"context"
 	"fmt"
 	"log/slog"
 	"policy-service/internal/models"
@@ -478,6 +479,44 @@ func (r *RegisteredPolicyRepository) CreateRiskAnalysis(analysis *models.Registe
 	return nil
 }
 
+func (r *RegisteredPolicyRepository) CreateRiskAnalysisTX(analysis *models.RegisteredPolicyRiskAnalysis, tx *sqlx.Tx) error {
+	if analysis.ID == uuid.Nil {
+		analysis.ID = uuid.New()
+	}
+	analysis.CreatedAt = time.Now()
+
+	slog.Info("Creating risk analysis record",
+		"id", analysis.ID,
+		"registered_policy_id", analysis.RegisteredPolicyID,
+		"analysis_status", analysis.AnalysisStatus,
+		"analysis_type", analysis.AnalysisType)
+
+	query := `
+		INSERT INTO registered_policy_risk_analysis (
+			id, registered_policy_id, analysis_status, analysis_type,
+			analysis_source, analysis_timestamp, overall_risk_score,
+			overall_risk_level, identified_risks, recommendations,
+			raw_output, analysis_notes, created_at
+		) VALUES (
+			:id, :registered_policy_id, :analysis_status, :analysis_type,
+			:analysis_source, :analysis_timestamp, :overall_risk_score,
+			:overall_risk_level, :identified_risks, :recommendations,
+			:raw_output, :analysis_notes, :created_at
+		)`
+
+	_, err := tx.ExecContext(context.Background(), query, analysis)
+	if err != nil {
+		slog.Error("Failed to create risk analysis record",
+			"id", analysis.ID,
+			"registered_policy_id", analysis.RegisteredPolicyID,
+			"error", err)
+		return fmt.Errorf("failed to create risk analysis: %w", err)
+	}
+
+	slog.Info("Successfully created risk analysis record", "id", analysis.ID)
+	return nil
+}
+
 // GetRiskAnalysesByPolicyID retrieves all risk analyses for a specific registered policy
 func (r *RegisteredPolicyRepository) GetRiskAnalysesByPolicyID(policyID uuid.UUID) ([]models.RegisteredPolicyRiskAnalysis, error) {
 	slog.Debug("Retrieving risk analyses by policy ID", "registered_policy_id", policyID)
@@ -600,6 +639,26 @@ func (r *RegisteredPolicyRepository) DeleteRiskAnalysis(id uuid.UUID) error {
 
 	slog.Info("Successfully deleted risk analysis", "id", id)
 	return nil
+}
+
+// GetAllRiskAnalyses retrieves all risk analyses with pagination
+func (r *RegisteredPolicyRepository) GetAllRiskAnalyses(limit, offset int) ([]models.RegisteredPolicyRiskAnalysis, error) {
+	slog.Debug("Retrieving all risk analyses", "limit", limit, "offset", offset)
+
+	var analyses []models.RegisteredPolicyRiskAnalysis
+	query := `
+		SELECT * FROM registered_policy_risk_analysis
+		ORDER BY analysis_timestamp DESC
+		LIMIT $1 OFFSET $2`
+
+	err := r.db.Select(&analyses, query, limit, offset)
+	if err != nil {
+		slog.Error("Failed to get all risk analyses", "error", err)
+		return nil, fmt.Errorf("failed to get risk analyses: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved risk analyses", "count", len(analyses))
+	return analyses, nil
 }
 
 // GetWithFilters retrieves registered policies based on filter criteria
@@ -965,4 +1024,36 @@ func (r *RegisteredPolicyRepository) GetRecentClaimByPolicyAndTrigger(
 	}
 
 	return &claim, nil
+}
+
+func (r *RegisteredPolicyRepository) GetMonthlyDataCostByProvider(
+	providerID string,
+	year int,
+	month int,
+) ([]models.BasePolicyDataCost, error) {
+	var costs []models.BasePolicyDataCost
+	query := `
+        SELECT 
+            bp.id as base_policy_id,
+            bp.product_name,
+            COUNT(rp.id) as active_policy_count,
+            COALESCE(SUM(rp.total_data_cost), 0) as sum_total_data_cost,
+            COALESCE(SUM(rp.monthly_data_cost), 0) as sum_monthly_data_cost
+        FROM base_policy bp
+        INNER JOIN registered_policy rp ON rp.base_policy_id = bp.id
+        WHERE bp.insurance_provider_id = $1
+            AND rp.status = 'active'
+            AND rp.underwriting_status = 'approved'
+            AND rp.premium_paid_by_farmer = true
+            AND EXTRACT(YEAR FROM TO_TIMESTAMP(rp.coverage_start_date)) = $2
+            AND EXTRACT(MONTH FROM TO_TIMESTAMP(rp.coverage_start_date)) = $3
+        GROUP BY bp.id, bp.product_name
+        ORDER BY sum_total_data_cost DESC`
+
+	err := r.db.Select(&costs, query, providerID, year, month)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get monthly data cost: %w", err)
+	}
+
+	return costs, nil
 }

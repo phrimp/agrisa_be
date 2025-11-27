@@ -159,7 +159,7 @@ type CreateUserProfileRequest struct {
 	RoleID string `json:"role_id" db:"role_id"`
 
 	// Company Association
-	PartnerID *string `json:"partner_id,omitempty" db:"partner_id"`
+	PartnerID *uuid.UUID `json:"partner_id,omitempty" db:"partner_id"`
 
 	// Basic Personal Information
 	FullName    string  `json:"full_name" db:"full_name"`

@@ -89,3 +89,7 @@ type GetAllUsersResponse struct {
 	Limit  int     `json:"limit"`
 	Offset int     `json:"offset"`
 }
+
+type VerifyIdentifierRequest struct {
+	Identifier string `json:"identifier" binding:"required"`
+}
