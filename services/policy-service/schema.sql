@@ -13,7 +13,7 @@ CREATE EXTENSION IF NOT EXISTS "postgis";
 CREATE TYPE data_source_type AS ENUM ('weather', 'satellite', 'derived');
 CREATE TYPE parameter_type AS ENUM ('numeric', 'boolean', 'categorical');
 CREATE TYPE base_policy_status AS ENUM ('draft', 'active', 'archived');
-CREATE TYPE policy_status AS ENUM ('draft', 'pending_review', 'active', 'expired', 'cancelled', 'rejected');
+CREATE TYPE policy_status AS ENUM ('draft', 'pending_review', 'pending_payment', 'active', 'expired', 'cancelled', 'rejected');
 CREATE TYPE underwriting_status AS ENUM ('pending', 'approved', 'rejected');
 CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'overdue', 'cancelled', 'refunded');
 CREATE TYPE validation_status AS ENUM ('pending', 'passed', 'passed_ai', 'failed', 'warning');

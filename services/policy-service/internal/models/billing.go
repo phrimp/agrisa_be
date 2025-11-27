@@ -7,7 +7,7 @@ import (
 )
 
 // ============================================================================
-// BILLING & INVOICING
+// BILLING & INVOICING (DEPRECATED)
 // ============================================================================
 
 type PartnerInvoice struct {
@@ -38,3 +38,4 @@ type InvoiceLineItem struct {
 	TotalCost          float64    `json:"total_cost" db:"total_cost"`
 	CreatedAt          time.Time  `json:"created_at" db:"created_at"`
 }
+

@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"policy-service/internal/services"
+	"policy-service/internal/worker"
 	"time"
 
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -15,19 +18,19 @@ const (
 
 // PaymentEvent represents the payment event data from payment-service
 type PaymentEvent struct {
-	ID          string     `json:"id"`
-	Amount      float64    `json:"amount"`
-	Description string     `json:"description"`
-	Status      string     `json:"status"`
-	UserID      string     `json:"user_id"`
-	CheckoutURL *string    `json:"checkout_url"`
-	OrderCode   *string    `json:"order_code"`
-	Type        *string    `json:"type"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
-	DeletedAt   *time.Time `json:"deleted_at"`
-	PaidAt      *time.Time `json:"paid_at"`
-	ExpiredAt   *time.Time `json:"expired_at"`
+	ID          string      `json:"id"`
+	Amount      float64     `json:"amount"`
+	Description string      `json:"description"`
+	Status      string      `json:"status"`
+	UserID      string      `json:"user_id"`
+	CheckoutURL *string     `json:"checkout_url"`
+	OrderCode   *string     `json:"order_code"`
+	Type        *string     `json:"type"`
+	CreatedAt   time.Time   `json:"created_at"`
+	UpdatedAt   time.Time   `json:"updated_at"`
+	DeletedAt   *time.Time  `json:"deleted_at"`
+	PaidAt      *time.Time  `json:"paid_at"`
+	ExpiredAt   *time.Time  `json:"expired_at"`
 	OrderItems  []OrderItem `json:"orderItems"`
 }
 
@@ -145,16 +148,32 @@ func (c *PaymentConsumer) processMessage(ctx context.Context, msg amqp.Delivery)
 
 // DefaultPaymentEventHandler is the default implementation of PaymentEventHandler
 type DefaultPaymentEventHandler struct {
-	// Add dependencies here (e.g., registeredPolicyService)
+	registeredPolicyService *services.RegisteredPolicyService
 }
 
 // NewDefaultPaymentEventHandler creates a new default payment event handler
-func NewDefaultPaymentEventHandler() *DefaultPaymentEventHandler {
-	return &DefaultPaymentEventHandler{}
+func NewDefaultPaymentEventHandler(registeredPolicyService *services.RegisteredPolicyService) *DefaultPaymentEventHandler {
+	return &DefaultPaymentEventHandler{
+		registeredPolicyService: registeredPolicyService,
+	}
 }
 
 // HandlePaymentCompleted handles a completed payment event
 func (h *DefaultPaymentEventHandler) HandlePaymentCompleted(ctx context.Context, event PaymentEvent) error {
+	for _, orderItem := range event.OrderItems {
+		dailyJob := worker.JobPayload{
+			JobID: uuid.NewString(),
+			Type:  "fetch-farm-monitoring-data",
+			Params: map[string]any{
+				"policy_id":  orderItem.ItemID,
+				"start_date": 0,
+				"end_date":   0,
+			},
+			MaxRetries: 10,
+			RunNow:     true,
+		}
+		slog.Info("starting job", "job", dailyJob)
+	}
 	// TODO: Implement payment completion logic
 	// This should:
 	// 1. Find the registered policy associated with this payment (via order_code or payment type)
