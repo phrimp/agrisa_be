@@ -326,6 +326,7 @@ func (h *PolicyHandler) GetPartnerPolicies(c fiber.Ctx) error {
 			utils.CreateErrorResponse("UNAUTHORIZED", "Authorization token is required"))
 	}
 
+	slog.Info("Fetching partner policies token: ", "token", token)
 	// calling api to get profile by token
 	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
 	if err != nil {
