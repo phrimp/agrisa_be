@@ -475,7 +475,7 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 
 	if endDate == "now" {
 		currentTime := time.Now()
-		lastDay := currentTime.Add(24 * time.Hour)
+		lastDay := currentTime.Add(-24 * time.Hour)
 		endDate = currentTime.Format("2006-01-02")
 		startDate = lastDay.Format("2006-01-02")
 	}
@@ -866,7 +866,7 @@ func CalculatePolygonCentroid(coordinates [][]float64) Point {
 }
 
 func ValidateCroptype(cropType string) bool {
-	var cropTypes = []string{"rice", "coffee"}
+	cropTypes := []string{"rice", "coffee"}
 	for _, ct := range cropTypes {
 		if ct == cropType {
 			return true

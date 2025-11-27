@@ -341,25 +341,15 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	if err != nil {
 		return fmt.Errorf("invalid policy_id format: %w", err)
 	}
-
-	basePolicyIDStr, ok := params["base_policy_id"].(string)
-	if !ok {
-		return fmt.Errorf("missing or invalid base_policy_id parameters")
-	}
-	basePolicyID, err := uuid.Parse(basePolicyIDStr)
+	policy, err := s.registeredPolicyRepo.GetByID(policyID)
 	if err != nil {
-		return fmt.Errorf("invalid base_policy_id format: %w", err)
+		slog.Error("error retrieving policy by id", "id", policyID, "error", err)
+		return fmt.Errorf("error retrieving policy by id: %w", err)
 	}
 
-	farmIDStr, ok := params["farm_id"].(string)
-	if !ok {
-		return fmt.Errorf("missing or invalid farm_id parameter")
-	}
+	basePolicyID := policy.BasePolicyID
 
-	farmID, err := uuid.Parse(farmIDStr)
-	if err != nil {
-		return fmt.Errorf("invalid farm_id format: %w", err)
-	}
+	farmID := policy.FarmID
 
 	// Extract optional check_policy parameter (defaults to false)
 	checkPolicy, _ := params["check_policy"].(bool)
@@ -424,20 +414,45 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 	startDateFloat, ok := params["start_date"].(float64)
 	if !ok {
-		slog.Error("GetFarmPhotoJob: missing or invalid start_date parameter", "farm_id", farmID)
+		slog.Error("missing or invalid start_date parameter", "farm_id", farmID)
 		return fmt.Errorf("missing or invalid start_date parameter")
 	}
 	startDate := int64(startDateFloat)
 
 	endDateFloat, ok := params["end_date"].(float64)
 	if !ok {
-		slog.Error("GetFarmPhotoJob: missing or invalid end_date parameter", "farm_id", farmID)
+		slog.Error("missing or invalid end_date parameter", "farm_id", farmID)
 		return fmt.Errorf("missing or invalid end_date parameter")
 	}
 	endDate := int64(endDateFloat)
 
 	if endDate == 0 {
-		endDate = time.Now().Add(24 * time.Hour).Unix()
+		endDate = time.Now().Unix()
+	}
+	if startDate == 0 {
+		trigger, err := s.basePolicyRepo.GetBasePolicyTriggersByPolicyID(basePolicyID)
+		if err != nil || len(trigger) == 0 {
+			slog.Error("base policy trigger retrieve failed", "error", err, "trigger length", len(trigger))
+
+			return fmt.Errorf("base policy trigger retrieve failed: %w", err)
+		}
+		switch trigger[0].MonitorFrequencyUnit {
+		case models.MonitorFrequencyHour:
+			startDate = time.Now().Add(-time.Duration(trigger[0].MonitorInterval) * time.Hour).Unix()
+		case models.MonitorFrequencyDay:
+			startDate = time.Now().AddDate(0, 0, -trigger[0].MonitorInterval).Unix()
+		case models.MonitorFrequencyWeek:
+			startDate = time.Now().AddDate(0, 0, -trigger[0].MonitorInterval*7).Unix()
+		case models.MonitorFrequencyMonth:
+			startDate = time.Now().AddDate(0, -trigger[0].MonitorInterval, 0).Unix()
+		case models.MonitorFrequencyYear:
+			startDate = time.Now().AddDate(-trigger[0].MonitorInterval, 0, 0).Unix()
+		default:
+			slog.Error("unsupported monitor frequency unit",
+				"unit", trigger[0].MonitorFrequencyUnit,
+				"basePolicyID", basePolicyID)
+			return fmt.Errorf("unsupported monitor frequency unit: %v", trigger[0].MonitorFrequencyUnit)
+		}
 	}
 
 	ctx := context.Background()
@@ -1990,7 +2005,7 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 	request.RegisteredPolicy.PolicyNumber = "AGP" + utils.GenerateRandomStringWithLength(9)
 	request.RegisteredPolicy.UnderwritingStatus = models.UnderwritingPending
 
-	request.RegisteredPolicy.CoverageStartDate = 0 // start day only start after underwriting
+	request.RegisteredPolicy.CoverageStartDate = 0 // start day only start after payment
 	request.RegisteredPolicy.CoverageEndDate = int64(*completeBasePolicy.BasePolicy.InsuranceValidToDay)
 	request.RegisteredPolicy.PremiumPaidByFarmer = false
 	request.RegisteredPolicy.Status = models.PolicyPendingReview
@@ -2449,70 +2464,18 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 		return nil, fmt.Errorf("failed to create underwriting: %w", err)
 	}
 
-	// 3. Update registered policy underwriting status
-	if err := s.registeredPolicyRepo.UpdateUnderwritingStatus(policyID, req.UnderwritingStatus); err != nil {
-		slog.Error("Failed to update policy underwriting status", "policy_id", policyID, "error", err)
-		return nil, fmt.Errorf("failed to update policy underwriting status: %w", err)
-	}
-
-	// 4. If approved, update policy status and start insurance process
+	// 4. If approved, update policy status
 	responseMessage := "Underwriting record created"
+	policy.UnderwritingStatus = req.UnderwritingStatus
 	if req.UnderwritingStatus == models.UnderwritingApproved {
 		// Update policy status to active and set coverage start date
-		policy.Status = models.PolicyActive
-		policy.CoverageStartDate = time.Now().Unix()
+		policy.Status = models.PolicyPendingPayment
 		if err := s.registeredPolicyRepo.Update(policy); err != nil {
 			slog.Error("Failed to update policy status to active", "policy_id", policyID, "error", err)
 			return nil, fmt.Errorf("failed to update policy status: %w", err)
 		}
 
-		// Get scheduler and dispatch FetchFarmMonitoringDataJob with check_policy=true
-		scheduler, ok := s.workerManager.GetSchedulerByPolicyID(policyID)
-		if !ok {
-			slog.Warn("Scheduler not found for policy, attempting to create worker infrastructure",
-				"policy_id", policyID)
-			// Try to recover/create worker infrastructure
-			if err := s.recoverPolicyInfrastructure(ctx, policyID); err != nil {
-				slog.Error("Failed to recover policy infrastructure", "policy_id", policyID, "error", err)
-				// Don't fail the entire operation, just log warning
-			} else {
-				scheduler, ok = s.workerManager.GetSchedulerByPolicyID(policyID)
-			}
-		}
-
-		if ok && scheduler != nil {
-			currentTime := time.Now()
-			// Fetch last 30 days of data with policy checking enabled
-			startTime := currentTime.AddDate(0, 0, -30)
-
-			monitoringJob := worker.JobPayload{
-				JobID: uuid.NewString(),
-				Type:  "fetch-farm-monitoring-data",
-				Params: map[string]any{
-					"policy_id":      policyID.String(),
-					"base_policy_id": policy.BasePolicyID.String(),
-					"farm_id":        policy.FarmID.String(),
-					"start_date":     startTime.Unix(),
-					"end_date":       currentTime.Unix(),
-					"check_policy":   true, // Enable policy trigger checking
-				},
-				MaxRetries: 3,
-				OneTime:    true,
-				RunNow:     true,
-			}
-
-			scheduler.AddJob(monitoringJob)
-			slog.Info("Dispatched FetchFarmMonitoringDataJob with check_policy=true",
-				"policy_id", policyID,
-				"job_id", monitoringJob.JobID,
-				"start_date", startTime.Unix(),
-				"end_date", currentTime.Unix())
-
-			responseMessage = "Underwriting approved, policy activated, and monitoring job dispatched"
-		} else {
-			slog.Warn("Could not dispatch monitoring job - scheduler not available", "policy_id", policyID)
-			responseMessage = "Underwriting approved, policy activated (monitoring job dispatch skipped)"
-		}
+		responseMessage = "Underwriting approved, policy activated, and monitoring job dispatched"
 	} else if req.UnderwritingStatus == models.UnderwritingRejected {
 		// Update policy status to rejected
 		policy.Status = models.PolicyRejected
@@ -2575,4 +2538,8 @@ func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[
 	}
 
 	return result, nil
+}
+
+func (s *RegisteredPolicyService) UpdateRegisteredPolicy(policy *models.RegisteredPolicy) error {
+	return s.registeredPolicyRepo.Update(policy)
 }

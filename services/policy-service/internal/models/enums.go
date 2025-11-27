@@ -27,12 +27,13 @@ const (
 type PolicyStatus string
 
 const (
-	PolicyDraft         PolicyStatus = "draft"
-	PolicyPendingReview PolicyStatus = "pending_review"
-	PolicyActive        PolicyStatus = "active"
-	PolicyExpired       PolicyStatus = "expired"
-	PolicyCancelled     PolicyStatus = "cancelled"
-	PolicyRejected      PolicyStatus = "rejected"
+	PolicyDraft          PolicyStatus = "draft"
+	PolicyPendingReview  PolicyStatus = "pending_review"
+	PolicyPendingPayment PolicyStatus = "pending_payment"
+	PolicyActive         PolicyStatus = "active"
+	PolicyExpired        PolicyStatus = "expired"
+	PolicyCancelled      PolicyStatus = "cancelled"
+	PolicyRejected       PolicyStatus = "rejected"
 )
 
 type UnderwritingStatus string
@@ -51,6 +52,13 @@ const (
 	PaymentOverdue   PaymentStatus = "overdue"
 	PaymentCancelled PaymentStatus = "cancelled"
 	PaymentRefunded  PaymentStatus = "refunded"
+)
+
+type PaymentType string
+
+const (
+	PaymentTypePolicyRegistration PaymentType = "policy_registration_payment"
+	PaymentTypePolicyRenewal      PaymentType = "policy_renewal_payment"
 )
 
 type ValidationStatus string
@@ -151,11 +159,11 @@ const (
 type CancelRequestType string
 
 const (
-	CancelRequestTypeContractViolation  CancelRequestType = "contract_violation"
-	CancelRequestTypeOther              CancelRequestType = "other"
-	CancelRequestTypeNonPayment         CancelRequestType = "non_payment"
+	CancelRequestTypeContractViolation   CancelRequestType = "contract_violation"
+	CancelRequestTypeOther               CancelRequestType = "other"
+	CancelRequestTypeNonPayment          CancelRequestType = "non_payment"
 	CancelRequestTypePolicyholderRequest CancelRequestType = "policyholder_request"
-	CancelRequestTypeRegulatoryChange   CancelRequestType = "regulatory_change"
+	CancelRequestTypeRegulatoryChange    CancelRequestType = "regulatory_change"
 )
 
 type CancelRequestStatus string
