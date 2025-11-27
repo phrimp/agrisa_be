@@ -320,14 +320,14 @@ func (h *PolicyHandler) GetFarmerPolicyDetail(c fiber.Ctx) error {
 
 // GetPartnerPolicies retrieves all policies for the authenticated insurance partner
 func (h *PolicyHandler) GetPartnerPolicies(c fiber.Ctx) error {
-	userID := c.Get("X-User-ID")
-	if userID == "" {
+	token := c.Get("Authorization")
+	if token == "" {
 		return c.Status(http.StatusUnauthorized).JSON(
-			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+			utils.CreateErrorResponse("UNAUTHORIZED", "Authorization token is required"))
 	}
 
 	// calling api to get profile by token
-	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(userID)
+	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
@@ -346,7 +346,7 @@ func (h *PolicyHandler) GetPartnerPolicies(c fiber.Ctx) error {
 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
 		"policies":    policies,
 		"count":       len(policies),
-		"provider_id": userID,
+		"provider_id": partnerProfileID,
 	}))
 }
 
