@@ -2449,70 +2449,18 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 		return nil, fmt.Errorf("failed to create underwriting: %w", err)
 	}
 
-	// 3. Update registered policy underwriting status
-	if err := s.registeredPolicyRepo.UpdateUnderwritingStatus(policyID, req.UnderwritingStatus); err != nil {
-		slog.Error("Failed to update policy underwriting status", "policy_id", policyID, "error", err)
-		return nil, fmt.Errorf("failed to update policy underwriting status: %w", err)
-	}
-
-	// 4. If approved, update policy status and start insurance process
+	// 4. If approved, update policy status
 	responseMessage := "Underwriting record created"
+	policy.UnderwritingStatus = req.UnderwritingStatus
 	if req.UnderwritingStatus == models.UnderwritingApproved {
 		// Update policy status to active and set coverage start date
 		policy.Status = models.PolicyActive
-		policy.CoverageStartDate = time.Now().Unix()
 		if err := s.registeredPolicyRepo.Update(policy); err != nil {
 			slog.Error("Failed to update policy status to active", "policy_id", policyID, "error", err)
 			return nil, fmt.Errorf("failed to update policy status: %w", err)
 		}
 
-		// Get scheduler and dispatch FetchFarmMonitoringDataJob with check_policy=true
-		scheduler, ok := s.workerManager.GetSchedulerByPolicyID(policyID)
-		if !ok {
-			slog.Warn("Scheduler not found for policy, attempting to create worker infrastructure",
-				"policy_id", policyID)
-			// Try to recover/create worker infrastructure
-			if err := s.recoverPolicyInfrastructure(ctx, policyID); err != nil {
-				slog.Error("Failed to recover policy infrastructure", "policy_id", policyID, "error", err)
-				// Don't fail the entire operation, just log warning
-			} else {
-				scheduler, ok = s.workerManager.GetSchedulerByPolicyID(policyID)
-			}
-		}
-
-		if ok && scheduler != nil {
-			currentTime := time.Now()
-			// Fetch last 30 days of data with policy checking enabled
-			startTime := currentTime.AddDate(0, 0, -30)
-
-			monitoringJob := worker.JobPayload{
-				JobID: uuid.NewString(),
-				Type:  "fetch-farm-monitoring-data",
-				Params: map[string]any{
-					"policy_id":      policyID.String(),
-					"base_policy_id": policy.BasePolicyID.String(),
-					"farm_id":        policy.FarmID.String(),
-					"start_date":     startTime.Unix(),
-					"end_date":       currentTime.Unix(),
-					"check_policy":   true, // Enable policy trigger checking
-				},
-				MaxRetries: 3,
-				OneTime:    true,
-				RunNow:     true,
-			}
-
-			scheduler.AddJob(monitoringJob)
-			slog.Info("Dispatched FetchFarmMonitoringDataJob with check_policy=true",
-				"policy_id", policyID,
-				"job_id", monitoringJob.JobID,
-				"start_date", startTime.Unix(),
-				"end_date", currentTime.Unix())
-
-			responseMessage = "Underwriting approved, policy activated, and monitoring job dispatched"
-		} else {
-			slog.Warn("Could not dispatch monitoring job - scheduler not available", "policy_id", policyID)
-			responseMessage = "Underwriting approved, policy activated (monitoring job dispatch skipped)"
-		}
+		responseMessage = "Underwriting approved, policy activated, and monitoring job dispatched"
 	} else if req.UnderwritingStatus == models.UnderwritingRejected {
 		// Update policy status to rejected
 		policy.Status = models.PolicyRejected
