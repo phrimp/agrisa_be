@@ -2543,3 +2543,19 @@ func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[
 func (s *RegisteredPolicyService) UpdateRegisteredPolicy(policy *models.RegisteredPolicy) error {
 	return s.registeredPolicyRepo.Update(policy)
 }
+
+func (s *RegisteredPolicyService) GetPartnerID(result map[string]interface{}) (string, error) {
+	// Lấy object "data"
+	data, ok := result["data"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("data field not found or invalid")
+	}
+
+	// Lấy "partner_id" từ data
+	partnerID, ok := data["partner_id"].(string)
+	if !ok {
+		return "", fmt.Errorf("partner_id not found or not a string")
+	}
+
+	return partnerID, nil
+}

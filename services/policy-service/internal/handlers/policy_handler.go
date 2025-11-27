@@ -339,12 +339,19 @@ func (h *PolicyHandler) GetPartnerPolicies(c fiber.Ctx) error {
 	// log the partner profile data
 	slog.Info("Partner profile data", "data", partnerProfileData)
 
+	// get partner id from profile data
+	partnerID, err := h.registeredPolicyService.GetPartnerID(partnerProfileData)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
+	}
+
 	//partnerProfileID := partnerProfileData["partner_id"].(string)
 
 	// userID is the insurance provider ID for partners
-	policies, err := h.registeredPolicyService.GetPoliciesByProviderID(tokenString)
+	policies, err := h.registeredPolicyService.GetPoliciesByProviderID(partnerID)
 	if err != nil {
-		slog.Error("Failed to get partner policies", "provider_id", tokenString, "error", err)
+		slog.Error("Failed to get partner policies", "provider_id", partnerID, "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve policies"))
 	}
@@ -352,7 +359,7 @@ func (h *PolicyHandler) GetPartnerPolicies(c fiber.Ctx) error {
 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
 		"policies":    policies,
 		"count":       len(policies),
-		"provider_id": tokenString,
+		"provider_id": partnerID,
 	}))
 }
 
