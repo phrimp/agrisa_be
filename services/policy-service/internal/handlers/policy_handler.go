@@ -320,11 +320,13 @@ func (h *PolicyHandler) GetFarmerPolicyDetail(c fiber.Ctx) error {
 
 // GetPartnerPolicies retrieves all policies for the authenticated insurance partner
 func (h *PolicyHandler) GetPartnerPolicies(c fiber.Ctx) error {
-	token := c.Get("Authorization")
-	if token == "" {
+	tokenString := c.Get("Authorization")
+	if tokenString == "" {
 		return c.Status(http.StatusUnauthorized).JSON(
 			utils.CreateErrorResponse("UNAUTHORIZED", "Authorization token is required"))
 	}
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
 
 	slog.Info("Fetching partner policies token: ", "token", token)
 	// calling api to get profile by token
