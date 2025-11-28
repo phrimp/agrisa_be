@@ -880,11 +880,10 @@ type CreatePartnerPolicyUnderwritingResponse struct {
 }
 
 type MonthlyDataCostRequest struct {
-	InsuranceProviderID string
-	Month               int    `json:"month"`
-	Year                int    `json:"year"`
-	Direction           string `json:"direction,omitempty"`
-	Status              string `json:"status,omitempty"`
-	UnderwritingStatus  string `json:"underwriting_status,omitempty"`
-	OrderBy             string `json:"order_by,omitempty"`
+	Month              int    `json:"month"`
+	Year               int    `json:"year"`
+	Direction          string `json:"direction,omitempty"`
+	Status             string `json:"status,omitempty"`
+	UnderwritingStatus string `json:"underwriting_status,omitempty"`
+	OrderBy            string `json:"order_by,omitempty"`
 }
