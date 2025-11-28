@@ -372,6 +372,12 @@ func (h *PolicyHandler) GetPartnerPolicyDetail(c fiber.Ctx) error {
 			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
 	}
 
+	partnerProfileID, err := h.getPartnerIDFromToken(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", err.Error()))
+	}
+
 	policyIDStr := c.Params("id")
 	policyID, err := uuid.Parse(policyIDStr)
 	if err != nil {
@@ -391,7 +397,7 @@ func (h *PolicyHandler) GetPartnerPolicyDetail(c fiber.Ctx) error {
 	}
 
 	// Authorization check - partner can only view their provider's policies
-	if policy.InsuranceProviderID != userID {
+	if policy.InsuranceProviderID != partnerProfileID {
 		return c.Status(http.StatusForbidden).JSON(
 			utils.CreateErrorResponse("FORBIDDEN", "You do not have permission to view this policy"))
 	}
@@ -989,4 +995,28 @@ func (h *PolicyHandler) GetMonthlyDataCost(c fiber.Ctx) error {
 	}
 
 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(response))
+}
+
+// Helper function to extract partner ID from authorization token
+func (h *PolicyHandler) getPartnerIDFromToken(c fiber.Ctx) (string, error) {
+	tokenString := c.Get("Authorization")
+	if tokenString == "" {
+		return "", fmt.Errorf("authorization token is required")
+	}
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	// Get partner profile from token
+	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve insurance partner profile: %w", err)
+	}
+
+	// Extract partner ID from profile data
+	partnerID, err := h.registeredPolicyService.GetPartnerID(partnerProfileData)
+	if err != nil {
+		return "", fmt.Errorf("failed to retrieve partner ID: %w", err)
+	}
+
+	return partnerID, nil
 }
