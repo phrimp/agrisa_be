@@ -948,6 +948,7 @@ func (h *PolicyHandler) GetMonthlyDataCost(c fiber.Ctx) error {
 	var request models.MonthlyDataCostRequest
 
 	if err := c.Bind().Body(&request); err != nil {
+		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(
 			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
 	}
