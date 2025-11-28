@@ -2562,9 +2562,10 @@ func (s *RegisteredPolicyService) GetPartnerID(result map[string]interface{}) (s
 
 func (s *RegisteredPolicyService) GetMonthlyDataCost(
 	request models.MonthlyDataCostRequest,
+	insuranceProviderID string,
 ) (*models.MonthlyDataCostResponse, error) {
 	slog.Info("Calculating monthly data cost",
-		"provider_id", request.InsuranceProviderID,
+		"provider_id", insuranceProviderID,
 		"month", request.Month,
 		"year", request.Year,
 		"direction", request.Direction,
@@ -2574,7 +2575,7 @@ func (s *RegisteredPolicyService) GetMonthlyDataCost(
 
 	// Get base policy costs
 	basePolicyCosts, err := s.registeredPolicyRepo.GetMonthlyDataCostByProvider(
-		request.InsuranceProviderID,
+		insuranceProviderID,
 		request.Year,
 		request.Month,
 		request.Direction,
@@ -2596,7 +2597,7 @@ func (s *RegisteredPolicyService) GetMonthlyDataCost(
 	}
 
 	response := &models.MonthlyDataCostResponse{
-		InsuranceProviderID:     request.InsuranceProviderID,
+		InsuranceProviderID:     insuranceProviderID,
 		Month:                   request.Month,
 		Year:                    request.Year,
 		BasePolicyCosts:         basePolicyCosts,

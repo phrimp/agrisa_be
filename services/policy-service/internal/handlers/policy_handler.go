@@ -974,15 +974,13 @@ func (h *PolicyHandler) GetMonthlyDataCost(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
 	}
 
-	request.InsuranceProviderID = partnerProfileID
-
 	// Call service
 	response, err := h.registeredPolicyService.GetMonthlyDataCost(
-		request,
+		request, partnerProfileID,
 	)
 	if err != nil {
 		slog.Error("Failed to calculate monthly data cost",
-			"provider_id", request.InsuranceProviderID,
+			"provider_id", partnerProfileID,
 			"error", err)
 		return c.Status(http.StatusInternalServerError).JSON(
 			utils.CreateErrorResponse("CALCULATION_FAILED",
