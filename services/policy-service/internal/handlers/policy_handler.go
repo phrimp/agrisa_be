@@ -53,7 +53,8 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 	partnerGroup.Get("/stats", h.GetPartnerPolicyStats)                                       // GET /policies/read-partner/stats
 	partnerGroup.Get("/monitoring-data/:farm_id/:parameter_name", h.GetPartnerMonitoringData) // GET /policies/read-partner/monitoring-data/:farm_id/:parameter_name
 	partnerUpdateGroup := policyGroup.Group("/create-partner")
-	partnerUpdateGroup.Post("/underwriting/:id", h.CreatePartnerPolicyUnderwriting) // PATCH /policies/update-partner/underwriting/:id
+	partnerUpdateGroup.Post("/underwriting/:id", h.CreatePartnerPolicyUnderwriting) // PATCH /policies/update-partner/underwriting/:id]
+	partnerGroup.Post("/monthly-data-cost", h.GetMonthlyDataCost)
 
 	// Admin routes - full access to all policies
 	adminReadGroup := policyGroup.Group("/read-all")
@@ -940,4 +941,53 @@ func (h *PolicyHandler) GetMonitoringDataByFarm(c fiber.Ctx) error {
 		"farm_id":         farmID,
 		"requested_by":    userID,
 	}))
+}
+
+func (h *PolicyHandler) GetMonthlyDataCost(c fiber.Ctx) error {
+
+	var request models.MonthlyDataCostRequest
+
+	if err := c.Bind().Body(&request); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
+	}
+
+	tokenString := c.Get("Authorization")
+	if tokenString == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "Authorization token is required"))
+	}
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	// calling api to get profile by token
+	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+	}
+
+	// get partner id from profile data
+	partnerProfileID, err := h.registeredPolicyService.GetPartnerID(partnerProfileData)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
+	}
+
+	request.InsuranceProviderID = partnerProfileID
+
+	// Call service
+	response, err := h.registeredPolicyService.GetMonthlyDataCost(
+		request,
+	)
+	if err != nil {
+		slog.Error("Failed to calculate monthly data cost",
+			"provider_id", request.InsuranceProviderID,
+			"error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("CALCULATION_FAILED",
+				"Failed to calculate monthly data cost"))
+	}
+
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(response))
 }

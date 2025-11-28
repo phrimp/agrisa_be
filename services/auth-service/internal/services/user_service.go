@@ -41,6 +41,7 @@ type IUserService interface {
 	VerifyFaceLiveness(form *multipart.Form) (interface{}, error)
 	VerifyLandCertificate(userID string, NationalIDInput string) (result bool, err error)
 	CheckExistEmailOrPhone(input string) (bool, error)
+	GetUserCardByUserID(userID string) (*models.UserCard, error)
 }
 
 type UserService struct {
@@ -1319,4 +1320,8 @@ func (s *UserService) GetAllUsers(limit, offset int) (*models.GetAllUsersRespons
 func (s *UserService) CheckExistEmailOrPhone(input string) (bool, error) {
 	exists, err := s.userRepo.CheckExistEmailOrPhone(input)
 	return exists, err
+}
+
+func (s *UserService) GetUserCardByUserID(userID string) (*models.UserCard, error) {
+	return s.userCardRepo.GetUserCardByUserID(userID)
 }

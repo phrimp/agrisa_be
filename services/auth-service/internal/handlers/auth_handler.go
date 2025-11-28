@@ -46,6 +46,7 @@ func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
 	// Admin manage all sessions
 	sessionGr.GET("/all", a.GetAllSessions)
 	sessionGr.POST("/verify-land-certificate", a.VerifyLandCertificate)
+	sessionGr.GET("/cards", a.GetCard)
 
 }
 
@@ -474,5 +475,26 @@ func (a *AuthHandler) VerifyIdentifier(c *gin.Context) {
 	response := utils.CreateSuccessResponse(map[string]bool{
 		"available": exists,
 	})
+	c.JSON(http.StatusOK, response)
+}
+
+func (a *AuthHandler) GetCard(c *gin.Context) {
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		slog.Error("Missing X-User-ID header in GetCard request")
+		errorResponse := utils.CreateErrorResponse("UNAUTHORIZED", "Invalid session")
+		c.JSON(http.StatusUnauthorized, errorResponse)
+		return
+	}
+
+	userCard, err := a.userService.GetUserCardByUserID(userID)
+	if err != nil {
+		slog.Error("Error retrieving user card for user %s: %v", userID, err)
+		errorResponse := utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve user card")
+		c.JSON(http.StatusInternalServerError, errorResponse)
+		return
+	}
+
+	response := utils.CreateSuccessResponse(userCard)
 	c.JSON(http.StatusOK, response)
 }

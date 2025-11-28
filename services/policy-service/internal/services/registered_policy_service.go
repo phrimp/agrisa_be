@@ -2559,3 +2559,51 @@ func (s *RegisteredPolicyService) GetPartnerID(result map[string]interface{}) (s
 
 	return partnerID, nil
 }
+
+func (s *RegisteredPolicyService) GetMonthlyDataCost(
+	request models.MonthlyDataCostRequest,
+) (*models.MonthlyDataCostResponse, error) {
+	slog.Info("Calculating monthly data cost",
+		"provider_id", request.InsuranceProviderID,
+		"month", request.Month,
+		"year", request.Year,
+		"direction", request.Direction,
+		"status", request.UnderwritingStatus,
+		"underwriting_status", request.UnderwritingStatus,
+	)
+
+	// Get base policy costs
+	basePolicyCosts, err := s.registeredPolicyRepo.GetMonthlyDataCostByProvider(
+		request.InsuranceProviderID,
+		request.Year,
+		request.Month,
+		request.Direction,
+		request.Status,
+		request.UnderwritingStatus,
+		request.OrderBy,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	// Calculate totals
+	var totalActivePolicies int
+	var totalDataCost float64
+
+	for _, cost := range basePolicyCosts {
+		totalActivePolicies += cost.ActivePolicyCount
+		totalDataCost += cost.SumTotalDataCost
+	}
+
+	response := &models.MonthlyDataCostResponse{
+		InsuranceProviderID:     request.InsuranceProviderID,
+		Month:                   request.Month,
+		Year:                    request.Year,
+		BasePolicyCosts:         basePolicyCosts,
+		TotalActivePolicies:     totalActivePolicies,
+		TotalBasePolicyDataCost: totalDataCost,
+		Currency:                "VND",
+	}
+
+	return response, nil
+}
