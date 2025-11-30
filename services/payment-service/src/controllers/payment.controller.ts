@@ -216,6 +216,12 @@ export class PaymentController {
                   parsed.data.data.orderCode.toString(),
                 );
               if (publisher_payment) {
+                this.logger.log('Publishing payment to queue', {
+                  orderCode: parsed.data.data.orderCode,
+                  type: publisher_payment.type,
+                  amount: publisher_payment.amount,
+                  orderItemsCount: publisher_payment.orderItems?.length || 0,
+                });
                 await publisher(publisher_payment);
                 this.logger.log('Payment event published to queue', {
                   orderCode: parsed.data.data.orderCode,
