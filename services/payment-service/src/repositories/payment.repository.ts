@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository, LessThan, Not, type FindManyOptions } from 'typeorm';
+import { In, LessThan, Not, Repository, type FindManyOptions } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 
 @Injectable()
