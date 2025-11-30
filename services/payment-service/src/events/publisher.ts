@@ -5,8 +5,6 @@ export const publisher = async (data) => {
   const { connection, channel } = await connectRabbitMQ();
 
   try {
-    await channel.confirmSelect();
-
     await channel.assertQueue(queue, {
       durable: true,
       autoDelete: false,
