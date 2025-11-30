@@ -18,6 +18,7 @@ export const publisher = async (data) => {
       exclusive: false,
       arguments: {
         'x-dead-letter-exchange': dlxExchange,
+        'x-dead-letter-routing-key': 'payment_events.failed',
       },
     });
 
