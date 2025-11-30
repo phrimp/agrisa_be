@@ -147,7 +147,6 @@ func (c *PaymentConsumer) startConsumerLoop(ctx context.Context) error {
 	args := amqp.Table{
 		"x-dead-letter-exchange":    "dlx.payment",
 		"x-dead-letter-routing-key": "payment_events.failed",
-		"x-message-ttl":             int64(86400000), // 24 hours in milliseconds
 	}
 
 	_, err = c.conn.Channel.QueueDeclare(
@@ -484,8 +483,8 @@ func (h *DefaultPaymentEventHandler) processPolicyPayment(
 			PaymentID: event.ID,
 			Reason:    "payment amount mismatch",
 			Details: map[string]interface{}{
-				"expected": expectedAmount,
-				"received": orderItem.Price,
+				"expected":  expectedAmount,
+				"received":  orderItem.Price,
 				"policy_id": registeredPolicyID,
 			},
 		}
