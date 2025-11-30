@@ -218,7 +218,7 @@ func main() {
 	}
 
 	// Recover active policy worker infrastructure after restart
-	if err := registeredPolicyService.RecoverActivePolicies(ctx); err != nil {
+	if err := registeredPolicyService.RecoverPolicies(ctx); err != nil {
 		log.Printf("Warning: failed to recover active policies: %v", err)
 		// Non-fatal: continue startup even if recovery fails
 	}
