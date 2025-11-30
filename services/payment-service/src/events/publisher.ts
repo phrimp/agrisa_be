@@ -22,7 +22,12 @@ export const publisher = async (data) => {
       },
     });
 
-    channel.sendToQueue(queue, Buffer.from(JSON.stringify(data)), {
+    const payload = {
+      ...data,
+      amount: parseFloat(data.amount),
+    };
+
+    channel.sendToQueue(queue, Buffer.from(JSON.stringify(payload)), {
       persistent: true,
     });
   } finally {
