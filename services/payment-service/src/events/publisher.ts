@@ -17,8 +17,6 @@ export const publisher = async (data) => {
     channel.sendToQueue(queue, Buffer.from(JSON.stringify(data)), {
       persistent: true,
     });
-
-    await channel.waitForConfirms();
   } finally {
     await channel.close();
     await connection.close();
