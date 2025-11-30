@@ -549,8 +549,18 @@ func (h *PolicyHandler) CreatePartnerPolicyUnderwriting(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
 	}
 
-	if policy.InsuranceProviderID != partnerProfileData["partner_id"].(string) {
-		return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "Cannot underwrite others policies"))
+	profileData, ok := partnerProfileData["data"].(map[string]any)
+	if ok {
+		partnerID, ok := profileData["partner_id"].(string)
+		if ok {
+			if policy.InsuranceProviderID != partnerID {
+				return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "Cannot underwrite others policies"))
+			}
+		} else {
+			return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "partner id not found"))
+		}
+	} else {
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "profile data not fould"))
 	}
 
 	// Call service to create underwriting
