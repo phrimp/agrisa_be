@@ -1,43 +1,42 @@
-/* eslint-disable @typescript-eslint/no-floating-promises */
 import {
   Body,
   Controller,
-  Get,
-  Param,
-  Post,
-  Logger,
-  Inject,
-  Headers,
   Delete,
-  Query,
+  Get,
+  Headers,
   HttpException,
   HttpStatus,
+  Inject,
+  Logger,
+  Param,
+  Post,
+  Query,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import {
-  createPaymentLinkSchema,
-  webhookPayloadSchema,
-  createPayoutDataSchema,
-  createBatchPayoutDataSchema,
-} from '../types/payos.types';
-import type {
-  CreatePaymentLinkData,
-  CreatePayoutData,
-  CreateBatchPayoutData,
-} from '../types/payos.types';
-import type { PayosService } from '../services/payos.service';
-import type { PaymentService } from '../services/payment.service';
+import { publisher } from 'src/events/publisher';
+import { payosConfig } from 'src/libs/payos.config';
 import {
   checkPermissions,
   generateRandomString,
   generateReferenceId,
 } from 'src/libs/utils';
+import type { OrderItemService } from 'src/services/order-item.service';
 import { paymentViewSchema } from 'src/types/payment.types';
 import z from 'zod';
-import type { OrderItemService } from 'src/services/order-item.service';
-import { payosConfig } from 'src/libs/payos.config';
-import { publisher } from 'src/events/publisher';
+import type { PaymentService } from '../services/payment.service';
+import type { PayosService } from '../services/payos.service';
+import type {
+  CreateBatchPayoutData,
+  CreatePaymentLinkData,
+  CreatePayoutData,
+} from '../types/payos.types';
+import {
+  createBatchPayoutDataSchema,
+  createPaymentLinkSchema,
+  createPayoutDataSchema,
+  webhookPayloadSchema,
+} from '../types/payos.types';
 
 @Controller()
 export class PaymentController {
@@ -216,7 +215,19 @@ export class PaymentController {
                 await this.paymentService.findByOrderCode(
                   parsed.data.data.orderCode.toString(),
                 );
-              publisher(publisher_payment);
+              if (publisher_payment) {
+                await publisher(publisher_payment);
+                this.logger.log('Payment event published to queue', {
+                  orderCode: parsed.data.data.orderCode,
+                });
+              } else {
+                this.logger.error(
+                  'Failed to fetch updated payment for publishing',
+                  {
+                    orderCode: parsed.data.data.orderCode,
+                  },
+                );
+              }
               console.log('DATA:', parsed.data.data);
             }
           } else {
