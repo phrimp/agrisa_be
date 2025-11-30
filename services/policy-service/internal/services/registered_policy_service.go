@@ -1964,15 +1964,53 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 	var farm *models.Farm
 
 	if request.IsNewFarm {
-		// create new farm
-		return nil, fmt.Errorf("feature unimplemented, comeback later") // TODO: delete later
+		// Create new farm with validation
 		farm = &request.Farm
 		slog.Info("new farm creation request for a new registered policy", "farm", farm)
-		err := s.farmService.CreateFarmTx(farm, request.RegisteredPolicy.FarmerID, tx)
+
+		// Validate required fields (using same validation logic as CreateFarmValidate)
+		if farm.CropType == "" {
+			return nil, fmt.Errorf("crop_type is required")
+		}
+
+		if farm.AreaSqm <= 0 {
+			return nil, fmt.Errorf("area_sqm must be greater than 0")
+		}
+
+		if !ValidateCroptype(farm.CropType) {
+			return nil, fmt.Errorf("invalid crop_type (only rice or coffee allowed)")
+		}
+
+		if farm.SoilType == nil {
+			return nil, fmt.Errorf("soil_type is required")
+		}
+
+		if !ValidateSoilType(farm.SoilType, farm.CropType) {
+			return nil, fmt.Errorf("invalid soil_type for the given crop_type")
+		}
+
+		// Validate harvest date if provided
+		if farm.ExpectedHarvestDate != nil {
+			if farm.PlantingDate == nil {
+				return nil, fmt.Errorf("planting_date is required when expected_harvest_date is provided")
+			}
+			if *farm.ExpectedHarvestDate < *farm.PlantingDate {
+				return nil, fmt.Errorf("expected_harvest_date must be greater than or equal to planting_date")
+			}
+		}
+
+		if farm.OwnerNationalID == nil {
+			return nil, fmt.Errorf("owner_national_id is required")
+		}
+
+		// Create farm in transaction
+		err = s.farmService.CreateFarmTx(farm, request.RegisteredPolicy.FarmerID, tx)
 		if err != nil {
 			slog.Error("error creating new farm", "error", err)
 			return nil, fmt.Errorf("error creating farm: %w", err)
 		}
+
+		slog.Info("new farm created successfully", "farm_id", farm.ID)
 	} else {
 		farm, err = s.farmService.GetByFarmID(ctx, request.FarmID)
 		if err != nil {
@@ -2502,7 +2540,6 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 }
 
 func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]interface{}, error) {
-
 	url := "https://agrisa-api.phrimp.io.vn/profile/protected/api/v1/insurance-partners/me/profile"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
