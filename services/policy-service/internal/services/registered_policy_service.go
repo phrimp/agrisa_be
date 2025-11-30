@@ -1664,7 +1664,7 @@ func fetchWeatherData(client *http.Client,
 	}
 
 	// Execute request with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	httpReq = httpReq.WithContext(ctx)
 

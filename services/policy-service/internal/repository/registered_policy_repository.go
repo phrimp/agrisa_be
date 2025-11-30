@@ -150,14 +150,26 @@ func (r *RegisteredPolicyRepository) Delete(id uuid.UUID) error {
 
 func (r *RegisteredPolicyRepository) GetAllPoliciesAndStatus() (map[uuid.UUID]models.PolicyStatus, error) {
 	query := `
-SELECT id, status
-FROM public.registered_policy where not status = 'rejected' or status = 'cancelled' or status = 'expired';
-	`
-	var queryResult map[uuid.UUID]models.PolicyStatus
-	err := r.db.Get(&queryResult, query)
-	if err != nil {
-		return queryResult, fmt.Errorf("error getting policy ids and status: %w", err)
+  		SELECT id, status
+  		FROM public.registered_policy 
+  		WHERE status NOT IN ('rejected', 'cancelled', 'expired')
+  	`
+
+	var results []struct {
+		ID     uuid.UUID           `db:"id"`
+		Status models.PolicyStatus `db:"status"`
 	}
+
+	err := r.db.Select(&results, query)
+	if err != nil {
+		return nil, fmt.Errorf("error getting policy ids and status: %w", err)
+	}
+
+	queryResult := make(map[uuid.UUID]models.PolicyStatus, len(results))
+	for _, row := range results {
+		queryResult[row.ID] = row.Status
+	}
+
 	return queryResult, nil
 }
 
