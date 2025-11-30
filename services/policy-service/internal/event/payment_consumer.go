@@ -3,6 +3,7 @@ package event
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"math"
 	"policy-service/internal/models"
@@ -56,31 +57,109 @@ type PaymentEventHandler interface {
 
 // PaymentConsumer consumes payment events from RabbitMQ
 type PaymentConsumer struct {
-	conn    *RabbitMQConnection
-	handler PaymentEventHandler
+	conn              *RabbitMQConnection
+	handler           PaymentEventHandler
+	messagesProcessed int64
+	messagesFailed    int64
+	lastMessageTime   time.Time
+	isRunning         bool
 }
 
 // NewPaymentConsumer creates a new payment event consumer
 func NewPaymentConsumer(conn *RabbitMQConnection, handler PaymentEventHandler) *PaymentConsumer {
 	return &PaymentConsumer{
-		conn:    conn,
-		handler: handler,
+		conn:            conn,
+		handler:         handler,
+		lastMessageTime: time.Now(),
+		isRunning:       false,
 	}
 }
 
-// Start begins consuming payment events
+// Start begins consuming payment events with automatic reconnection
 func (c *PaymentConsumer) Start(ctx context.Context) error {
-	// Declare the queue (ensure it exists)
-	_, err := c.conn.Channel.QueueDeclare(
+	slog.Info("Starting payment consumer with auto-reconnect")
+
+	c.isRunning = true
+
+	go func() {
+		defer func() {
+			c.isRunning = false
+		}()
+
+		for {
+			// Check if context is cancelled
+			select {
+			case <-ctx.Done():
+				slog.Info("Payment consumer stopped - context cancelled")
+				return
+			default:
+			}
+
+			// Start consumer loop (will block until error or context cancelled)
+			err := c.startConsumerLoop(ctx)
+
+			if ctx.Err() != nil {
+				slog.Info("Payment consumer stopped - context done")
+				return
+			}
+
+			if err != nil {
+				slog.Error("Payment consumer loop failed, reconnecting in 5 seconds",
+					"error", err)
+				time.Sleep(5 * time.Second)
+
+				// Attempt to recreate channel if connection is alive
+				if c.conn.Connection != nil && !c.conn.Connection.IsClosed() {
+					ch, chErr := c.conn.Connection.Channel()
+					if chErr == nil {
+						if c.conn.Channel != nil {
+							c.conn.Channel.Close() // Close old channel
+						}
+						c.conn.Channel = ch
+						slog.Info("RabbitMQ channel recreated successfully")
+					} else {
+						slog.Error("Failed to recreate channel",
+							"error", chErr)
+					}
+				} else {
+					slog.Error("RabbitMQ connection is closed, waiting for reconnection")
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+// startConsumerLoop runs the actual message consumption loop
+func (c *PaymentConsumer) startConsumerLoop(ctx context.Context) error {
+	// Configure QoS - limit to 10 unacked messages at a time
+	err := c.conn.Channel.Qos(
+		10,    // prefetch count - process 10 messages at a time
+		0,     // prefetch size (0 = no limit)
+		false, // global (false = apply to this channel only)
+	)
+	if err != nil {
+		return fmt.Errorf("failed to set QoS: %w", err)
+	}
+
+	// Declare the queue with dead letter queue configuration
+	args := amqp.Table{
+		"x-dead-letter-exchange":    "dlx.payment",
+		"x-dead-letter-routing-key": "payment_events.failed",
+		"x-message-ttl":             int64(86400000), // 24 hours in milliseconds
+	}
+
+	_, err = c.conn.Channel.QueueDeclare(
 		PaymentEventsQueue,
 		true,  // durable
 		false, // auto-delete
 		false, // exclusive
 		false, // no-wait
-		nil,   // arguments
+		args,  // arguments for DLQ
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to declare queue: %w", err)
 	}
 
 	// Start consuming messages
@@ -94,34 +173,38 @@ func (c *PaymentConsumer) Start(ctx context.Context) error {
 		nil,   // arguments
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to start consuming: %w", err)
 	}
 
-	slog.Info("Payment consumer started", "queue", PaymentEventsQueue)
+	slog.Info("Payment consumer started successfully",
+		"queue", PaymentEventsQueue,
+		"prefetch_count", 10)
 
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				slog.Info("Payment consumer stopped")
-				return
-			case msg, ok := <-msgs:
-				if !ok {
-					slog.Warn("Payment consumer channel closed")
-					return
-				}
-				c.processMessage(ctx, msg)
+	// Process messages until channel closes or context cancelled
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("Consumer loop stopping - context cancelled")
+			return nil
+		case msg, ok := <-msgs:
+			if !ok {
+				slog.Warn("Payment consumer channel closed")
+				return fmt.Errorf("message channel closed")
 			}
+			c.processMessage(ctx, msg)
 		}
-	}()
-
-	return nil
+	}
 }
 
 func (c *PaymentConsumer) processMessage(ctx context.Context, msg amqp.Delivery) {
+	// Add timeout to prevent hanging indefinitely
+	processCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	var event PaymentEvent
 	if err := json.Unmarshal(msg.Body, &event); err != nil {
 		slog.Error("failed to unmarshal payment event", "error", err)
+		c.messagesFailed++
 		// Reject the message and don't requeue (malformed message)
 		msg.Nack(false, false)
 		return
@@ -134,11 +217,12 @@ func (c *PaymentConsumer) processMessage(ctx context.Context, msg amqp.Delivery)
 		"status", event.Status,
 	)
 
-	if err := c.handler.HandlePaymentCompleted(ctx, event); err != nil {
+	if err := c.handler.HandlePaymentCompleted(processCtx, event); err != nil {
 		slog.Error("failed to handle payment event",
 			"payment_id", event.ID,
 			"error", err,
 		)
+		c.messagesFailed++
 		// Requeue the message for retry
 		msg.Nack(false, true)
 		return
@@ -146,6 +230,8 @@ func (c *PaymentConsumer) processMessage(ctx context.Context, msg amqp.Delivery)
 
 	// Acknowledge successful processing
 	msg.Ack(false)
+	c.messagesProcessed++
+	c.lastMessageTime = time.Now()
 	slog.Info("Payment event processed successfully", "payment_id", event.ID)
 }
 
@@ -171,18 +257,21 @@ func NewDefaultPaymentEventHandler(
 
 // HandlePaymentCompleted handles a completed payment event
 func (h *DefaultPaymentEventHandler) HandlePaymentCompleted(ctx context.Context, event PaymentEvent) error {
-	// Validate payment event type
+	// Validate payment event type - CRITICAL: must return error to retry
 	if event.Type == nil {
-		slog.Warn("payment event has no type", "payment_id", event.ID)
-		return nil
+		return &PaymentValidationError{
+			PaymentID: event.ID,
+			Reason:    "payment event has no type",
+		}
 	}
 
-	// Verify payment status (common validation for all payment types)
+	// Verify payment status - CRITICAL: must return error to retry
+	// This could be a timing issue where event was sent before payment completed
 	if event.Status != "paid" && event.Status != "completed" {
-		slog.Warn("payment not in paid status",
-			"payment_id", event.ID,
-			"status", event.Status)
-		return nil
+		return &PaymentValidationError{
+			PaymentID: event.ID,
+			Reason:    fmt.Sprintf("payment not in paid/completed status: %s", event.Status),
+		}
 	}
 
 	// Validate payment has PaidAt timestamp (common validation for all payment types)
@@ -299,10 +388,12 @@ func (h *DefaultPaymentEventHandler) HandlePaymentCompleted(ctx context.Context,
 	// ============================================================================
 
 	default:
-		slog.Info("unsupported payment type, skipping",
-			"payment_id", event.ID,
-			"type", *event.Type)
-		return nil
+		// CRITICAL: Return error for unsupported types to allow retry
+		// This could be a new payment type that hasn't been deployed yet
+		return &PaymentValidationError{
+			PaymentID: event.ID,
+			Reason:    fmt.Sprintf("unsupported payment type: %s", *event.Type),
+		}
 	}
 }
 
@@ -498,4 +589,91 @@ type MonitoringError struct {
 
 func (e *MonitoringError) Error() string {
 	return "monitoring setup failed: " + e.Reason + " (policy_id: " + e.PolicyID.String() + ")"
+}
+
+// ConsumerHealthStatus represents the health status of the payment consumer
+type ConsumerHealthStatus struct {
+	IsHealthy         bool      `json:"is_healthy"`
+	IsRunning         bool      `json:"is_running"`
+	MessagesProcessed int64     `json:"messages_processed"`
+	MessagesFailed    int64     `json:"messages_failed"`
+	LastMessageTime   time.Time `json:"last_message_time"`
+	ConnectionStatus  string    `json:"connection_status"`
+	HealthMessage     string    `json:"health_message,omitempty"`
+}
+
+// HealthCheck returns the current health status of the consumer
+func (c *PaymentConsumer) HealthCheck() ConsumerHealthStatus {
+	status := ConsumerHealthStatus{
+		IsRunning:         c.isRunning,
+		MessagesProcessed: c.messagesProcessed,
+		MessagesFailed:    c.messagesFailed,
+		LastMessageTime:   c.lastMessageTime,
+	}
+
+	// Check connection status
+	if c.conn.Connection == nil || c.conn.Connection.IsClosed() {
+		status.ConnectionStatus = "disconnected"
+		status.IsHealthy = false
+		status.HealthMessage = "RabbitMQ connection is closed"
+		return status
+	}
+
+	status.ConnectionStatus = "connected"
+
+	// Check if consumer is running
+	if !c.isRunning {
+		status.IsHealthy = false
+		status.HealthMessage = "Consumer is not running"
+		return status
+	}
+
+	// Check if we've processed messages recently (within last 10 minutes)
+	// This check is only relevant if we've processed at least one message
+	if c.messagesProcessed > 0 {
+		timeSinceLastMessage := time.Since(c.lastMessageTime)
+		if timeSinceLastMessage > 10*time.Minute {
+			status.IsHealthy = false
+			status.HealthMessage = fmt.Sprintf("No messages processed in last %v", timeSinceLastMessage)
+			return status
+		}
+	}
+
+	// Check failure rate
+	if c.messagesProcessed > 0 {
+		totalMessages := c.messagesProcessed + c.messagesFailed
+		failureRate := float64(c.messagesFailed) / float64(totalMessages)
+		if failureRate > 0.5 {
+			status.IsHealthy = false
+			status.HealthMessage = fmt.Sprintf("High failure rate: %.1f%%", failureRate*100)
+			return status
+		}
+	}
+
+	status.IsHealthy = true
+	status.HealthMessage = "Consumer is healthy"
+	return status
+}
+
+// GetMetrics returns consumer metrics
+func (c *PaymentConsumer) GetMetrics() map[string]interface{} {
+	return map[string]interface{}{
+		"messages_processed":  c.messagesProcessed,
+		"messages_failed":     c.messagesFailed,
+		"last_message_time":   c.lastMessageTime,
+		"is_running":          c.isRunning,
+		"connection_alive":    c.conn.Connection != nil && !c.conn.Connection.IsClosed(),
+		"total_messages":      c.messagesProcessed + c.messagesFailed,
+		"success_rate":        c.calculateSuccessRate(),
+		"time_since_last_msg": time.Since(c.lastMessageTime).String(),
+	}
+}
+
+// calculateSuccessRate calculates the success rate of message processing
+func (c *PaymentConsumer) calculateSuccessRate() float64 {
+	total := c.messagesProcessed + c.messagesFailed
+	if total == 0 {
+		return 100.0
+	}
+	return (float64(c.messagesProcessed) / float64(total)) * 100.0
 }

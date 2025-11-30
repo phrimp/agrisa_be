@@ -94,20 +94,20 @@ func main() {
 	app.Get("/checkhealth", func(c fiber.Ctx) error {
 		return c.Status(fiber.StatusOK).SendString("Policy service is healthy")
 	})
+
+	// Health check endpoint for payment consumer (will be registered after consumer is initialized)
+	var paymentConsumerHealthHandler fiber.Handler
 	redisClient, err := redis.NewRedisClient(cfg.RedisCfg.Host, cfg.RedisCfg.Port, cfg.RedisCfg.Password, cfg.RedisCfg.DB)
 	if err != nil {
 		log.Printf("error connect to redis: %s", err)
 	}
 
-	// Initialize RabbitMQ connection
+	// Initialize RabbitMQ connection - CRITICAL for payment processing
 	rabbitConn, err := event.ConnectRabbitMQ(cfg.RabbitMQCfg)
 	if err != nil {
-		log.Printf("error connecting to RabbitMQ: %s", err)
-		log.Println("Warning: Payment event consumer will be disabled")
+		log.Fatalf("CRITICAL: Cannot start policy service without RabbitMQ connection: %v", err)
 	}
-	if rabbitConn != nil {
-		defer rabbitConn.Close()
-	}
+	defer rabbitConn.Close()
 
 	keys := strings.SplitSeq(cfg.GeminiAPICfg.APIKey, ",")
 	for key := range keys {
@@ -165,15 +165,28 @@ func main() {
 	}()
 
 	// Start payment event consumer
-	if rabbitConn != nil {
-		paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyService, registeredPolicyRepo, workerManager)
-		paymentConsumer := event.NewPaymentConsumer(rabbitConn, paymentHandler)
-		if err := paymentConsumer.Start(ctx); err != nil {
-			log.Printf("error starting payment consumer: %v", err)
-		} else {
-			log.Println("Payment event consumer started successfully")
-		}
+	paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyService, registeredPolicyRepo, workerManager)
+	paymentConsumer := event.NewPaymentConsumer(rabbitConn, paymentHandler)
+	if err := paymentConsumer.Start(ctx); err != nil {
+		log.Printf("error starting payment consumer: %v", err)
+	} else {
+		log.Println("Payment event consumer started successfully")
 	}
+
+	// Register health check endpoint for payment consumer
+	paymentConsumerHealthHandler = func(c fiber.Ctx) error {
+		status := paymentConsumer.HealthCheck()
+		if status.IsHealthy {
+			return c.JSON(status)
+		}
+		return c.Status(fiber.StatusServiceUnavailable).JSON(status)
+	}
+
+	// Register metrics endpoint for payment consumer
+	app.Get("/metrics/payment-consumer", func(c fiber.Ctx) error {
+		metrics := paymentConsumer.GetMetrics()
+		return c.JSON(metrics)
+	})
 
 	go func() {
 		retryWait := 0.5
@@ -227,6 +240,9 @@ func main() {
 	policyHandler.Register(app)
 	basePolicyTriggerHandler.Register(app)
 	riskAnalysisHandler.Register(app)
+
+	// Register payment consumer health check endpoint
+	app.Get("/health/payment-consumer", paymentConsumerHealthHandler)
 
 	shutdownChan := make(chan os.Signal, 1)
 	doneChan := make(chan bool, 1)
