@@ -25,6 +25,10 @@ export const publisher = async (data) => {
     const payload = {
       ...data,
       amount: parseFloat(data.amount),
+      orderItems: data.orderItems?.map((item) => ({
+        ...item,
+        price: parseFloat(item.price),
+      })),
     };
 
     channel.sendToQueue(queue, Buffer.from(JSON.stringify(payload)), {
