@@ -5,12 +5,15 @@ export const publisher = async (data) => {
   const { connection, channel } = await connectRabbitMQ();
 
   try {
+    await channel.confirmSelect();
+
     await channel.assertQueue(queue, {
       durable: true,
       autoDelete: false,
       exclusive: false,
       arguments: null,
     });
+
     channel.sendToQueue(queue, Buffer.from(JSON.stringify(data)), {
       persistent: true,
     });
