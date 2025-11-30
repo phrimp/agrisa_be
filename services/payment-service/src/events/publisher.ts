@@ -2,14 +2,23 @@ import { connectRabbitMQ } from 'src/libs/rabbitmq.config';
 
 export const publisher = async (data) => {
   const queue = 'payment_events';
+  const dlxExchange = 'dlx.payment';
   const { connection, channel } = await connectRabbitMQ();
 
   try {
+    // Declare the dead-letter exchange
+    await channel.assertExchange(dlxExchange, 'topic', {
+      durable: true,
+    });
+
+    // Assert queue with dead-letter exchange configuration
     await channel.assertQueue(queue, {
       durable: true,
       autoDelete: false,
       exclusive: false,
-      arguments: null,
+      arguments: {
+        'x-dead-letter-exchange': dlxExchange,
+      },
     });
 
     channel.sendToQueue(queue, Buffer.from(JSON.stringify(data)), {
