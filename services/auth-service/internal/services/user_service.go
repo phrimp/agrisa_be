@@ -42,6 +42,7 @@ type IUserService interface {
 	VerifyLandCertificate(userID string, NationalIDInput string) (result bool, err error)
 	CheckExistEmailOrPhone(input string) (bool, error)
 	GetUserCardByUserID(userID string) (*models.UserCard, error)
+	ResetEkycData(userID string) error
 }
 
 type UserService struct {
@@ -1324,4 +1325,18 @@ func (s *UserService) CheckExistEmailOrPhone(input string) (bool, error) {
 
 func (s *UserService) GetUserCardByUserID(userID string) (*models.UserCard, error) {
 	return s.userCardRepo.GetUserCardByUserID(userID)
+}
+
+func (s *UserService) ResetEkycData(userID string) error {
+	user, err := s.userRepo.GetUserByID(userID)
+	if err != nil {
+		slog.Error("user not found when resetting ekyc data", "user_id", userID)
+		return fmt.Errorf("note_found: user not found")
+	}
+
+	err = s.userRepo.ResetEkycData(user.ID)
+	if err != nil {
+		return fmt.Errorf("failed to delete user card data: %w", err)
+	}
+	return nil
 }

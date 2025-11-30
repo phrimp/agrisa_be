@@ -30,6 +30,7 @@ type IUserRepository interface {
 	UpdateUserKycStatus(userID string, kycVerified bool) error
 	UpdateUserStatus(userID string, status models.UserStatus, lockedUntil *int64) error
 	CheckExistEmailOrPhone(value string) (bool, error)
+	ResetEkycData(userID string) error
 }
 
 type UserRepository struct {
@@ -388,4 +389,90 @@ func (r *UserRepository) CheckExistEmailOrPhone(value string) (bool, error) {
 		return false, fmt.Errorf("failed to check existence of email or phone: %w", err)
 	}
 	return exists, nil
+}
+
+func (r *UserRepository) ResetEkycData(userID string) error {
+	// Begin transaction
+	tx, err := r.db.Beginx()
+	if err != nil {
+		slog.Error("Failed to begin transaction", "error", err)
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	// Ensure rollback if anything goes wrong
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	// Query 1: Update users table
+	updateUsersQuery := `
+        UPDATE users
+        SET kyc_verified = false,
+            face_liveness = '',
+            updated_at = NOW()
+        WHERE id = $1
+    `
+	result, err := tx.Exec(updateUsersQuery, userID)
+	if err != nil {
+		slog.Error("Failed to update users table", "error", err)
+		return fmt.Errorf("failed to update users table: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		slog.Error("Failed to check rows affected on users", "error", err)
+		return fmt.Errorf("failed to check rows affected on users: %w", err)
+	}
+	if rowsAffected == 0 {
+		slog.Error("No user found with id", "userID", userID)
+		return fmt.Errorf("user not found with id: %s", userID)
+	}
+
+	// Query 2: Update user_ekyc_progress table
+	updateEkycProgressQuery := `
+        UPDATE user_ekyc_progress
+        SET is_ocr_done = false,
+            ocr_done_at = NULL,
+            is_face_verified = false,
+            face_verified_at = NULL,
+            cic_no = ''
+        WHERE user_id = $1
+    `
+	result, err = tx.Exec(updateEkycProgressQuery, userID)
+	if err != nil {
+		slog.Error("Failed to update user_ekyc_progress table", "error", err)
+		return fmt.Errorf("failed to update user_ekyc_progress table: %w", err)
+	}
+
+	rowsAffected, err = result.RowsAffected()
+	if err != nil {
+		slog.Error("Failed to check rows affected on user_ekyc_progress", "error", err)
+		return fmt.Errorf("failed to check rows affected on user_ekyc_progress: %w", err)
+	}
+	if rowsAffected == 0 {
+		slog.Error("No ekyc progress found for user", "userID", userID)
+		return fmt.Errorf("user_ekyc_progress not found for user_id: %s", userID)
+	}
+
+	// Query 3: Delete from user_card table
+	deleteUserCardQuery := `
+        DELETE FROM user_card
+        WHERE user_id = $1
+    `
+	_, err = tx.Exec(deleteUserCardQuery, userID)
+	if err != nil {
+		slog.Error("Failed to delete from user_card table", "error", err)
+		return fmt.Errorf("failed to delete from user_card table: %w", err)
+	}
+	// Note: No need to check rowsAffected for delete, user may not have cards yet
+
+	// Commit transaction
+	if err = tx.Commit(); err != nil {
+		slog.Error("Failed to commit transaction", "error", err)
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }

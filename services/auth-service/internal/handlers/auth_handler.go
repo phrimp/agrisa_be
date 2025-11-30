@@ -47,7 +47,7 @@ func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
 	sessionGr.GET("/all", a.GetAllSessions)
 	sessionGr.POST("/verify-land-certificate", a.VerifyLandCertificate)
 	sessionGr.GET("/cards", a.GetCard)
-
+	sessionGr.POST("/reset-ekyc", a.ResetEkycData)
 }
 
 func (a *AuthHandler) InitDefaultUser(cfg config.AuthServiceConfig) error {
@@ -496,5 +496,31 @@ func (a *AuthHandler) GetCard(c *gin.Context) {
 	}
 
 	response := utils.CreateSuccessResponse(userCard)
+	c.JSON(http.StatusOK, response)
+}
+
+func (a *AuthHandler) ResetEkycData(c *gin.Context) {
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		slog.Error("Missing X-User-ID header in ResetEkycData request")
+		errorResponse := utils.CreateErrorResponse("UNAUTHORIZED", "Invalid session")
+		c.JSON(http.StatusUnauthorized, errorResponse)
+		return
+	}
+
+	err := a.userService.ResetEkycData(userID)
+	if err != nil {
+		if strings.Contains(err.Error(), "not_found") {
+			errorResponse := utils.CreateErrorResponse("NOT_FOUND", "User not found")
+			c.JSON(http.StatusNotFound, errorResponse)
+			return
+		}
+
+		errorResponse := utils.CreateErrorResponse("INTERNAL_ERROR", "Failed to reset ekyc data")
+		c.JSON(http.StatusInternalServerError, errorResponse)
+		return
+	}
+
+	response := utils.CreateSuccessResponse("success")
 	c.JSON(http.StatusOK, response)
 }
