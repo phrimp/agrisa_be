@@ -151,7 +151,7 @@ func (s *RegisteredPolicyService) ArchiveExpiredPolicy(ctx context.Context, poli
 }
 
 // RecoverActivePolicies recovers worker infrastructure for all active policies after restart
-func (s *RegisteredPolicyService) RecoverActivePolicies(ctx context.Context) error {
+func (s *RegisteredPolicyService) RecoverPolicies(ctx context.Context) error {
 	slog.Info("Recovering active policy worker infrastructure")
 
 	// Load active policy IDs from database

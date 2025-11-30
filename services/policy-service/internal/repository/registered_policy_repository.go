@@ -148,6 +148,19 @@ func (r *RegisteredPolicyRepository) Delete(id uuid.UUID) error {
 	return nil
 }
 
+func (r *RegisteredPolicyRepository) GetAllPoliciesAndStatus() (map[uuid.UUID]models.PolicyStatus, error) {
+	query := `
+SELECT id, status
+FROM public.registered_policy where not status = 'rejected' or status = 'cancelled' or status = 'expired';
+	`
+	var queryResult map[uuid.UUID]models.PolicyStatus
+	err := r.db.Get(&queryResult, query)
+	if err != nil {
+		return queryResult, fmt.Errorf("error getting policy ids and status: %w", err)
+	}
+	return queryResult, nil
+}
+
 // GetByIDWithFarm retrieves a registered policy with farm details using FastAssembleWithPrefix
 func (r *RegisteredPolicyRepository) GetByIDWithFarm(id uuid.UUID) (*models.RegisteredPolicyWFarm, error) {
 	query := `
@@ -1070,7 +1083,6 @@ func (r *RegisteredPolicyRepository) GetMonthlyDataCostByProvider(
 		startTimestamp,
 		endTimestamp,
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get monthly data cost: %w", err)
 	}
