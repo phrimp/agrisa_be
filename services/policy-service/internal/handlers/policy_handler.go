@@ -52,8 +52,8 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 	partnerGroup.Get("/detail/:id", h.GetPartnerPolicyDetail)                                 // GET /policies/read-partner/detail/:id
 	partnerGroup.Get("/stats", h.GetPartnerPolicyStats)                                       // GET /policies/read-partner/stats
 	partnerGroup.Get("/monitoring-data/:farm_id/:parameter_name", h.GetPartnerMonitoringData) // GET /policies/read-partner/monitoring-data/:farm_id/:parameter_name
-	partnerUpdateGroup := policyGroup.Group("/create-partner")
-	partnerUpdateGroup.Post("/underwriting/:id", h.CreatePartnerPolicyUnderwriting) // PATCH /policies/update-partner/underwriting/:id]
+	partnerCreateGroup := policyGroup.Group("/create-partner")
+	partnerCreateGroup.Post("/underwriting/:id", h.CreatePartnerPolicyUnderwriting) // PATCH /policies/update-partner/underwriting/:id]
 	partnerGroup.Post("/monthly-data-cost", h.GetMonthlyDataCost)
 
 	// Admin routes - full access to all policies
@@ -347,7 +347,7 @@ func (h *PolicyHandler) GetPartnerPolicies(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
 	}
 
-	//partnerProfileID := partnerProfileData["partner_id"].(string)
+	// partnerProfileID := partnerProfileData["partner_id"].(string)
 
 	// userID is the insurance provider ID for partners
 	policies, err := h.registeredPolicyService.GetPoliciesByProviderID(partnerID)
@@ -528,9 +528,22 @@ func (h *PolicyHandler) CreatePartnerPolicyUnderwriting(c fiber.Ctx) error {
 	// TODO: Add authorization check - verify user belongs to the insurance provider
 	// This will need a profile service call to check if user exists in insurance provider profile
 	// For now, we log a warning but allow the operation
-	slog.Warn("Authorization check not fully implemented",
-		"user_id", userID,
-		"insurance_provider_id", policy.InsuranceProviderID)
+
+	tokenString := c.Get("Authorization")
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	slog.Info("Fetching partner policies token: ", "token", token)
+	// calling api to get profile by token
+	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+	}
+
+	if policy.InsuranceProviderID != partnerProfileData["partner_id"].(string) {
+		return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "Cannot underwrite others policies"))
+	}
 
 	// Call service to create underwriting
 	response, err := h.registeredPolicyService.CreatePartnerPolicyUnderwriting(
@@ -950,7 +963,6 @@ func (h *PolicyHandler) GetMonitoringDataByFarm(c fiber.Ctx) error {
 }
 
 func (h *PolicyHandler) GetMonthlyDataCost(c fiber.Ctx) error {
-
 	var request models.MonthlyDataCostRequest
 
 	if err := c.Bind().Body(&request); err != nil {

@@ -299,3 +299,12 @@ func (h *RiskAnalysisHandler) Delete(c fiber.Ctx) error {
 		"deleted_id": id,
 	}))
 }
+
+func (h *RiskAnalysisHandler) Create(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+	return nil
+}
