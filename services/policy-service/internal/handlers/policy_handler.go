@@ -16,11 +16,13 @@ import (
 
 type PolicyHandler struct {
 	registeredPolicyService *services.RegisteredPolicyService
+	riskAnalysisService     *services.RiskAnalysisCRUDService
 }
 
-func NewPolicyHandler(registeredPolicyService *services.RegisteredPolicyService) *PolicyHandler {
+func NewPolicyHandler(registeredPolicyService *services.RegisteredPolicyService, riskAnalysisService *services.RiskAnalysisCRUDService) *PolicyHandler {
 	return &PolicyHandler{
 		registeredPolicyService: registeredPolicyService,
+		riskAnalysisService:     riskAnalysisService,
 	}
 }
 
@@ -68,6 +70,10 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 	adminUpdateGroup := policyGroup.Group("/update-any")
 	adminUpdateGroup.Patch("/status/:id", h.UpdatePolicyStatusAdmin)             // PATCH /policies/update-any/status/:id
 	adminUpdateGroup.Patch("/underwriting/:id", h.UpdatePolicyUnderwritingAdmin) // PATCH /policies/update-any/underwriting/:id
+
+	// Admin test routes
+	adminTestGroup := policyGroup.Group("/test")
+	adminTestGroup.Post("/trigger-claim/:policy_id", h.TestTriggerClaim) // POST /policies/test/trigger-claim/:policy_id - Test claim generation with injected data
 }
 
 // ============================================================================
@@ -525,9 +531,11 @@ func (h *PolicyHandler) CreatePartnerPolicyUnderwriting(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve policy"))
 	}
 
-	// TODO: Add authorization check - verify user belongs to the insurance provider
-	// This will need a profile service call to check if user exists in insurance provider profile
-	// For now, we log a warning but allow the operation
+	// Verify if risk analysis exists
+	_, err = h.riskAnalysisService.GetByPolicyID(c.Context(), policyID)
+	if err != nil {
+		return c.Status(http.StatusNotFound).JSON(utils.CreateErrorResponse("NOT_FOUND", "Risk analysis not found: 1 risk analysis is require for underwriting"))
+	}
 
 	tokenString := c.Get("Authorization")
 
@@ -1031,4 +1039,90 @@ func (h *PolicyHandler) getPartnerIDFromToken(c fiber.Ctx) (string, error) {
 	}
 
 	return partnerID, nil
+}
+
+// ============================================================================
+// ADMIN TEST OPERATIONS
+// ============================================================================
+
+// TestTriggerClaim tests claim generation by injecting monitoring data
+func (h *PolicyHandler) TestTriggerClaim(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	// Parse policy ID from URL
+	policyIDStr := c.Params("policy_id")
+	policyID, err := uuid.Parse(policyIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid policy ID format"))
+	}
+
+	// Parse request body
+	var req struct {
+		MonitoringData []map[string]interface{} `json:"monitoring_data" binding:"required"`
+		CheckPolicy    bool                     `json:"check_policy"`
+	}
+
+	if err := c.Bind().JSON(&req); err != nil {
+		slog.Error("Failed to parse request body", "error", err)
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
+	}
+
+	// Validate monitoring data
+	if len(req.MonitoringData) == 0 {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("VALIDATION_ERROR", "monitoring_data is required and must not be empty"))
+	}
+
+	// Prepare job parameters
+	params := map[string]any{
+		"policy_id":    policyID.String(),
+		"start_date":   float64(0), // Not used in test mode
+		"end_date":     float64(0), // Not used in test mode
+		"check_policy": req.CheckPolicy,
+		"inject_test":  convertToInterfaceSlice(req.MonitoringData),
+	}
+
+	slog.Info("Test claim trigger requested",
+		"policy_id", policyID,
+		"user_id", userID,
+		"test_data_count", len(req.MonitoringData),
+		"check_policy", req.CheckPolicy)
+
+	// Execute the job with test data
+	err = h.registeredPolicyService.FetchFarmMonitoringDataJob(params)
+	if err != nil {
+		slog.Error("Failed to execute test claim trigger",
+			"policy_id", policyID,
+			"user_id", userID,
+			"error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("TEST_FAILED", "Failed to trigger test claim: "+err.Error()))
+	}
+
+	slog.Info("Test claim trigger completed successfully",
+		"policy_id", policyID,
+		"user_id", userID)
+
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+		"message":           "Test claim trigger executed successfully",
+		"policy_id":         policyID,
+		"test_data_count":   len(req.MonitoringData),
+		"check_policy":      req.CheckPolicy,
+		"monitoring_stored": true,
+	}))
+}
+
+// Helper function to convert []map[string]interface{} to []interface{}
+func convertToInterfaceSlice(data []map[string]interface{}) []interface{} {
+	result := make([]interface{}, len(data))
+	for i, item := range data {
+		result[i] = item
+	}
+	return result
 }

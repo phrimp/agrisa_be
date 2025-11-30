@@ -4,9 +4,11 @@ import (
 	utils "agrisa_utils"
 	"log/slog"
 	"net/http"
+	"policy-service/internal/models"
 	"policy-service/internal/services"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
@@ -54,6 +56,10 @@ func (h *RiskAnalysisHandler) Register(app *fiber.App) {
 	// Admin delete routes
 	adminDeleteGroup := riskGroup.Group("/delete-any")
 	adminDeleteGroup.Delete("/:id", h.Delete) // DELETE /risk-analysis/delete-any/:id
+
+	// Admin/Partner create routes
+	createGroup := riskGroup.Group("/create")
+	createGroup.Post("/", h.Create) // POST /risk-analysis/create
 }
 
 // ============================================================================
@@ -300,11 +306,87 @@ func (h *RiskAnalysisHandler) Delete(c fiber.Ctx) error {
 	}))
 }
 
+// Create creates a new risk analysis
 func (h *RiskAnalysisHandler) Create(c fiber.Ctx) error {
 	userID := c.Get("X-User-ID")
 	if userID == "" {
 		return c.Status(http.StatusUnauthorized).JSON(
 			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
 	}
-	return nil
+
+	// Parse request body
+	var req struct {
+		RegisteredPolicyID uuid.UUID                `json:"registered_policy_id" binding:"required"`
+		AnalysisStatus     string                   `json:"analysis_status" binding:"required"`
+		AnalysisType       string                   `json:"analysis_type" binding:"required"`
+		AnalysisSource     *string                  `json:"analysis_source,omitempty"`
+		OverallRiskScore   *float64                 `json:"overall_risk_score,omitempty"`
+		OverallRiskLevel   *string                  `json:"overall_risk_level,omitempty"`
+		IdentifiedRisks    map[string]interface{}   `json:"identified_risks,omitempty"`
+		Recommendations    map[string]interface{}   `json:"recommendations,omitempty"`
+		RawOutput          map[string]interface{}   `json:"raw_output,omitempty"`
+		AnalysisNotes      *string                  `json:"analysis_notes,omitempty"`
+	}
+
+	if err := c.Bind().JSON(&req); err != nil {
+		slog.Error("Failed to parse request body", "error", err)
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
+	}
+
+	// Validate required fields
+	if req.RegisteredPolicyID == uuid.Nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("VALIDATION_ERROR", "registered_policy_id is required"))
+	}
+
+	if req.AnalysisStatus == "" {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("VALIDATION_ERROR", "analysis_status is required"))
+	}
+
+	if req.AnalysisType == "" {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("VALIDATION_ERROR", "analysis_type is required"))
+	}
+
+	// Create risk analysis model
+	analysis := &models.RegisteredPolicyRiskAnalysis{
+		ID:                 uuid.New(),
+		RegisteredPolicyID: req.RegisteredPolicyID,
+		AnalysisStatus:     models.ValidationStatus(req.AnalysisStatus),
+		AnalysisType:       models.RiskAnalysisType(req.AnalysisType),
+		AnalysisSource:     req.AnalysisSource,
+		AnalysisTimestamp:  time.Now().Unix(),
+		OverallRiskScore:   req.OverallRiskScore,
+		IdentifiedRisks:    req.IdentifiedRisks,
+		Recommendations:    req.Recommendations,
+		RawOutput:          req.RawOutput,
+		AnalysisNotes:      req.AnalysisNotes,
+	}
+
+	// Set overall risk level if provided
+	if req.OverallRiskLevel != nil {
+		riskLevel := models.RiskLevel(*req.OverallRiskLevel)
+		analysis.OverallRiskLevel = &riskLevel
+	}
+
+	// Create risk analysis
+	err := h.riskAnalysisService.Create(c.Context(), analysis)
+	if err != nil {
+		if strings.Contains(err.Error(), "policy not found") {
+			return c.Status(http.StatusNotFound).JSON(
+				utils.CreateErrorResponse("POLICY_NOT_FOUND", "Registered policy not found"))
+		}
+		slog.Error("Failed to create risk analysis", "user_id", userID, "policy_id", req.RegisteredPolicyID, "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("CREATION_FAILED", "Failed to create risk analysis"))
+	}
+
+	slog.Info("Risk analysis created successfully", "id", analysis.ID, "policy_id", req.RegisteredPolicyID, "user_id", userID)
+
+	return c.Status(http.StatusCreated).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+		"message":         "Risk analysis created successfully",
+		"risk_analysis":   analysis,
+	}))
 }

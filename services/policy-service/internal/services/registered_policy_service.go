@@ -354,6 +354,26 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	// Extract optional check_policy parameter (defaults to false)
 	checkPolicy, _ := params["check_policy"].(bool)
 
+	// Extract optional inject_test parameter for testing claim generation
+	// inject_test should be an array of FarmMonitoringData objects
+	var testMonitoringData []models.FarmMonitoringData
+	if injectTestRaw, ok := params["inject_test"]; ok {
+		// Parse test data from parameter
+		if testDataArray, ok := injectTestRaw.([]interface{}); ok {
+			for _, item := range testDataArray {
+				if testDataMap, ok := item.(map[string]interface{}); ok {
+					// Convert map to FarmMonitoringData
+					testData := parseFarmMonitoringDataFromMap(testDataMap, farmID)
+					testMonitoringData = append(testMonitoringData, testData)
+				}
+			}
+			slog.Info("Test monitoring data injected for testing",
+				"policy_id", policyID,
+				"farm_id", farmID,
+				"test_data_count", len(testMonitoringData))
+		}
+	}
+
 	// Get triggers and conditions for this base policy
 	triggers, err := s.basePolicyRepo.GetBasePolicyTriggersByPolicyID(basePolicyID)
 	if err != nil {
@@ -457,8 +477,78 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 	ctx := context.Background()
 
+	// Initialize result variables
+	var allMonitoringData []models.FarmMonitoringData
+	var agroPolygonID string
+
+	// If test data is injected, skip API fetching and use test data directly
+	if len(testMonitoringData) > 0 {
+		slog.Info("Using injected test data, skipping API fetch",
+			"policy_id", policyID,
+			"farm_id", farmID,
+			"test_records", len(testMonitoringData))
+
+		allMonitoringData = testMonitoringData
+
+		// Store test monitoring data in database for consistency
+		if err := s.farmMonitoringDataRepo.CreateBatch(ctx, allMonitoringData); err != nil {
+			return fmt.Errorf("failed to store test monitoring data: %w", err)
+		}
+		slog.Info("Test monitoring data stored successfully",
+			"farm_id", farmID,
+			"total_records", len(allMonitoringData))
+
+		// Check policy trigger conditions with test data
+		if checkPolicy && len(allMonitoringData) > 0 {
+			slog.Info("Checking policy trigger conditions with test data",
+				"policy_id", policyID,
+				"farm_id", farmID,
+				"data_points", len(allMonitoringData))
+
+			// Evaluate trigger conditions against test data
+			triggeredConditions := s.evaluateTriggerConditions(ctx, triggers, allMonitoringData, farmID)
+
+			if len(triggeredConditions) > 0 {
+				slog.Info("Trigger conditions satisfied with test data",
+					"policy_id", policyID,
+					"triggered_conditions", len(triggeredConditions))
+
+				// Generate Claim
+				claim, err := s.generateClaimFromTrigger(ctx, policyID, basePolicyID, farmID, triggers[0].ID, triggeredConditions)
+				if err != nil {
+					slog.Error("Failed to generate claim from trigger",
+						"policy_id", policyID,
+						"error", err)
+				} else {
+					slog.Info("Claim generated successfully from test data",
+						"claim_id", claim.ID,
+						"claim_number", claim.ClaimNumber,
+						"claim_amount", claim.ClaimAmount,
+						"policy_id", policyID)
+
+					for _, tc := range triggeredConditions {
+						slog.Info("Triggered condition details",
+							"claim_id", claim.ID,
+							"condition_id", tc.ConditionID,
+							"parameter", tc.ParameterName,
+							"measured_value", tc.MeasuredValue,
+							"threshold_value", tc.ThresholdValue,
+							"operator", tc.Operator,
+							"consecutive_days", tc.ConsecutiveDays,
+							"is_early_warning", tc.IsEarlyWarning)
+					}
+				}
+			}
+		}
+
+		// Schedule risk analysis
+		scheduler.AddJob(riskAnalysisJob)
+		return nil
+	}
+
 	// Load farm to get boundary coordinates
-	farm, err := s.farmService.GetByFarmID(ctx, farmID.String())
+	var farm *models.Farm
+	farm, err = s.farmService.GetByFarmID(ctx, farmID.String())
 	if err != nil {
 		return fmt.Errorf("failed to load farm: %w", err)
 	}
@@ -555,10 +645,8 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	}
 
 	// Collect results from all workers
-	allMonitoringData := []models.FarmMonitoringData{}
 	errorSummary := make(map[models.DataSourceParameterName]error)
 	skipSummary := make(map[models.DataSourceParameterName]string)
-	var agroPolygonID string // Store polygon ID from weather API
 
 	for i := 0; i < jobsEnqueued; i++ {
 		resp := <-results
@@ -618,24 +706,26 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		}
 	}
 
-	// Log summary
-	successCount := len(conditionsWithDataSources) - len(errorSummary) - len(skipSummary)
-	successRate := float64(successCount) / float64(len(conditionsWithDataSources)) * 100
+	// Log summary (only for non-test data path)
+	if len(testMonitoringData) == 0 {
+		successCount := len(conditionsWithDataSources) - len(errorSummary) - len(skipSummary)
+		successRate := float64(successCount) / float64(len(conditionsWithDataSources)) * 100
 
-	slog.Info("Farm monitoring data fetch completed",
-		"policy_id", policyID,
-		"farm_id", farmID,
-		"base_policy_id", basePolicyID,
-		"total_conditions", len(conditionsWithDataSources),
-		"successful", successCount,
-		"failed", len(errorSummary),
-		"skipped", len(skipSummary),
-		"success_rate", fmt.Sprintf("%.1f%%", successRate),
-		"records_stored", len(allMonitoringData))
+		slog.Info("Farm monitoring data fetch completed",
+			"policy_id", policyID,
+			"farm_id", farmID,
+			"base_policy_id", basePolicyID,
+			"total_conditions", len(conditionsWithDataSources),
+			"successful", successCount,
+			"failed", len(errorSummary),
+			"skipped", len(skipSummary),
+			"success_rate", fmt.Sprintf("%.1f%%", successRate),
+			"records_stored", len(allMonitoringData))
 
-	// Only fail if ALL sources failed
-	if len(errorSummary) == len(conditionsWithDataSources) {
-		return fmt.Errorf("all %d data sources failed to fetch", len(conditionsWithDataSources))
+		// Only fail if ALL sources failed
+		if len(errorSummary) == len(conditionsWithDataSources) {
+			return fmt.Errorf("all %d data sources failed to fetch", len(conditionsWithDataSources))
+		}
 	}
 
 	// Check policy trigger conditions if enabled
@@ -1899,6 +1989,71 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// parseFarmMonitoringDataFromMap converts a map to FarmMonitoringData for test injection
+func parseFarmMonitoringDataFromMap(dataMap map[string]interface{}, farmID uuid.UUID) models.FarmMonitoringData {
+	data := models.FarmMonitoringData{
+		ID:     uuid.New(),
+		FarmID: farmID,
+	}
+
+	// Parse BasePolicyTriggerConditionID
+	if condIDStr, ok := dataMap["base_policy_trigger_condition_id"].(string); ok {
+		if condID, err := uuid.Parse(condIDStr); err == nil {
+			data.BasePolicyTriggerConditionID = condID
+		}
+	}
+
+	// Parse ParameterName
+	if paramName, ok := dataMap["parameter_name"].(string); ok {
+		data.ParameterName = models.DataSourceParameterName(paramName)
+	}
+
+	// Parse MeasuredValue
+	if measuredValue, ok := dataMap["measured_value"].(float64); ok {
+		data.MeasuredValue = measuredValue
+	}
+
+	// Parse Unit (optional)
+	if unit, ok := dataMap["unit"].(string); ok {
+		data.Unit = &unit
+	}
+
+	// Parse MeasurementTimestamp
+	if timestamp, ok := dataMap["measurement_timestamp"].(float64); ok {
+		data.MeasurementTimestamp = int64(timestamp)
+	} else {
+		// Default to current time if not provided
+		data.MeasurementTimestamp = time.Now().Unix()
+	}
+
+	// Parse ComponentData (optional)
+	if componentData, ok := dataMap["component_data"].(map[string]interface{}); ok {
+		data.ComponentData = componentData
+	}
+
+	// Parse DataQuality (optional, defaults to "good")
+	if quality, ok := dataMap["data_quality"].(string); ok {
+		data.DataQuality = models.DataQuality(quality)
+	} else {
+		data.DataQuality = models.DataQualityGood
+	}
+
+	// Parse ConfidenceScore (optional)
+	if score, ok := dataMap["confidence_score"].(float64); ok {
+		data.ConfidenceScore = &score
+	}
+
+	// Parse MeasurementSource (optional)
+	if source, ok := dataMap["measurement_source"].(string); ok {
+		data.MeasurementSource = &source
+	}
+
+	// Set CreatedAt to now
+	data.CreatedAt = time.Now()
+
+	return data
 }
 
 // ============================================================================
