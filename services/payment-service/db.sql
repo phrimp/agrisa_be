@@ -31,16 +31,3 @@ CREATE TABLE order_items (
     deleted_at TIMESTAMP,
     FOREIGN KEY (payment_id) REFERENCES payments(id) ON DELETE CASCADE
 );
-
-CREATE TABLE configurations (
-    id VARCHAR PRIMARY KEY,
-    payos_client_id VARCHAR NOT NULL,
-    payos_api_key VARCHAR NOT NULL,
-    payos_checksum_key VARCHAR NOT NULL,
-    payos_expired_duration VARCHAR,
-    payos_order_code_length INT,
-    payment_cron_expression VARCHAR,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at TIMESTAMP
-);
