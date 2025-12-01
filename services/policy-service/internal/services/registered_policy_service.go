@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"policy-service/internal/ai/gemini"
 	"policy-service/internal/database/minio"
+	"policy-service/internal/event/publisher"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
@@ -33,6 +34,7 @@ type RegisteredPolicyService struct {
 	dataSourceRepo         *repository.DataSourceRepository
 	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository
 	minioClient            *minio.MinioClient
+	notiPublisher          *publisher.NotificationHelper
 	geminiSelector         *gemini.GeminiClientSelector
 }
 
@@ -47,6 +49,7 @@ func NewRegisteredPolicyService(
 	dataSourceRepo *repository.DataSourceRepository,
 	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository,
 	minioClient *minio.MinioClient,
+	notiPublisher *publisher.NotificationHelper,
 	geminiSelector *gemini.GeminiClientSelector,
 ) *RegisteredPolicyService {
 	return &RegisteredPolicyService{
@@ -59,6 +62,7 @@ func NewRegisteredPolicyService(
 		dataSourceRepo:         dataSourceRepo,
 		farmMonitoringDataRepo: farmMonitoringDataRepo,
 		minioClient:            minioClient,
+		notiPublisher:          notiPublisher,
 		geminiSelector:         geminiSelector,
 	}
 }
@@ -2300,6 +2304,18 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 		scheduler.AddJob(fullYearJob)
 	}()
 
+	go func() {
+		for {
+			err := s.notiPublisher.NotifyPolicyRegistered(ctx, request.RegisteredPolicy.FarmerID, request.RegisteredPolicy.PolicyNumber)
+			if err == nil {
+				slog.Info("policy registeration notification sent", "policy id", request.RegisteredPolicy.ID)
+				return
+			}
+			slog.Error("error sending policy registeration notification", "error", err)
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
 	return &models.RegisterAPolicyResponse{
 		RegisterPolicyID:             request.RegisteredPolicy.ID.String(),
 		SignedPolicyDocumentLocation: signedDocumentLocation,
@@ -2572,6 +2588,22 @@ func (s *RegisteredPolicyService) GetFarmerMonitoringData(
 	return data, nil
 }
 
+func (s *RegisteredPolicyService) GetUnderwritingByPolicyID(policyID uuid.UUID) ([]models.RegisteredPolicyUnderwriting, error) {
+	return s.registeredPolicyRepo.GetUnderwritingsByPolicyID(policyID)
+}
+
+func (s *RegisteredPolicyService) GetUnderwritingByPolicyIDAndFarmerID(policyID uuid.UUID, farmerID string) ([]models.RegisteredPolicyUnderwriting, error) {
+	return s.registeredPolicyRepo.GetUnderwritingsByPolicyIDAndFarmerID(policyID, farmerID)
+}
+
+func (s *RegisteredPolicyService) GetAllUnderwriting() ([]models.RegisteredPolicyUnderwriting, error) {
+	return s.registeredPolicyRepo.GetAllUnderwriting()
+}
+
+func (s *RegisteredPolicyService) GetInsuranceProviderIDByID(policyID uuid.UUID) (string, error) {
+	return s.registeredPolicyRepo.GetInsuranceProviderIDByID(policyID)
+}
+
 // GetFarmerMonitoringDataByParameter retrieves monitoring data for a specific parameter from a farmer's own farm
 func (s *RegisteredPolicyService) GetFarmerMonitoringDataByParameter(
 	ctx context.Context,
@@ -2695,7 +2727,7 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 }
 
 func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]interface{}, error) {
-	url := "https://agrisa-api.phrimp.io.vn/profile/protected/api/v1/insurance-partners/me/profile"
+	url := "http://profile-service:8087/profile/protected/api/v1/insurance-partners/me/profile"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		slog.Error("Error creating request for insurance partner profile", "error", err)

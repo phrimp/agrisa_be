@@ -8,7 +8,6 @@ import (
 	"math"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
-	"policy-service/internal/services"
 	"policy-service/internal/worker"
 	"time"
 
@@ -236,21 +235,18 @@ func (c *PaymentConsumer) processMessage(ctx context.Context, msg amqp.Delivery)
 
 // DefaultPaymentEventHandler is the default implementation of PaymentEventHandler
 type DefaultPaymentEventHandler struct {
-	registeredPolicyService *services.RegisteredPolicyService
-	registeredPolicyRepo    *repository.RegisteredPolicyRepository
-	workerManager           *worker.WorkerManagerV2
+	registeredPolicyRepo *repository.RegisteredPolicyRepository
+	workerManager        *worker.WorkerManagerV2
 }
 
 // NewDefaultPaymentEventHandler creates a new default payment event handler
 func NewDefaultPaymentEventHandler(
-	registeredPolicyService *services.RegisteredPolicyService,
 	registeredPolicyRepo *repository.RegisteredPolicyRepository,
 	workerManager *worker.WorkerManagerV2,
 ) *DefaultPaymentEventHandler {
 	return &DefaultPaymentEventHandler{
-		registeredPolicyService: registeredPolicyService,
-		registeredPolicyRepo:    registeredPolicyRepo,
-		workerManager:           workerManager,
+		registeredPolicyRepo: registeredPolicyRepo,
+		workerManager:        workerManager,
 	}
 }
 
@@ -457,7 +453,7 @@ func (h *DefaultPaymentEventHandler) processPolicyPayment(
 	}()
 
 	// Retrieve policy
-	registeredPolicy, err := h.registeredPolicyService.GetPolicyByID(registeredPolicyID)
+	registeredPolicy, err := h.registeredPolicyRepo.GetByID(registeredPolicyID)
 	if err != nil {
 		tx.Rollback()
 		slog.Error("failed to retrieve registered policy",
