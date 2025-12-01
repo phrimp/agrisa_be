@@ -47,7 +47,7 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 	farmerGroup.Get("/stats/overview", h.GetStatsOverview)                                             // GET /policies/read-own/stats/overview
 	farmerGroup.Get("/monitoring-data/:farm_id", h.GetFarmerMonitoringData)                            // GET /policies/read-own/monitoring-data/:farm_id
 	farmerGroup.Get("/monitoring-data/:farm_id/:parameter_name", h.GetFarmerMonitoringDataByParameter) // GET /policies/read-own/monitoring-data/:farm_id/:parameter_name
-	farmerGroup.Get("/underwritings/:policy_id", h.GetFarmerUnderwriting)
+	farmerGroup.Get("/underwriting/:policy_id", h.GetFarmerUnderwriting)
 
 	// Insurance Partner routes - read/manage partner's policies
 	partnerGroup := policyGroup.Group("/read-partner")
