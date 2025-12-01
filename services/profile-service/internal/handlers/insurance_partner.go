@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"log"
+	"log/slog"
 	"net/http"
 	"profile-service/internal/models"
 	"profile-service/internal/services"
@@ -139,6 +140,7 @@ func (h *InsurancePartnerHandler) CreateInsurancePartner(c *gin.Context) {
 
 func (h *InsurancePartnerHandler) GetInsurancePartnerPrivateByID(c *gin.Context) {
 	staffID := c.GetHeader("X-User-ID")
+	slog.Error("GetInsurancePartnerPrivateByID called", "staffID", staffID)
 	result, err := h.InsurancePartnerService.GetPrivateProfile(staffID)
 	if err != nil {
 		log.Printf("Error getting insurance partner private by staffID %s: %s", staffID, err.Error())
