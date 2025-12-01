@@ -29,6 +29,7 @@ func NewUserRepository(db *sqlx.DB) IUserRepository {
 
 func (r *UserRepository) GetUserProfileByUserID(userID string) (*models.UserProfile, error) {
 	var userProfile models.UserProfile
+	log.Printf("GetUserProfileByUserID called with userID: %s", userID)
 	err := r.db.Get(&userProfile, "SELECT * FROM user_profiles WHERE user_id = $1", userID)
 	if err != nil {
 		log.Printf("Error fetching user profile by userID %s: %v", userID, err)
