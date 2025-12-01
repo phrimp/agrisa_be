@@ -64,6 +64,17 @@ func (r *RegisteredPolicyRepository) GetByID(id uuid.UUID) (*models.RegisteredPo
 	return &policy, nil
 }
 
+func (r *RegisteredPolicyRepository) GetInsuranceProviderIDByID(id uuid.UUID) (string, error) {
+	var insuranceID string
+	query := `SELECT insurance_provider_id FROM public.registered_policy where id = $1;`
+	err := r.db.Get(&insuranceID, query, id)
+	if err != nil {
+		slog.Error("failed to get insurance provider id by policy id", "policy id", id, "error", err)
+		return "", fmt.Errorf("failed to get insurance provider id by policy id: %w", err)
+	}
+	return insuranceID, nil
+}
+
 func (r *RegisteredPolicyRepository) GetByPolicyNumber(policyNumber string) (*models.RegisteredPolicy, error) {
 	var policy models.RegisteredPolicy
 	query := `SELECT * FROM registered_policy WHERE policy_number = $1`
@@ -920,6 +931,54 @@ func (r *RegisteredPolicyRepository) GetUnderwritingsByPolicyID(policyID uuid.UU
 
 	slog.Debug("Successfully retrieved underwritings",
 		"registered_policy_id", policyID,
+		"count", len(underwritings))
+	return underwritings, nil
+}
+
+func (r *RegisteredPolicyRepository) GetUnderwritingsByPolicyIDAndFarmerID(policyID uuid.UUID, farmerID string) ([]models.RegisteredPolicyUnderwriting, error) {
+	slog.Debug("Retrieving underwritings by policy ID and farmer ID", "registered_policy_id", policyID, "farmer_id", farmerID)
+
+	var underwritings []models.RegisteredPolicyUnderwriting
+	query := `
+    SELECT rpu.* 
+    FROM registered_policy_underwriting rpu
+    JOIN registered_policy rp ON rpu.registered_policy_id = rp.id 
+    WHERE rpu.registered_policy_id = $1 
+      AND rp.farmer_id = $2 
+    ORDER BY rpu.validation_timestamp DESC`
+
+	err := r.db.Select(&underwritings, query, policyID, farmerID)
+	if err != nil {
+		slog.Error("Failed to get underwritings by policy ID and farmer ID",
+			"registered_policy_id", policyID,
+			"farmer_id", farmerID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get underwritings: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved underwritings",
+		"registered_policy_id", policyID,
+		"farmer_id", farmerID,
+		"count", len(underwritings))
+	return underwritings, nil
+}
+
+func (r *RegisteredPolicyRepository) GetAllUnderwriting() ([]models.RegisteredPolicyUnderwriting, error) {
+	slog.Debug("Retrieving all underwritings")
+
+	var underwritings []models.RegisteredPolicyUnderwriting
+	query := `
+		SELECT * FROM registered_policy_underwriting
+		ORDER BY validation_timestamp DESC`
+
+	err := r.db.Select(&underwritings, query)
+	if err != nil {
+		slog.Error("Failed to get all underwritings",
+			"error", err)
+		return nil, fmt.Errorf("failed to get underwritings: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved underwritings",
 		"count", len(underwritings))
 	return underwritings, nil
 }

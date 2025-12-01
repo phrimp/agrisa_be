@@ -2572,6 +2572,22 @@ func (s *RegisteredPolicyService) GetFarmerMonitoringData(
 	return data, nil
 }
 
+func (s *RegisteredPolicyService) GetUnderwritingByPolicyID(policyID uuid.UUID) ([]models.RegisteredPolicyUnderwriting, error) {
+	return s.registeredPolicyRepo.GetUnderwritingsByPolicyID(policyID)
+}
+
+func (s *RegisteredPolicyService) GetUnderwritingByPolicyIDAndFarmerID(policyID uuid.UUID, farmerID string) ([]models.RegisteredPolicyUnderwriting, error) {
+	return s.registeredPolicyRepo.GetUnderwritingsByPolicyIDAndFarmerID(policyID, farmerID)
+}
+
+func (s *RegisteredPolicyService) GetAllUnderwriting() ([]models.RegisteredPolicyUnderwriting, error) {
+	return s.registeredPolicyRepo.GetAllUnderwriting()
+}
+
+func (s *RegisteredPolicyService) GetInsuranceProviderIDByID(policyID uuid.UUID) (string, error) {
+	return s.registeredPolicyRepo.GetInsuranceProviderIDByID(policyID)
+}
+
 // GetFarmerMonitoringDataByParameter retrieves monitoring data for a specific parameter from a farmer's own farm
 func (s *RegisteredPolicyService) GetFarmerMonitoringDataByParameter(
 	ctx context.Context,
@@ -2695,7 +2711,7 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 }
 
 func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]interface{}, error) {
-	url := "https://agrisa-api.phrimp.io.vn/profile/protected/api/v1/insurance-partners/me/profile"
+	url := "http://profile-service:8087/profile/protected/api/v1/insurance-partners/me/profile"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		slog.Error("Error creating request for insurance partner profile", "error", err)
