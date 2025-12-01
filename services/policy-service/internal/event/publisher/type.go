@@ -1,4 +1,4 @@
-package event
+package publisher
 
 type NotificationEventPushModel struct {
 	Notification Notification `json:"notification"`
@@ -9,3 +9,5 @@ type Notification struct {
 	Title string `json:"title"`
 	Body  string `json:"body"`
 }
+
+const PushNotiQueue string = "push_noti_events"

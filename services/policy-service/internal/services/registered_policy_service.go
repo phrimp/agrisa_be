@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"policy-service/internal/ai/gemini"
 	"policy-service/internal/database/minio"
+	"policy-service/internal/event/publisher"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
@@ -33,6 +34,7 @@ type RegisteredPolicyService struct {
 	dataSourceRepo         *repository.DataSourceRepository
 	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository
 	minioClient            *minio.MinioClient
+	notiPublisher          *publisher.NotificationHelper
 	geminiSelector         *gemini.GeminiClientSelector
 }
 
@@ -47,6 +49,7 @@ func NewRegisteredPolicyService(
 	dataSourceRepo *repository.DataSourceRepository,
 	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository,
 	minioClient *minio.MinioClient,
+	notiPublisher *publisher.NotificationHelper,
 	geminiSelector *gemini.GeminiClientSelector,
 ) *RegisteredPolicyService {
 	return &RegisteredPolicyService{
@@ -59,6 +62,7 @@ func NewRegisteredPolicyService(
 		dataSourceRepo:         dataSourceRepo,
 		farmMonitoringDataRepo: farmMonitoringDataRepo,
 		minioClient:            minioClient,
+		notiPublisher:          notiPublisher,
 		geminiSelector:         geminiSelector,
 	}
 }
@@ -2298,6 +2302,18 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 			slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist")
 		}
 		scheduler.AddJob(fullYearJob)
+	}()
+
+	go func() {
+		for {
+			err := s.notiPublisher.NotifyPolicyRegistered(ctx, request.RegisteredPolicy.FarmerID, request.RegisteredPolicy.PolicyNumber)
+			if err == nil {
+				slog.Info("policy registeration notification sent", "policy id", request.RegisteredPolicy.ID)
+				return
+			}
+			slog.Error("error sending policy registeration notification", "error", err)
+			time.Sleep(10 * time.Second)
+		}
 	}()
 
 	return &models.RegisterAPolicyResponse{
