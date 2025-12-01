@@ -2097,7 +2097,7 @@ func (s *RegisteredPolicyService) validatePolicyTags(tags map[string]string, req
 // BUSINESS PROCESS
 // ============================================================================
 
-func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicyRequest, ctx context.Context) (*models.RegisterAPolicyResponse, error) {
+func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicyRequest, ctx context.Context, partnerUserIDs []string) (*models.RegisterAPolicyResponse, error) {
 	var err error
 	tx, err := s.registeredPolicyRepo.BeginTransaction()
 	if err != nil {
@@ -2312,6 +2312,18 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 				return
 			}
 			slog.Error("error sending policy registeration notification", "error", err)
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
+	go func() {
+		for {
+			err := s.notiPublisher.NotifyPolicyRegisteredPartner(ctx, partnerUserIDs, request.RegisteredPolicy.PolicyNumber)
+			if err == nil {
+				slog.Info("policy registeration partner notification sent", "policy id", request.RegisteredPolicy.ID)
+				return
+			}
+			slog.Error("error sending policy registeration partner notification", "error", err)
 			time.Sleep(10 * time.Second)
 		}
 	}()
@@ -2831,4 +2843,56 @@ func (s *RegisteredPolicyService) GetMonthlyDataCost(
 	}
 
 	return response, nil
+}
+
+func (s *RegisteredPolicyService) GetAllUserIDsFromInsuranceProvider(providerID string, token string) ([]string, error) {
+	url := "http://profile-service:8087/profile/public/api/v1/users/" + providerID
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		slog.Error("Error creating request for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Add("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error("Error making request for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		slog.Error("Error reading response body for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error reading response: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Error("Unexpected status code for insurance partner profile", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		slog.Error("Error parsing JSON for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error parsing JSON: %v", err)
+	}
+	profileDatas, ok := result["data"].([]any)
+	if !ok {
+		slog.Error("profile data not fould", "full response", result)
+		return nil, fmt.Errorf("profile data not fould")
+	}
+	userID := []string{}
+	for _, userRawData := range profileDatas {
+		userData := userRawData.(map[string]any)
+		id, ok := userData["user_id"].(string)
+		if !ok {
+			slog.Warn("user id not found in profile data", "profile data", userRawData)
+			continue
+		}
+		userID = append(userID, id)
+	}
+	return userID, nil
 }
