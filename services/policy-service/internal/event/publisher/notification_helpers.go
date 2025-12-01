@@ -22,9 +22,20 @@ func (h *NotificationHelper) NotifyPolicyRegistered(ctx context.Context, userID,
 	event := NotificationEventPushModel{
 		Notification: Notification{
 			Title: "Policy Registered Successfully",
-			Body:  fmt.Sprintf("Your policy %s has been registered and is now active.", policyNumber),
+			Body:  fmt.Sprintf("Your policy %s has been registered and is now waiting for underwriting.", policyNumber),
 		},
 		UserIDs: []string{userID},
+	}
+	return h.publisher.PublishNotification(ctx, event)
+}
+
+func (h *NotificationHelper) NotifyPolicyRegisteredPartner(ctx context.Context, userIDs []string, basePolicyNumber string) error {
+	event := NotificationEventPushModel{
+		Notification: Notification{
+			Title: "Policy Registered Successfully",
+			Body:  fmt.Sprintf("Your base policy %s has been registered and is now waiting for underwriting.", basePolicyNumber),
+		},
+		UserIDs: userIDs,
 	}
 	return h.publisher.PublishNotification(ctx, event)
 }

@@ -135,9 +135,17 @@ func (h *PolicyHandler) RegisterPolicy(c fiber.Ctx) error {
 		return c.Status(http.StatusForbidden).JSON(
 			utils.CreateErrorResponse("FORBIDDEN", "Cannot register policy for another user"))
 	}
+	tokenString := c.Get("Authorization")
+	token := strings.TrimPrefix(tokenString, "Bearer ")
 
+	partnerUserIDs, err := h.registeredPolicyService.GetAllUserIDsFromInsuranceProvider(registerRequest.RegisteredPolicy.InsuranceProviderID, token)
+	if err != nil {
+		slog.Error("error retrieving partner user ids", "error", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("INTERNAL", "error retrieving partner user ids"))
+	}
 	// Call service to register the policy
-	response, err := h.registeredPolicyService.RegisterAPolicy(registerRequest, c.Context())
+	response, err := h.registeredPolicyService.RegisterAPolicy(registerRequest, c.Context(), partnerUserIDs)
 	if err != nil {
 		// Parse error and return appropriate status code
 		errMsg := err.Error()
