@@ -14,6 +14,7 @@ type IUserService interface {
 	GetUserProfileByUserID(userID string) (*models.UserProfile, error)
 	CreateUserProfile(req *models.CreateUserProfileRequest, createdByID, createdByName string) error
 	UpdateUserProfile(updateProfileRequestBody map[string]interface{}, userID, updatedByName string) (*models.UserProfile, error)
+	GetUserProfilesByPartnerID(partnerID string) ([]models.UserProfile, error)
 }
 
 func NewUserService(repo repository.IUserRepository) IUserService {
@@ -75,4 +76,8 @@ func (s *UserService) UpdateUserProfile(updateProfileRequestBody map[string]inte
 	}
 
 	return updatedProfile, nil
+}
+
+func (s *UserService) GetUserProfilesByPartnerID(partnerID string) ([]models.UserProfile, error) {
+	return s.repo.GetUserProfilesByPartnerID(partnerID)
 }

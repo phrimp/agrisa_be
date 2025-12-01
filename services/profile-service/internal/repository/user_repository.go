@@ -3,6 +3,7 @@ package repository
 import (
 	"fmt"
 	"log"
+	"log/slog"
 	"profile-service/internal/models"
 	"utils"
 
@@ -13,6 +14,7 @@ type IUserRepository interface {
 	GetUserProfileByUserID(userID string) (*models.UserProfile, error)
 	CreateUserProfile(req *models.CreateUserProfileRequest, createdByID, createdByName string) error
 	UpdateUserProfile(query string, args ...interface{}) error
+	GetUserProfilesByPartnerID(partnerID string) ([]models.UserProfile, error)
 }
 
 type UserRepository struct {
@@ -110,4 +112,14 @@ func (r *UserRepository) UpdateUserProfile(query string, args ...interface{}) er
 		return fmt.Errorf("failed to update insurance partner: %w", err)
 	}
 	return nil
+}
+
+func (r *UserRepository) GetUserProfilesByPartnerID(partnerID string) ([]models.UserProfile, error) {
+	var userProfiles []models.UserProfile
+	err := r.db.Select(&userProfiles, "SELECT * FROM user_profiles WHERE partner_id = $1", partnerID)
+	if err != nil {
+		slog.Error("Error fetching user profiles by partnerID", "partnerID", partnerID, "error", err)
+		return nil, err
+	}
+	return userProfiles, nil
 }
