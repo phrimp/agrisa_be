@@ -2739,7 +2739,7 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 }
 
 func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]interface{}, error) {
-	url := "http://profile-service:8087/profile/protected/api/v1/insurance-partners/me/profile"
+	url := "https://agrisa-api.phrimp.io.vn/profile/protected/api/v1/insurance-partners/me/profile"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		slog.Error("Error creating request for insurance partner profile", "error", err)
