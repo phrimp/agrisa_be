@@ -1392,3 +1392,7 @@ func (s *BasePolicyService) extractObjectNameFromURL(url string) string {
 func (s *BasePolicyService) GetByID(id uuid.UUID) (*models.BasePolicy, error) {
 	return s.basePolicyRepo.GetBasePolicyByID(id)
 }
+
+func (s *BasePolicyService) GetByProvider(providerID string) ([]models.BasePolicy, error) {
+	return s.basePolicyRepo.GetBasePoliciesByProvider(providerID)
+}
