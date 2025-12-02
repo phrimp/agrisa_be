@@ -842,17 +842,26 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 	if req.UnderwritingStatus == models.UnderwritingApproved {
 		go func() {
 			slog.Info("underwriting approved, start payment window: 24h before policy auto cancel", "policy_id", policyID)
-			time.Sleep(5 * time.Minute) // TODO: Update to 24h
 			policy, err := s.registeredPolicyRepo.GetByID(policyID)
 			if err != nil {
 				slog.Error("CRITICAL: policy not found skip payment window", "error", err)
 				return
 			}
+			basePolicy, err := s.basePolicyRepo.GetBasePolicyByID(policy.BasePolicyID)
+			if err != nil {
+				slog.Error("CRITICAL: retrieve base policy failed", "error", err)
+			}
+			time.Sleep(time.Duration(*basePolicy.MaxPremiumPaymentProlong) * time.Minute) // TODO: Change to hour
 			if policy.Status != models.PolicyPendingPayment {
 				slog.Info("policy status invalid skip payment window", "status", policy.Status)
 				return
 			}
 			policy.Status = models.PolicyCancelled
+			err = s.registeredPolicyRepo.Update(policy)
+			if err != nil {
+				slog.Info("error updating policy", "error", err)
+				return
+			}
 			slog.Info("payment pending due: policy status set to cancelled", "policy_id", policy.ID)
 		}()
 	}
@@ -866,7 +875,7 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 	}, nil
 }
 
-func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]interface{}, error) {
+func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]any, error) {
 	url := "https://agrisa-api.phrimp.io.vn/profile/protected/api/v1/insurance-partners/me/profile"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
