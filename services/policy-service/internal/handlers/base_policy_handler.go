@@ -103,6 +103,7 @@ func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 
 	response, err := bph.basePolicyService.CreateCompletePolicy(c.Context(), &req, expiration)
 	if err != nil {
+		slog.Error("base policy creation failed", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("CREATION_FAILED", err.Error()))
 	}
 
