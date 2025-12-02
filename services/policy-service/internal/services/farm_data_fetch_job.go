@@ -215,6 +215,15 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		slog.Error("error retrieving policy by id", "id", policyID, "error", err)
 		return fmt.Errorf("error retrieving policy by id: %w", err)
 	}
+	blockedStatus := map[models.PolicyStatus]bool{
+		models.PolicyPayout:    true,
+		models.PolicyCancelled: true,
+		models.PolicyRejected:  true,
+		models.PolicyExpired:   true,
+	}
+	if blockedStatus[policy.Status] {
+		return fmt.Errorf("fetch farm monitoring data job blocked by policy status: %v", policy.Status)
+	}
 
 	basePolicyID := policy.BasePolicyID
 

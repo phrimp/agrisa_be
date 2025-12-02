@@ -159,7 +159,7 @@ func main() {
 	farmService := services.NewFarmService(farmRepo, cfg, minioClient, workerManager)
 	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, notificationHelper, geminiSelector)
-	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
+	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient, registeredPolicyRepo, basePolicyRepo, notificationHelper, workerManager)
 	basePolicyTriggerService := services.NewBasePolicyTriggerService(basePolicyTriggerRepo)
 	riskAnalysisService := services.NewRiskAnalysisCRUDService(registeredPolicyRepo)
 	claimService := services.NewClaimService(claimRepo, registeredPolicyRepo, farmRepo)

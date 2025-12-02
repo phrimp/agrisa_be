@@ -6,21 +6,28 @@ import (
 	"fmt"
 	"log/slog"
 	"policy-service/internal/database/minio"
+	"policy-service/internal/event/publisher"
 	"policy-service/internal/models"
+	"policy-service/internal/repository"
+	"policy-service/internal/worker"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
 // PolicyExpirationService handles auto-commit of expired archive policies
 type PolicyExpirationService struct {
-	redisClient   *redis.Client
-	minioClient   *minio.MinioClient
-	policyService *BasePolicyService
-	stopChannel   chan struct{}
-	stats         *ExpirationStats
+	redisClient               *redis.Client
+	minioClient               *minio.MinioClient
+	policyService             *BasePolicyService
+	stopChannel               chan struct{}
+	stats                     *ExpirationStats
+	policyRenewalOrchestrator *PolicyRenewalOrchestrator
+	basePolicyRepo            *repository.BasePolicyRepository
+	notiPublisher             *publisher.NotificationHelper
 }
 
 // ExpirationStats tracks processing statistics
@@ -33,7 +40,9 @@ type ExpirationStats struct {
 }
 
 // NewPolicyExpirationService creates a new expiration service instance
-func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePolicyService, minioClient *minio.MinioClient) *PolicyExpirationService {
+func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePolicyService, minioClient *minio.MinioClient, policyRepo *repository.RegisteredPolicyRepository, basePolicyRepo *repository.BasePolicyRepository, notiPublisher *publisher.NotificationHelper, workerManager *worker.WorkerManagerV2) *PolicyExpirationService {
+	validityCalculator := NewBasePolicyValidityCalculator()
+	policyRenewalOrchestrator := NewPolicyRenewalOrchestrator(basePolicyRepo, policyRepo, validityCalculator, workerManager)
 	return &PolicyExpirationService{
 		minioClient:   minioClient,
 		redisClient:   redisClient,
@@ -42,6 +51,9 @@ func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePo
 		stats: &ExpirationStats{
 			LastProcessed: time.Now(),
 		},
+		policyRenewalOrchestrator: policyRenewalOrchestrator,
+		basePolicyRepo:            basePolicyRepo,
+		notiPublisher:             notiPublisher,
 	}
 }
 
@@ -58,7 +70,15 @@ func (s *PolicyExpirationService) StartListener(ctx context.Context) error {
 		select {
 		case msg := <-pubsub.Channel():
 			if s.isArchivePolicyKey(msg.Payload) {
+				go s.processExpiredDraftPolicy(ctx, msg.Payload)
+			}
+			if s.isValidDateKey(msg.Payload) {
+				slog.Info("DEBUG Expiration key catched", "key", msg.Payload)
 				go s.processExpiredPolicy(ctx, msg.Payload)
+			}
+			if s.isEnrollmentClosed(msg.Payload) {
+				slog.Info("DEBUG Expiration key catched", "key", msg.Payload)
+				go s.processEnrollmentClosed(ctx, msg.Payload)
 			}
 		case <-ctx.Done():
 			slog.Info("Policy expiration listener stopped")
@@ -86,8 +106,90 @@ func (s *PolicyExpirationService) isArchivePolicyKey(expiredKey string) bool {
 	return false
 }
 
+func (s *PolicyExpirationService) isEnrollmentClosed(expiredKey string) bool {
+	return strings.Contains(expiredKey, "--BasePolicy--EnrollmentClosed")
+}
+
 func (s *PolicyExpirationService) isValidDateKey(expiredKey string) bool {
 	return strings.Contains(expiredKey, "--BasePolicy--ValidDate")
+}
+
+func (s *PolicyExpirationService) processEnrollmentClosed(ctx context.Context, expiredKey string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("CRITICAL: Panic recovery", "panic", r)
+		}
+	}()
+	expiredKey = strings.Split(expiredKey, "--BasePolicy--EnrollmentClosed")[0]
+	basePolicyID, err := uuid.Parse(expiredKey)
+	if err != nil {
+		slog.Error("error parsing base_policy_id retry spamming", "base_policy_id", expiredKey, "error", err)
+		time.Sleep(10 * time.Second)
+		s.processExpiredPolicy(ctx, expiredKey)
+	}
+	basePolicy, err := s.basePolicyRepo.GetBasePolicyByID(basePolicyID)
+	if err != nil {
+		slog.Error("error retriving base policy", "base_policy_id", basePolicyID, "error", err)
+		return
+	}
+	if basePolicy.Status == models.BasePolicyArchived {
+		slog.Error("invalid operation: base policy status invalid", "status", basePolicy.Status)
+		return
+	}
+	basePolicy.Status = models.BasePolicyClosed
+	err = s.basePolicyRepo.UpdateBasePolicy(basePolicy)
+	if err != nil {
+		slog.Error("error updating base policy", "base_policy_id", basePolicyID, "error", err)
+		return
+	}
+}
+
+func (s *PolicyExpirationService) processExpiredPolicy(ctx context.Context, expiredKey string) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("CRITICAL: Panic recovery", "panic", r)
+		}
+	}()
+	expiredKey = strings.Split(expiredKey, "--BasePolicy--ValidDate")[0]
+	basePolicyID, err := uuid.Parse(expiredKey)
+	if err != nil {
+		slog.Error("error parsing base_policy_id retry spamming", "base_policy_id", expiredKey, "error", err)
+		time.Sleep(10 * time.Second)
+		s.processExpiredPolicy(ctx, expiredKey)
+	}
+	result, err := s.policyRenewalOrchestrator.PrepareRenewal(ctx, basePolicyID)
+	if err != nil {
+		slog.Error("error policy renew process", "base_policy_id", basePolicyID, "error", err)
+		return
+	}
+
+	slog.Info("policy renew successfully", "result", result)
+
+	if result.IsExpired {
+		go func() {
+			for {
+				err := s.notiPublisher.NotifyPolicyExpiredBatch(ctx, result.FarmerIDs, result.PolicyCode)
+				if err == nil {
+					slog.Info("policy registeration notification sent", "policy id", result.PolicyCode)
+					return
+				}
+				slog.Error("error sending policy registeration notification", "error", err)
+				time.Sleep(10 * time.Second)
+			}
+		}()
+	} else {
+		go func() {
+			for {
+				err := s.notiPublisher.NotifyPolicyRenewedBatch(ctx, result.FarmerIDs, result.PolicyCode)
+				if err == nil {
+					slog.Info("policy registeration notification sent", "policy id", result.PolicyCode)
+					return
+				}
+				slog.Error("error sending policy registeration notification", "error", err)
+				time.Sleep(10 * time.Second)
+			}
+		}()
+	}
 }
 
 func (s *PolicyExpirationService) processUnArchivedExpiredPolicy(ctx context.Context, expiredKey string) {
@@ -115,7 +217,7 @@ func (s *PolicyExpirationService) processUnArchivedExpiredPolicy(ctx context.Con
 }
 
 // processExpiredPolicy handles a single expired archive policy
-func (s *PolicyExpirationService) processExpiredPolicy(ctx context.Context, expiredKey string) {
+func (s *PolicyExpirationService) processExpiredDraftPolicy(ctx context.Context, expiredKey string) {
 	slog.Info("Processing expired archive policy", "expired_key", expiredKey)
 
 	s.updateStats(true, false) // Mark as processed

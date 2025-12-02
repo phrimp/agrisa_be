@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
+	"policy-service/internal/worker"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,6 +17,7 @@ type PolicyRenewalOrchestrator struct {
 	basePolicyRepo       *repository.BasePolicyRepository
 	registeredPolicyRepo *repository.RegisteredPolicyRepository
 	validityCalculator   *BasePolicyValidityCalculator
+	workerManager        *worker.WorkerManagerV2
 }
 
 // NewPolicyRenewalOrchestrator creates a new renewal orchestrator instance
@@ -23,33 +25,56 @@ func NewPolicyRenewalOrchestrator(
 	basePolicyRepo *repository.BasePolicyRepository,
 	registeredPolicyRepo *repository.RegisteredPolicyRepository,
 	validityCalculator *BasePolicyValidityCalculator,
+	workerManager *worker.WorkerManagerV2,
 ) *PolicyRenewalOrchestrator {
 	return &PolicyRenewalOrchestrator{
 		basePolicyRepo:       basePolicyRepo,
 		registeredPolicyRepo: registeredPolicyRepo,
 		validityCalculator:   validityCalculator,
+		workerManager:        workerManager,
 	}
 }
 
 // RenewalResult contains the results of a renewal operation
 type RenewalResult struct {
-	BasePolicyID            uuid.UUID
-	UpdatedValidityWindow   *ValidityWindow
-	RenewedPolicyCount      int
-	RenewalPremiumApplied   bool
-	RenewalDiscountRate     float64
-	OriginalPremium         float64
-	RenewedPremium          float64
-	NotificationsSent       int
-	Errors                  []error
+	BasePolicyID          uuid.UUID
+	UpdatedValidityWindow *ValidityWindow
+	RenewedPolicyCount    int
+	RenewalPremiumApplied bool
+	RenewalDiscountRate   float64
+	PolicyCode            string
+	FarmerIDs             []string
+	IsExpired             bool
+	Errors                []error
 }
 
 // PrepareRenewal prepares all policies for renewal
 func (o *PolicyRenewalOrchestrator) PrepareRenewal(
 	ctx context.Context,
-	basePolicy *models.BasePolicy,
-	registeredPolicies []models.RegisteredPolicy,
+	basePolicyID uuid.UUID,
 ) (*RenewalResult, error) {
+	slog.Info("Preparing policy renewal -- initializing -- retrieving base policy and all related registered policies", "base_policy_id", basePolicyID)
+	basePolicy, err := o.basePolicyRepo.GetBasePolicyByID(basePolicyID)
+	if err != nil {
+		slog.Error("Error retrieving base policy", "base_policy_id", basePolicyID)
+		return nil, fmt.Errorf("error retrieving base policy: %w", err)
+	}
+	registeredPolicies, err := o.registeredPolicyRepo.GetByBasePolicyID(ctx, basePolicy.ID)
+	if err != nil {
+		slog.Warn("No registered policy found", "base_policy_id", basePolicy.ID)
+	}
+
+	if basePolicy.Status == models.BasePolicyArchived {
+		return nil, fmt.Errorf("base policy is archived")
+	}
+
+	if !basePolicy.AutoRenewal {
+		slog.Info("Preparing policy renewal: no auto renew -- expiration processing",
+			"base_policy_id", basePolicy.ID,
+			"policy_count", len(registeredPolicies))
+		return o.PrepareExpired(ctx, basePolicy, registeredPolicies)
+	}
+
 	slog.Info("Preparing policy renewal",
 		"base_policy_id", basePolicy.ID,
 		"policy_count", len(registeredPolicies))
@@ -92,52 +117,117 @@ func (o *PolicyRenewalOrchestrator) PrepareRenewal(
 			discountRate = *basePolicy.RenewalDiscountRate
 		}
 
-		// Use first policy as reference for premium calculation
-		samplePolicy := registeredPolicies[0]
-		originalPremium := samplePolicy.TotalFarmerPremium
-		renewedPremium := o.calculateRenewalPremium(originalPremium, discountRate)
-
 		result.RenewalDiscountRate = discountRate
-		result.OriginalPremium = originalPremium
-		result.RenewedPremium = renewedPremium
 		result.RenewalPremiumApplied = discountRate > 0
 
-		slog.Info("Calculated renewal premium",
-			"base_policy_id", basePolicy.ID,
-			"original_premium", originalPremium,
-			"discount_rate", discountRate,
-			"renewed_premium", renewedPremium)
-
+		allowedStatus := map[models.PolicyStatus]bool{
+			models.PolicyActive: true,
+			models.PolicyPayout: true,
+		}
 		// Step 3: Update all registered policies
-		// Note: Payment reset and status update are handled by the expiration handler
-		// Here we focus on premium adjustment if needed
-		if result.RenewalPremiumApplied {
-			for _, policy := range registeredPolicies {
-				policy.TotalFarmerPremium = o.calculateRenewalPremium(policy.TotalFarmerPremium, discountRate)
-				policy.UpdatedAt = time.Now()
+		for _, policy := range registeredPolicies {
 
-				if err := o.registeredPolicyRepo.Update(&policy); err != nil {
-					errMsg := fmt.Errorf("failed to update policy %s premium: %w", policy.ID, err)
-					result.Errors = append(result.Errors, errMsg)
-					slog.Error("Failed to update policy premium",
-						"policy_id", policy.ID,
-						"error", err)
-					// Continue with other policies
-					continue
-				}
+			if !allowedStatus[policy.Status] {
+				continue
 			}
+
+			originalPremium := policy.TotalFarmerPremium
+			policy.TotalFarmerPremium = o.calculateRenewalPremium(originalPremium, discountRate)
+			policy.CoverageEndDate = int64(*basePolicy.InsuranceValidToDay)
+			policy.PremiumPaidAt = nil
+			policy.PremiumPaidByFarmer = false
+			policy.Status = models.PolicyPendingPayment
+			policy.UpdatedAt = time.Now()
+
+			slog.Info("Calculated renewal premium",
+				"base_policy_id", basePolicy.ID,
+				"original_premium", originalPremium,
+				"discount_rate", discountRate,
+				"renewed_premium", policy.TotalFarmerPremium)
+
+			if err := o.registeredPolicyRepo.Update(&policy); err != nil {
+				errMsg := fmt.Errorf("failed to update policy %s : %w", policy.ID, err)
+				result.Errors = append(result.Errors, errMsg)
+				slog.Error("Failed to update policy",
+					"policy_id", policy.ID,
+					"error", err)
+				// Continue with other policies
+				continue
+			}
+			err := o.workerManager.CleanupWorkerInfrastructure(ctx, policy.ID)
+			if err != nil {
+				slog.Error("Failed to cleanup worker infrastructure",
+					"policy_id", policy.ID,
+					"error", err)
+			}
+			result.FarmerIDs = append(result.FarmerIDs, policy.FarmerID)
 		}
 
 		result.RenewedPolicyCount = len(registeredPolicies) - len(result.Errors)
 	}
-
-	// Step 4: Send renewal notifications (stub for now)
-	// TODO: Integrate with notification service
-	result.NotificationsSent = 0
+	result.PolicyCode = *basePolicy.ProductCode
 
 	slog.Info("Renewal preparation completed",
 		"base_policy_id", basePolicy.ID,
 		"validity_window", fmt.Sprintf("Day %d-%d", nextWindow.FromDay, nextWindow.ToDay),
+		"renewed_policies", result.RenewedPolicyCount,
+		"errors", len(result.Errors))
+
+	return result, nil
+}
+
+func (o *PolicyRenewalOrchestrator) PrepareExpired(
+	ctx context.Context,
+	basePolicy *models.BasePolicy,
+	registeredPolicies []models.RegisteredPolicy,
+) (*RenewalResult, error) {
+	result := &RenewalResult{
+		BasePolicyID: basePolicy.ID,
+		Errors:       make([]error, 0),
+	}
+
+	basePolicy.Status = models.BasePolicyArchived
+	basePolicy.UpdatedAt = time.Now()
+
+	if err := o.basePolicyRepo.UpdateBasePolicy(basePolicy); err != nil {
+		return nil, fmt.Errorf("failed to update base policy validity window: %w", err)
+	}
+
+	if len(registeredPolicies) > 0 {
+
+		for _, policy := range registeredPolicies {
+
+			policy.Status = models.PolicyExpired
+			policy.UpdatedAt = time.Now()
+
+			slog.Info("Calculated renewal premium",
+				"base_policy_id", basePolicy.ID,
+			)
+			if err := o.registeredPolicyRepo.Update(&policy); err != nil {
+				errMsg := fmt.Errorf("failed to update policy %s premium: %w", policy.ID, err)
+				result.Errors = append(result.Errors, errMsg)
+				slog.Error("Failed to update policy premium",
+					"policy_id", policy.ID,
+					"error", err)
+				// Continue with other policies
+				continue
+			}
+			err := o.workerManager.CleanupWorkerInfrastructure(ctx, policy.ID)
+			if err != nil {
+				slog.Error("Failed to cleanup worker infrastructure",
+					"policy_id", policy.ID,
+					"error", err)
+			}
+			result.FarmerIDs = append(result.FarmerIDs, policy.FarmerID)
+		}
+
+		result.RenewedPolicyCount = len(registeredPolicies) - len(result.Errors)
+	}
+	result.PolicyCode = *basePolicy.ProductCode
+	result.IsExpired = true
+
+	slog.Info("Renewal preparation completed",
+		"base_policy_id", basePolicy.ID,
 		"renewed_policies", result.RenewedPolicyCount,
 		"errors", len(result.Errors))
 

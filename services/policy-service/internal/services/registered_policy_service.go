@@ -784,6 +784,14 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 		return nil, fmt.Errorf("failed to get policy: %w", err)
 	}
 
+	if policy.UnderwritingStatus != models.UnderwritingPending {
+		return nil, fmt.Errorf("invalid operation: policy underwriting status=%v", policy.UnderwritingStatus)
+	}
+
+	if policy.Status != models.PolicyPendingReview {
+		return nil, fmt.Errorf("invalid operation: policy status=%v", policy.Status)
+	}
+
 	// 2. Create underwriting record
 	underwriting := &models.RegisteredPolicyUnderwriting{
 		ID:                  uuid.New(),
@@ -829,6 +837,25 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 		"policy_id", policyID,
 		"status", req.UnderwritingStatus,
 		"message", responseMessage)
+
+	// Payment Window
+	if req.UnderwritingStatus == models.UnderwritingApproved {
+		go func() {
+			slog.Info("underwriting approved, start payment window: 24h before policy auto cancel", "policy_id", policyID)
+			time.Sleep(5 * time.Minute) // TODO: Update to 24h
+			policy, err := s.registeredPolicyRepo.GetByID(policyID)
+			if err != nil {
+				slog.Error("CRITICAL: policy not found skip payment window", "error", err)
+				return
+			}
+			if policy.Status != models.PolicyPendingPayment {
+				slog.Info("policy status invalid skip payment window", "status", policy.Status)
+				return
+			}
+			policy.Status = models.PolicyCancelled
+			slog.Info("payment pending due: policy status set to cancelled", "policy_id", policy.ID)
+		}()
+	}
 
 	return &models.CreatePartnerPolicyUnderwritingResponse{
 		UnderwritingID:     underwriting.ID.String(),

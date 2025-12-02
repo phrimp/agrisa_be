@@ -462,6 +462,12 @@ func (h *DefaultPaymentEventHandler) processPolicyPayment(
 		return err
 	}
 
+	if registeredPolicy.UnderwritingStatus != models.UnderwritingApproved {
+		tx.Rollback()
+		slog.Warn("only policy with underwriting approved are allowed to be processed", "actual status", registeredPolicy.UnderwritingStatus)
+		return nil
+	}
+
 	if registeredPolicy.Status != models.PolicyPendingPayment {
 		tx.Rollback()
 		slog.Warn("only policy pending payment are allowed to be processed", "actual status", registeredPolicy.Status)
