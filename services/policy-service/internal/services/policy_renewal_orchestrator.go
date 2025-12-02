@@ -128,22 +128,25 @@ func (o *PolicyRenewalOrchestrator) PrepareRenewal(
 		for _, policy := range registeredPolicies {
 
 			if !allowedStatus[policy.Status] {
+				policy.Status = models.PolicyExpired
 				continue
+			} else {
+				originalPremium := policy.TotalFarmerPremium
+				policy.TotalFarmerPremium = o.calculateRenewalPremium(originalPremium, discountRate)
+				policy.CoverageEndDate = int64(*basePolicy.InsuranceValidToDay)
+				policy.PremiumPaidAt = nil
+				policy.PremiumPaidByFarmer = false
+				policy.Status = models.PolicyPendingPayment
+
+				slog.Info("Calculated renewal premium",
+					"base_policy_id", basePolicy.ID,
+					"original_premium", originalPremium,
+					"discount_rate", discountRate,
+					"renewed_premium", policy.TotalFarmerPremium)
 			}
 
-			originalPremium := policy.TotalFarmerPremium
-			policy.TotalFarmerPremium = o.calculateRenewalPremium(originalPremium, discountRate)
-			policy.CoverageEndDate = int64(*basePolicy.InsuranceValidToDay)
-			policy.PremiumPaidAt = nil
-			policy.PremiumPaidByFarmer = false
-			policy.Status = models.PolicyPendingPayment
 			policy.UpdatedAt = time.Now()
-
-			slog.Info("Calculated renewal premium",
-				"base_policy_id", basePolicy.ID,
-				"original_premium", originalPremium,
-				"discount_rate", discountRate,
-				"renewed_premium", policy.TotalFarmerPremium)
+			slog.Info("updating registered policy after expired", "policy", policy)
 
 			if err := o.registeredPolicyRepo.Update(&policy); err != nil {
 				errMsg := fmt.Errorf("failed to update policy %s : %w", policy.ID, err)
