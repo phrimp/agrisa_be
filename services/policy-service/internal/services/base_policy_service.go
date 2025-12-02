@@ -1355,3 +1355,7 @@ func (s *BasePolicyService) extractObjectNameFromURL(url string) string {
 	// If no bucket prefix, return as is
 	return url
 }
+
+func (s *BasePolicyService) GetByID(id uuid.UUID) (*models.BasePolicy, error) {
+	return s.basePolicyRepo.GetBasePolicyByID(id)
+}

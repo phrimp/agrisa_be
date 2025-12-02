@@ -86,6 +86,10 @@ func (s *PolicyExpirationService) isArchivePolicyKey(expiredKey string) bool {
 	return false
 }
 
+func (s *PolicyExpirationService) isValidDateKey(expiredKey string) bool {
+	return strings.Contains(expiredKey, "--BasePolicy--ValidDate")
+}
+
 func (s *PolicyExpirationService) processUnArchivedExpiredPolicy(ctx context.Context, expiredKey string) {
 	defer func() {
 		if r := recover(); r != nil {

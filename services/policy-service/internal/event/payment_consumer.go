@@ -462,6 +462,11 @@ func (h *DefaultPaymentEventHandler) processPolicyPayment(
 		return err
 	}
 
+	if registeredPolicy.Status != models.PolicyPendingPayment {
+		tx.Rollback()
+		slog.Warn("only policy pending payment are allowed to be processed", "actual status", registeredPolicy.Status)
+		return nil
+	}
 	// Idempotency check: skip if already processed
 	if registeredPolicy.PremiumPaidByFarmer {
 		tx.Rollback()
@@ -488,7 +493,9 @@ func (h *DefaultPaymentEventHandler) processPolicyPayment(
 
 	// Update policy with payment information
 	now := time.Now().Unix()
-	registeredPolicy.CoverageStartDate = now // Coverage starts immediately upon payment
+	if registeredPolicy.CoverageStartDate == 0 {
+		registeredPolicy.CoverageStartDate = now // Coverage starts immediately upon payment
+	}
 	registeredPolicy.Status = models.PolicyActive
 	registeredPolicy.PremiumPaidByFarmer = true
 	registeredPolicy.PremiumPaidAt = &paidAt

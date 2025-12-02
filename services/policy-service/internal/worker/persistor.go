@@ -28,6 +28,9 @@ type WorkerPersistor interface {
 	// Disaster Recovery
 	LoadActiveWorkerInfrastructure(ctx context.Context) ([]uuid.UUID, error)
 
+	// Cleanup
+	DeleteWorkerInfrastructure(ctx context.Context, policyID uuid.UUID) error
+
 	// Transaction Support
 	WithTransaction(ctx context.Context, fn func(context.Context, WorkerPersistor) error) error
 }
