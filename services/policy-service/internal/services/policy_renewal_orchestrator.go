@@ -124,8 +124,16 @@ func (o *PolicyRenewalOrchestrator) PrepareRenewal(
 			models.PolicyActive: true,
 			models.PolicyPayout: true,
 		}
+		skipStatus := map[models.PolicyStatus]bool{
+			models.PolicyCancelled: true,
+			models.PolicyRejected:  true,
+		}
 		// Step 3: Update all registered policies
 		for _, policy := range registeredPolicies {
+
+			if skipStatus[policy.Status] {
+				continue
+			}
 
 			if !allowedStatus[policy.Status] {
 				policy.Status = models.PolicyExpired
