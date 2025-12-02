@@ -373,5 +373,10 @@ func (bph *BasePolicyHandler) GetCompletePolicyDetail(c fiber.Ctx) error {
 }
 
 func (bph *BasePolicyHandler) GetByProvider(c fiber.Ctx) error {
-	return nil
+	providerID := ""
+	policies, err := bph.basePolicyService.GetByProvider(providerID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "error get all base policies by provider partner"))
+	}
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(policies))
 }
