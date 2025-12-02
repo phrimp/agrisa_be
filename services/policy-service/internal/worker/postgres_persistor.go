@@ -488,6 +488,48 @@ func (p *PostgresPersistor) LoadActiveWorkerInfrastructure(ctx context.Context) 
 	return policyIDs, nil
 }
 
+// Cleanup
+
+// DeleteWorkerInfrastructure completely deletes all worker infrastructure for a policy
+func (p *PostgresPersistor) DeleteWorkerInfrastructure(ctx context.Context, policyID uuid.UUID) error {
+	// Delete in a transaction to ensure atomicity
+	tx, err := p.db.BeginTxx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+
+	// Delete job executions first (foreign key constraint)
+	deleteJobsQuery := `DELETE FROM worker_job_execution WHERE policy_id = $1`
+	_, err = tx.ExecContext(ctx, deleteJobsQuery, policyID)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to delete job executions: %w", err)
+	}
+
+	// Delete scheduler state
+	deleteSchedulerQuery := `DELETE FROM worker_scheduler_state WHERE policy_id = $1`
+	_, err = tx.ExecContext(ctx, deleteSchedulerQuery, policyID)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to delete scheduler state: %w", err)
+	}
+
+	// Delete pool state
+	deletePoolQuery := `DELETE FROM worker_pool_state WHERE policy_id = $1`
+	_, err = tx.ExecContext(ctx, deletePoolQuery, policyID)
+	if err != nil {
+		tx.Rollback()
+		return fmt.Errorf("failed to delete pool state: %w", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
 // Transaction Support
 
 // WithTransaction executes a function within a database transaction
@@ -812,6 +854,28 @@ func (p *postgresTxPersistor) LoadActiveWorkerInfrastructure(ctx context.Context
 		policyIDs = append(policyIDs, policyID)
 	}
 	return policyIDs, rows.Err()
+}
+
+func (p *postgresTxPersistor) DeleteWorkerInfrastructure(ctx context.Context, policyID uuid.UUID) error {
+	// Delete job executions first (foreign key constraint)
+	_, err := p.tx.ExecContext(ctx, `DELETE FROM worker_job_execution WHERE policy_id = $1`, policyID)
+	if err != nil {
+		return fmt.Errorf("failed to delete job executions: %w", err)
+	}
+
+	// Delete scheduler state
+	_, err = p.tx.ExecContext(ctx, `DELETE FROM worker_scheduler_state WHERE policy_id = $1`, policyID)
+	if err != nil {
+		return fmt.Errorf("failed to delete scheduler state: %w", err)
+	}
+
+	// Delete pool state
+	_, err = p.tx.ExecContext(ctx, `DELETE FROM worker_pool_state WHERE policy_id = $1`, policyID)
+	if err != nil {
+		return fmt.Errorf("failed to delete pool state: %w", err)
+	}
+
+	return nil
 }
 
 func (p *postgresTxPersistor) WithTransaction(ctx context.Context, fn func(context.Context, WorkerPersistor) error) error {

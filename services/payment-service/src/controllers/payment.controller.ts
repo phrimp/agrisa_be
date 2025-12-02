@@ -319,6 +319,11 @@ export class PaymentController {
       });
   }
 
+  @Get('protected/order/:id')
+  getOrderById(@Headers('x-user-id') user_id: string, @Param('id') id: string) {
+    return this.paymentService.findByIdAndUserId(id, user_id);
+  }
+
   // Payout endpoints
   @Post('protected/payout')
   async createPayout(@Body() body: CreatePayoutData) {

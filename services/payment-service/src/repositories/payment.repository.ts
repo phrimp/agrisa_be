@@ -47,6 +47,16 @@ export class PaymentRepository {
     });
   }
 
+  async findByIdAndUserId(
+    id: string,
+    user_id: string,
+  ): Promise<Payment | null> {
+    return await this.paymentRepo.findOne({
+      where: { id, user_id },
+      relations: ['orderItems'],
+    });
+  }
+
   async findByOrderCode(order_code: string): Promise<Payment | null> {
     return await this.paymentRepo.findOne({
       where: { order_code },

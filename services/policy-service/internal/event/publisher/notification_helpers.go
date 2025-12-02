@@ -64,6 +64,39 @@ func (h *NotificationHelper) NotifyPolicyExpired(ctx context.Context, userID, po
 	return h.publisher.PublishNotification(ctx, event)
 }
 
+func (h *NotificationHelper) NotifyPolicyExpiredBatch(ctx context.Context, userIDs []string, policyNumber string) error {
+	event := NotificationEventPushModel{
+		Notification: Notification{
+			Title: "Policy Expired",
+			Body:  fmt.Sprintf("Your policy %s has expired. Please renew to continue coverage.", policyNumber),
+		},
+		UserIDs: userIDs,
+	}
+	return h.publisher.PublishNotification(ctx, event)
+}
+
+func (h *NotificationHelper) NotifyPolicyRenewed(ctx context.Context, userID, policyNumber string) error {
+	event := NotificationEventPushModel{
+		Notification: Notification{
+			Title: "Policy Renewed",
+			Body:  fmt.Sprintf("Your policy %s has expired. Please renew to continue coverage.", policyNumber),
+		},
+		UserIDs: []string{userID},
+	}
+	return h.publisher.PublishNotification(ctx, event)
+}
+
+func (h *NotificationHelper) NotifyPolicyRenewedBatch(ctx context.Context, userIDs []string, policyNumber string) error {
+	event := NotificationEventPushModel{
+		Notification: Notification{
+			Title: "Policy Renewed",
+			Body:  fmt.Sprintf("Your policy %s has been renewed. Please proceed to payment for new policy.", policyNumber),
+		},
+		UserIDs: userIDs,
+	}
+	return h.publisher.PublishNotification(ctx, event)
+}
+
 // NotifyClaimGenerated sends a notification when a claim is automatically generated
 func (h *NotificationHelper) NotifyClaimGenerated(ctx context.Context, userID, policyNumber, claimID string) error {
 	event := NotificationEventPushModel{

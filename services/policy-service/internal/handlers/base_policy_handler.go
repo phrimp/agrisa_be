@@ -46,6 +46,7 @@ func (bph *BasePolicyHandler) Register(app *fiber.App) {
 	policyGroup.Post("/commit", bph.CommitPolicies)                                // POST /base-policies/commit - Manual commit policies to DB
 	policyGroup.Get("/active", bph.GetAllActivePolicy)
 	policyGroup.Get("/detail", bph.GetCompletePolicyDetail) // GET  /base-policies/detail - Get complete policy details with PDF
+	policyGroup.Get("/by-provider", bph.GetByProvider)
 
 	// Utility routes
 	policyGroup.Get("/count", bph.GetBasePolicyCount)                                 // GET  /base-policies/count - Total policy count
@@ -369,4 +370,13 @@ func (bph *BasePolicyHandler) GetCompletePolicyDetail(c fiber.Ctx) error {
 	}
 
 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(detail))
+}
+
+func (bph *BasePolicyHandler) GetByProvider(c fiber.Ctx) error {
+	providerID := ""
+	policies, err := bph.basePolicyService.GetByProvider(providerID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "error get all base policies by provider partner"))
+	}
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(policies))
 }

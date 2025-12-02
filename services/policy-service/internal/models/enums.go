@@ -21,6 +21,7 @@ type BasePolicyStatus string
 const (
 	BasePolicyDraft    BasePolicyStatus = "draft"
 	BasePolicyActive   BasePolicyStatus = "active"
+	BasePolicyClosed   BasePolicyStatus = "closed"
 	BasePolicyArchived BasePolicyStatus = "archived"
 )
 
@@ -31,6 +32,7 @@ const (
 	PolicyPendingReview  PolicyStatus = "pending_review"
 	PolicyPendingPayment PolicyStatus = "pending_payment"
 	PolicyActive         PolicyStatus = "active"
+	PolicyPayout         PolicyStatus = "payout"
 	PolicyExpired        PolicyStatus = "expired"
 	PolicyCancelled      PolicyStatus = "cancelled"
 	PolicyRejected       PolicyStatus = "rejected"

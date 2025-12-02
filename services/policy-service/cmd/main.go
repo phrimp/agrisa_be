@@ -159,7 +159,7 @@ func main() {
 	farmService := services.NewFarmService(farmRepo, cfg, minioClient, workerManager)
 	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, notificationHelper, geminiSelector)
-	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
+	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient, registeredPolicyRepo, basePolicyRepo, notificationHelper, workerManager)
 	basePolicyTriggerService := services.NewBasePolicyTriggerService(basePolicyTriggerRepo)
 	riskAnalysisService := services.NewRiskAnalysisCRUDService(registeredPolicyRepo)
 	claimService := services.NewClaimService(claimRepo, registeredPolicyRepo, farmRepo)
@@ -175,7 +175,7 @@ func main() {
 	}()
 
 	// Start payment event consumer
-	paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyRepo, workerManager)
+	paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyRepo, basePolicyRepo, workerManager)
 	paymentConsumer := event.NewPaymentConsumer(rabbitConn, paymentHandler)
 	if err := paymentConsumer.Start(ctx); err != nil {
 		log.Printf("error starting payment consumer: %v", err)
@@ -232,7 +232,7 @@ func main() {
 	dataSourceHandler := handlers.NewDataSourceHandler(dataSourceService)
 	basePolicyHandler := handlers.NewBasePolicyHandler(basePolicyService, minioClient, workerManager)
 	farmHandler := handlers.NewFarmHandler(farmService, minioClient)
-	policyHandler := handlers.NewPolicyHandler(registeredPolicyService, riskAnalysisService)
+	policyHandler := handlers.NewPolicyHandler(registeredPolicyService, riskAnalysisService, basePolicyService)
 	basePolicyTriggerHandler := handlers.NewBasePolicyTriggerHandler(basePolicyTriggerService)
 	riskAnalysisHandler := handlers.NewRiskAnalysisHandler(riskAnalysisService)
 	claimHandler := handlers.NewClaimHandler(claimService, registeredPolicyService)

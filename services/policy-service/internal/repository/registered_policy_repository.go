@@ -1179,8 +1179,8 @@ func (r *RegisteredPolicyRepository) GetTotalFilterStatusProviders(status string
 
 func (r *RegisteredPolicyRepository) GetTotalFilterStatusPolicies(status string, underwritingStatus string) (int64, error) {
 	query := `
-		SELECT COUNT(*) 
-		FROM registered_policy 
+		SELECT COUNT(*)
+		FROM registered_policy
 		WHERE status = $1 AND underwriting_status = $2
 	`
 	var count int64
@@ -1190,6 +1190,164 @@ func (r *RegisteredPolicyRepository) GetTotalFilterStatusPolicies(status string,
 		return 0, fmt.Errorf("failed to count active approved policies: %w", err)
 	}
 	return count, nil
+}
+
+// ============================================================================
+// POLICY EXPIRATION METHODS (Phase 1.4)
+// ============================================================================
+
+// GetByBasePolicyID retrieves all registered policies for a base policy
+func (r *RegisteredPolicyRepository) GetByBasePolicyID(ctx context.Context, basePolicyID uuid.UUID) ([]models.RegisteredPolicy, error) {
+	var policies []models.RegisteredPolicy
+	query := `SELECT * FROM registered_policy WHERE base_policy_id = $1 ORDER BY created_at DESC`
+
+	err := r.db.SelectContext(ctx, &policies, query, basePolicyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get registered policies by base_policy_id: %w", err)
+	}
+
+	return policies, nil
+}
+
+// ResetPaymentFields resets payment-related fields to default values
+func (r *RegisteredPolicyRepository) ResetPaymentFields(ctx context.Context, policyID uuid.UUID) error {
+	query := `
+		UPDATE registered_policy SET
+			premium_paid_by_farmer = false,
+			premium_paid_at = NULL,
+			updated_at = NOW()
+		WHERE id = $1`
+
+	result, err := r.db.ExecContext(ctx, query, policyID)
+	if err != nil {
+		return fmt.Errorf("failed to reset payment fields: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("policy not found: %s", policyID)
+	}
+
+	slog.Info("Reset payment fields", "policy_id", policyID)
+	return nil
+}
+
+// ResetPaymentFieldsBatch resets payment fields for multiple policies
+func (r *RegisteredPolicyRepository) ResetPaymentFieldsBatch(ctx context.Context, policyIDs []uuid.UUID) error {
+	if len(policyIDs) == 0 {
+		return nil
+	}
+
+	query := `
+		UPDATE registered_policy SET
+			premium_paid_by_farmer = false,
+			premium_paid_at = NULL,
+			updated_at = NOW()
+		WHERE id = ANY($1)`
+
+	// Convert UUIDs to strings for PostgreSQL array
+	policyIDStrs := make([]string, len(policyIDs))
+	for i, id := range policyIDs {
+		policyIDStrs[i] = id.String()
+	}
+
+	result, err := r.db.ExecContext(ctx, query, policyIDStrs)
+	if err != nil {
+		return fmt.Errorf("failed to batch reset payment fields: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	slog.Info("Batch reset payment fields",
+		"policy_count", len(policyIDs),
+		"rows_affected", rowsAffected)
+
+	return nil
+}
+
+// UpdateStatusBatch updates status for multiple policies atomically
+func (r *RegisteredPolicyRepository) UpdateStatusBatch(ctx context.Context, policyIDs []uuid.UUID, status models.PolicyStatus) error {
+	if len(policyIDs) == 0 {
+		return nil
+	}
+
+	query := `
+		UPDATE registered_policy SET
+			status = $1,
+			updated_at = NOW()
+		WHERE id = ANY($2)`
+
+	// Convert UUIDs to strings for PostgreSQL array
+	policyIDStrs := make([]string, len(policyIDs))
+	for i, id := range policyIDs {
+		policyIDStrs[i] = id.String()
+	}
+
+	result, err := r.db.ExecContext(ctx, query, status, policyIDStrs)
+	if err != nil {
+		return fmt.Errorf("failed to batch update status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	slog.Info("Batch updated policy status",
+		"policy_count", len(policyIDs),
+		"new_status", status,
+		"rows_affected", rowsAffected)
+
+	return nil
+}
+
+// UpdateStatusAndResetPaymentBatch updates status and resets payment fields atomically
+func (r *RegisteredPolicyRepository) UpdateStatusAndResetPaymentBatch(
+	ctx context.Context,
+	policyIDs []uuid.UUID,
+	status models.PolicyStatus,
+) error {
+	if len(policyIDs) == 0 {
+		return nil
+	}
+
+	query := `
+		UPDATE registered_policy SET
+			status = $1,
+			premium_paid_by_farmer = false,
+			premium_paid_at = NULL,
+			updated_at = NOW()
+		WHERE id = ANY($2)`
+
+	// Convert UUIDs to strings for PostgreSQL array
+	policyIDStrs := make([]string, len(policyIDs))
+	for i, id := range policyIDs {
+		policyIDStrs[i] = id.String()
+	}
+
+	result, err := r.db.ExecContext(ctx, query, status, policyIDStrs)
+	if err != nil {
+		return fmt.Errorf("failed to batch update status and reset payment: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	slog.Info("Batch updated policy status and reset payment fields",
+		"policy_count", len(policyIDs),
+		"new_status", status,
+		"rows_affected", rowsAffected)
+
+	return nil
 }
 
 func (r *RegisteredPolicyRepository) GetTotalMonthlyRevenue(year int, month int, status string, underwritingStatus string) (float64, error) {

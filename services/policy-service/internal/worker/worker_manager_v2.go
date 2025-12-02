@@ -569,3 +569,82 @@ func (m *WorkerManagerV2) Shutdown() {
 func (m *WorkerManagerV2) GetPersistor() WorkerPersistor {
 	return m.persistor
 }
+
+// CleanupWorkerInfrastructure completely removes worker infrastructure without trace
+// This is used during policy expiration to clean up ALL resources
+func (m *WorkerManagerV2) CleanupWorkerInfrastructure(
+	ctx context.Context,
+	policyID uuid.UUID,
+) error {
+	slog.Info("Cleaning up worker infrastructure completely", "policy_id", policyID)
+
+	// First stop if not already stopped
+	if err := m.StopWorkerInfrastructure(ctx, policyID); err != nil {
+		slog.Warn("Failed to stop before cleanup (may already be stopped)", "error", err)
+	}
+
+	// Remove from in-memory maps
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if pool, exists := m.pools[policyID]; exists {
+		poolName := pool.GetName()
+		delete(m.poolsByName, poolName)
+		delete(m.pools, policyID)
+		slog.Info("Removed pool from memory", "policy_id", policyID, "pool_name", poolName)
+	}
+
+	if scheduler, exists := m.schedulers[policyID]; exists {
+		schedulerName := scheduler.Name
+		delete(m.schedulersByName, schedulerName)
+		delete(m.schedulers, policyID)
+		slog.Info("Removed scheduler from memory", "policy_id", policyID, "scheduler_name", schedulerName)
+	}
+
+	// Clean up cancel function if still exists
+	if _, exists := m.poolCancels[policyID]; exists {
+		delete(m.poolCancels, policyID)
+	}
+
+	// Delete all database records for this worker infrastructure
+	//	if err := m.persistor.DeleteWorkerInfrastructure(ctx, policyID); err != nil {
+	//		slog.Error("Failed to delete worker infrastructure from database",
+	//			"policy_id", policyID,
+	//			"error", err)
+	//		return fmt.Errorf("failed to delete worker infrastructure from database: %w", err)
+	//	}
+
+	// Clear all Redis job history for this policy
+	if m.redisClient != nil {
+		poolKeyPattern := fmt.Sprintf("worker:pool:policy-%s*", policyID.String())
+		jobKeyPattern := fmt.Sprintf("worker:job:policy-%s*", policyID.String())
+
+		// Delete pool-related keys
+		poolKeys, err := m.redisClient.GetClient().Keys(ctx, poolKeyPattern).Result()
+		if err != nil {
+			slog.Warn("Failed to fetch pool keys for cleanup", "error", err)
+		} else if len(poolKeys) > 0 {
+			if err := m.redisClient.GetClient().Del(ctx, poolKeys...).Err(); err != nil {
+				slog.Warn("Failed to delete pool keys", "error", err)
+			} else {
+				slog.Info("Deleted pool Redis keys", "count", len(poolKeys))
+			}
+		}
+
+		// Delete job-related keys
+		jobKeys, err := m.redisClient.GetClient().Keys(ctx, jobKeyPattern).Result()
+		if err != nil {
+			slog.Warn("Failed to fetch job keys for cleanup", "error", err)
+		} else if len(jobKeys) > 0 {
+			if err := m.redisClient.GetClient().Del(ctx, jobKeys...).Err(); err != nil {
+				slog.Warn("Failed to delete job keys", "error", err)
+			} else {
+				slog.Info("Deleted job Redis keys", "count", len(jobKeys))
+			}
+		}
+	}
+
+	slog.Info("Worker infrastructure cleanup completed successfully", "policy_id", policyID)
+
+	return nil
+}

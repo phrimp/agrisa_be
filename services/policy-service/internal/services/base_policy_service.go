@@ -421,6 +421,18 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 			"error", err)
 		return nil, fmt.Errorf("base policy validation: %w", err)
 	}
+	validationWindowTime := time.Now().Add(expiration).Unix()
+
+	if validationWindowTime > int64(*request.BasePolicy.EnrollmentEndDay) {
+		return nil, fmt.Errorf("base policy validation: expiration time must lower than enrollment end day")
+	}
+	if validationWindowTime > int64(*request.BasePolicy.InsuranceValidToDay) {
+		return nil, fmt.Errorf("base policy validation: expiration time must lower than valid to day")
+	}
+	if *request.BasePolicy.InsuranceValidToDay < *request.BasePolicy.EnrollmentEndDay {
+		return nil, fmt.Errorf("base policy validation: insurance valid to day must be greater than enrollment day")
+	}
+
 	if err := s.validateBasePolicyTrigger(request.Trigger); err != nil {
 		slog.Error("Trigger validation failed",
 			"trigger_id", triggerID,
@@ -995,6 +1007,27 @@ func (s *BasePolicyService) CommitPolicies(ctx context.Context, request *models.
 						ConditionCount: conditionCount,
 					})
 					response.TotalCommitted++
+
+					// Send valid date redis key
+					remainTime := int64(*policy.BasePolicy.InsuranceValidToDay) - time.Now().Unix()
+					placeHolder := ""
+					key := policy.BasePolicy.ID.String() + "--BasePolicy--ValidDate"
+					err := s.basePolicyRepo.CreateTempBasePolicyModels(ctx, []byte(placeHolder), key, time.Duration(remainTime)*time.Second)
+					if err != nil {
+						slog.Error("CRITICAL: error creating valid date key", "error", err)
+					}
+					slog.Info("valid date key created", "key", key)
+
+					// Send EnrollmentClosed redis key
+					remainTime = int64(*policy.BasePolicy.EnrollmentEndDay) - time.Now().Unix()
+					placeHolder = ""
+					key = policy.BasePolicy.ID.String() + "--BasePolicy--EnrollmentClosed"
+					err = s.basePolicyRepo.CreateTempBasePolicyModels(ctx, []byte(placeHolder), key, time.Duration(remainTime)*time.Second)
+					if err != nil {
+						slog.Error("CRITICAL: error creating enrollment date key", "error", err)
+					}
+					slog.Info("enrollment closed key created", "key", key)
+
 				}
 
 				slog.Info("Batch committed successfully",
@@ -1354,4 +1387,12 @@ func (s *BasePolicyService) extractObjectNameFromURL(url string) string {
 
 	// If no bucket prefix, return as is
 	return url
+}
+
+func (s *BasePolicyService) GetByID(id uuid.UUID) (*models.BasePolicy, error) {
+	return s.basePolicyRepo.GetBasePolicyByID(id)
+}
+
+func (s *BasePolicyService) GetByProvider(providerID string) ([]models.BasePolicy, error) {
+	return s.basePolicyRepo.GetBasePoliciesByProvider(providerID)
 }
