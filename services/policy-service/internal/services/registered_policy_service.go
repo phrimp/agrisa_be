@@ -282,8 +282,8 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 		return nil, fmt.Errorf("base policy is not active: status=%s", completeBasePolicy.BasePolicy.Status)
 	}
 
-	if completeBasePolicy.BasePolicy.InsuranceValidFromDay != nil && completeBasePolicy.BasePolicy.InsuranceValidToDay != nil {
-		if now.Unix() < int64(*completeBasePolicy.BasePolicy.InsuranceValidFromDay) || now.Unix() > int64(*completeBasePolicy.BasePolicy.InsuranceValidToDay) {
+	if completeBasePolicy.BasePolicy.InsuranceValidToDay != nil {
+		if now.Unix() > int64(*completeBasePolicy.BasePolicy.InsuranceValidToDay) {
 			return nil, fmt.Errorf("base policy is invalid")
 		}
 	}
