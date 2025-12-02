@@ -1349,3 +1349,118 @@ func (r *RegisteredPolicyRepository) UpdateStatusAndResetPaymentBatch(
 
 	return nil
 }
+
+func (r *RegisteredPolicyRepository) GetTotalMonthlyRevenue(year int, month int, status string, underwritingStatus string) (float64, error) {
+	query := `
+	WITH month_range AS (
+		SELECT
+			EXTRACT(EPOCH FROM DATE_TRUNC('month', make_date($1, $2, 1)))::INT AS month_start,
+			EXTRACT(EPOCH FROM (DATE_TRUNC('month', make_date($1, $2, 1)) + INTERVAL '1 month - 1 second'))::INT AS month_end
+	)
+	SELECT COALESCE(SUM(rp.total_data_cost), 0) AS total_cost
+	FROM registered_policy rp
+	CROSS JOIN month_range mr
+	WHERE rp.status = $3
+		AND rp.underwriting_status = $4
+		AND rp.coverage_start_date IS NOT NULL
+		AND rp.coverage_start_date > 0
+		AND rp.coverage_end_date IS NOT NULL
+		AND rp.coverage_end_date > 0
+		AND rp.coverage_start_date <= mr.month_end
+		AND rp.coverage_end_date >= mr.month_start;
+	`
+
+	var totalCost float64
+
+	err := r.db.GetContext(
+		context.Background(),
+		&totalCost,
+		query,
+		year,
+		month,
+		status,
+		underwritingStatus,
+	)
+	if err != nil {
+		slog.Error("Failed to calculate total monthly revenue", "error", err)
+		return 0, err
+	}
+
+	return totalCost, nil
+}
+
+func (r *RegisteredPolicyRepository) GetMonthlyTotalRegisteredPolicyByStatus(year int, month int, status string, underwritingStatus string) (int64, error) {
+	query := `
+	WITH month_range AS (
+		SELECT
+			EXTRACT(EPOCH FROM DATE_TRUNC('month', make_date($1, $2, 1)))::INT AS month_start,
+			EXTRACT(EPOCH FROM (DATE_TRUNC('month', make_date($1, $2, 1)) + INTERVAL '1 month - 1 second'))::INT AS month_end
+	)
+	SELECT COALESCE(count(rp.id), 0) AS total_cost
+	FROM registered_policy rp
+	CROSS JOIN month_range mr
+	WHERE rp.status = $3
+		AND rp.underwriting_status = $4
+		AND rp.coverage_start_date IS NOT NULL
+		AND rp.coverage_start_date > 0
+		AND rp.coverage_end_date IS NOT NULL
+		AND rp.coverage_end_date > 0
+		AND rp.coverage_start_date <= mr.month_end
+		AND rp.coverage_end_date >= mr.month_start;
+	`
+
+	var count int64
+	err := r.db.GetContext(
+		context.Background(),
+		&count,
+		query,
+		year,
+		month,
+		status,
+		underwritingStatus,
+	)
+	if err != nil {
+		slog.Error("Failed to count total registered policies by month", "error", err)
+		return 0, err
+	}
+
+	return count, nil
+}
+
+func (r *RegisteredPolicyRepository) GetTotalProvidersByMonth(year int, month int, status string, underwritingStatus string) (int64, error) {
+	query := `
+	WITH month_range AS (
+		SELECT
+			EXTRACT(EPOCH FROM DATE_TRUNC('month', make_date($1, $2, 1)))::INT AS month_start,
+			EXTRACT(EPOCH FROM (DATE_TRUNC('month', make_date($1, $2, 1)) + INTERVAL '1 month - 1 second'))::INT AS month_end
+	)
+	SELECT COALESCE(count(DISTINCT insurance_provider_id), 0) AS total_active_provider
+	FROM registered_policy rp
+	CROSS JOIN month_range mr
+	WHERE rp.status = $3
+		AND rp.underwriting_status = $4
+		AND rp.coverage_start_date IS NOT NULL
+		AND rp.coverage_start_date > 0
+		AND rp.coverage_end_date IS NOT NULL
+		AND rp.coverage_end_date > 0
+		AND rp.coverage_start_date <= mr.month_end
+		AND rp.coverage_end_date >= mr.month_start;
+	`
+
+	var count int64
+	err := r.db.GetContext(
+		context.Background(),
+		&count,
+		query,
+		year,
+		month,
+		status,
+		underwritingStatus,
+	)
+	if err != nil {
+		slog.Error("Failed to count total providers by month", "error", err)
+		return 0, err
+	}
+
+	return count, nil
+}

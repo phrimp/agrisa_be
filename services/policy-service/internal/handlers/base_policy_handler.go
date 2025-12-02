@@ -19,16 +19,18 @@ import (
 )
 
 type BasePolicyHandler struct {
-	basePolicyService *services.BasePolicyService
-	minioClient       *minio.MinioClient
-	workerManager     *worker.WorkerManagerV2
+	basePolicyService       *services.BasePolicyService
+	minioClient             *minio.MinioClient
+	workerManager           *worker.WorkerManagerV2
+	registeredPolicyService *services.RegisteredPolicyService
 }
 
-func NewBasePolicyHandler(basePolicyService *services.BasePolicyService, minioClient *minio.MinioClient, workerManager *worker.WorkerManagerV2) *BasePolicyHandler {
+func NewBasePolicyHandler(basePolicyService *services.BasePolicyService, minioClient *minio.MinioClient, workerManager *worker.WorkerManagerV2, registeredPolicyService *services.RegisteredPolicyService) *BasePolicyHandler {
 	return &BasePolicyHandler{
-		basePolicyService: basePolicyService,
-		minioClient:       minioClient,
-		workerManager:     workerManager,
+		basePolicyService:       basePolicyService,
+		minioClient:             minioClient,
+		workerManager:           workerManager,
+		registeredPolicyService: registeredPolicyService,
 	}
 }
 
@@ -373,7 +375,47 @@ func (bph *BasePolicyHandler) GetCompletePolicyDetail(c fiber.Ctx) error {
 }
 
 func (bph *BasePolicyHandler) GetByProvider(c fiber.Ctx) error {
-	providerID := ""
+	tokenString := c.Get("Authorization")
+	if tokenString == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "Authorization token is required"))
+	}
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	slog.Info("Fetching partner policies token: ", "token", token)
+	// calling api to get profile by token
+	partnerProfileData, err := bph.registeredPolicyService.GetInsurancePartnerProfile(token)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+	}
+
+	// log the partner profile data
+	slog.Info("Partner profile data", "data", partnerProfileData)
+
+	// get partner id from profile data
+	partnerID, err := bph.registeredPolicyService.GetPartnerID(partnerProfileData)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
+	}
+
+	profileData, ok := partnerProfileData["data"].(map[string]any)
+	if ok {
+		partnerIDProfile, ok := profileData["partner_id"].(string)
+		if ok {
+			if partnerID != partnerIDProfile {
+				return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "Cannot underwrite others policies"))
+			}
+		} else {
+			return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "partner id not found"))
+		}
+	} else {
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "profile data not fould"))
+	}
+
+	providerID := partnerID
 	policies, err := bph.basePolicyService.GetByProvider(providerID)
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "error get all base policies by provider partner"))
