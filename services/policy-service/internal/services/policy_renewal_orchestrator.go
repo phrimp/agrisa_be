@@ -206,8 +206,16 @@ func (o *PolicyRenewalOrchestrator) PrepareExpired(
 
 	if len(registeredPolicies) > 0 {
 
+		skipStatus := map[models.PolicyStatus]bool{
+			models.PolicyCancelled: true,
+			models.PolicyRejected:  true,
+		}
 		for _, policy := range registeredPolicies {
 
+			if skipStatus[policy.Status] {
+				slog.Info("skipping status for expired policy", "status", policy.Status, "id", policy.ID)
+				continue
+			}
 			policy.Status = models.PolicyExpired
 			policy.UpdatedAt = time.Now()
 

@@ -840,18 +840,20 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 
 	// Payment Window
 	if req.UnderwritingStatus == models.UnderwritingApproved {
+
+		basePolicy, err := s.basePolicyRepo.GetBasePolicyByID(policy.BasePolicyID)
+		if err != nil {
+			slog.Error("CRITICAL: retrieve base policy failed", "error", err)
+		}
+
 		go func() {
 			slog.Info("underwriting approved, start payment window: 24h before policy auto cancel", "policy_id", policyID)
+			time.Sleep(time.Duration(*basePolicy.MaxPremiumPaymentProlong) * time.Minute) // TODO: Change to hour
 			policy, err := s.registeredPolicyRepo.GetByID(policyID)
 			if err != nil {
 				slog.Error("CRITICAL: policy not found skip payment window", "error", err)
 				return
 			}
-			basePolicy, err := s.basePolicyRepo.GetBasePolicyByID(policy.BasePolicyID)
-			if err != nil {
-				slog.Error("CRITICAL: retrieve base policy failed", "error", err)
-			}
-			time.Sleep(time.Duration(*basePolicy.MaxPremiumPaymentProlong) * time.Minute) // TODO: Change to hour
 			if policy.Status != models.PolicyPendingPayment {
 				slog.Info("policy status invalid skip payment window", "status", policy.Status)
 				return
