@@ -236,16 +236,19 @@ func (c *PaymentConsumer) processMessage(ctx context.Context, msg amqp.Delivery)
 // DefaultPaymentEventHandler is the default implementation of PaymentEventHandler
 type DefaultPaymentEventHandler struct {
 	registeredPolicyRepo *repository.RegisteredPolicyRepository
+	basePolicyRepo       *repository.BasePolicyRepository
 	workerManager        *worker.WorkerManagerV2
 }
 
 // NewDefaultPaymentEventHandler creates a new default payment event handler
 func NewDefaultPaymentEventHandler(
 	registeredPolicyRepo *repository.RegisteredPolicyRepository,
+	basePolicyRepo *repository.BasePolicyRepository,
 	workerManager *worker.WorkerManagerV2,
 ) *DefaultPaymentEventHandler {
 	return &DefaultPaymentEventHandler{
 		registeredPolicyRepo: registeredPolicyRepo,
+		basePolicyRepo:       basePolicyRepo,
 		workerManager:        workerManager,
 	}
 }
@@ -462,6 +465,13 @@ func (h *DefaultPaymentEventHandler) processPolicyPayment(
 		return err
 	}
 
+	basePolicy, err := h.basePolicyRepo.GetBasePolicyByID(registeredPolicy.BasePolicyID)
+	if err != nil {
+		tx.Rollback()
+		slog.Error("failed to retrieve base policy", "error", err)
+		return err
+	}
+
 	if registeredPolicy.UnderwritingStatus != models.UnderwritingApproved {
 		tx.Rollback()
 		slog.Warn("only policy with underwriting approved are allowed to be processed", "actual status", registeredPolicy.UnderwritingStatus)
@@ -500,7 +510,7 @@ func (h *DefaultPaymentEventHandler) processPolicyPayment(
 	// Update policy with payment information
 	now := time.Now().Unix()
 	if registeredPolicy.CoverageStartDate == 0 {
-		registeredPolicy.CoverageStartDate = now // Coverage starts immediately upon payment
+		registeredPolicy.CoverageStartDate = max(now, int64(*basePolicy.InsuranceValidFromDay))
 	}
 	registeredPolicy.Status = models.PolicyActive
 	registeredPolicy.PremiumPaidByFarmer = true
