@@ -63,4 +63,14 @@ COPY --chown=app:app services/satellite-data-service/app/ ./app/
 
 USER app
 
-CMD ["python", "-m", "app.main"]
+# Production-ready uvicorn with multiple workers for parallel request handling
+# Workers: 4 (optimal for CPU-bound + I/O-bound workload)
+# Timeout: 120s (GEE API can take time for large operations)
+# Backlog: 2048 (queue size for incoming connections)
+CMD ["uvicorn", "app.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "5", \
+     "--timeout-keep-alive", "120", \
+     "--backlog", "2048", \
+     "--log-level", "info"]
