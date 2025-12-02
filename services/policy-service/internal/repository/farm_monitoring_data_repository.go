@@ -564,7 +564,7 @@ func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatus(ctx context.Contex
 	argIndex := 1
 
 	query := `
-		SELECT
+		SELECT DISTINCT ON (fmd.id)
 			fmd.id,
 			fmd.farm_id,
 			fmd.base_policy_trigger_condition_id,
@@ -583,7 +583,10 @@ func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatus(ctx context.Contex
 			rp.status as policy_status,
 			rp.policy_number
 		FROM farm_monitoring_data fmd
-		LEFT JOIN registered_policies rp ON fmd.farm_id = rp.farm_id
+		LEFT JOIN registered_policy rp ON fmd.farm_id = rp.farm_id
+			AND rp.status IN ('active', 'pending_payment', 'pending_review')
+			AND (rp.coverage_start_date = 0 OR fmd.measurement_timestamp >= rp.coverage_start_date)
+			AND (rp.coverage_end_date = 0 OR fmd.measurement_timestamp <= rp.coverage_end_date)
 		WHERE 1=1`
 
 	if startTimestamp != nil {
@@ -596,7 +599,7 @@ func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatus(ctx context.Contex
 		args = append(args, *endTimestamp)
 	}
 
-	query += " ORDER BY fmd.measurement_timestamp DESC"
+	query += " ORDER BY fmd.id, rp.created_at DESC NULLS LAST, fmd.measurement_timestamp DESC"
 
 	err := r.db.SelectContext(ctx, &dataList, query, args...)
 	if err != nil {
@@ -621,7 +624,7 @@ func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatusByFarmID(ctx contex
 	argIndex := 2
 
 	query := `
-		SELECT
+		SELECT DISTINCT ON (fmd.id)
 			fmd.id,
 			fmd.farm_id,
 			fmd.base_policy_trigger_condition_id,
@@ -641,6 +644,9 @@ func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatusByFarmID(ctx contex
 			rp.policy_number
 		FROM farm_monitoring_data fmd
 		LEFT JOIN registered_policy rp ON fmd.farm_id = rp.farm_id
+			AND rp.status IN ('active', 'pending_payment', 'pending_review')
+			AND (rp.coverage_start_date = 0 OR fmd.measurement_timestamp >= rp.coverage_start_date)
+			AND (rp.coverage_end_date = 0 OR fmd.measurement_timestamp <= rp.coverage_end_date)
 		WHERE fmd.farm_id = $1`
 
 	if startTimestamp != nil {
@@ -653,7 +659,7 @@ func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatusByFarmID(ctx contex
 		args = append(args, *endTimestamp)
 	}
 
-	query += " ORDER BY fmd.measurement_timestamp DESC"
+	query += " ORDER BY fmd.id, rp.created_at DESC NULLS LAST, fmd.measurement_timestamp DESC"
 
 	err := r.db.SelectContext(ctx, &dataList, query, args...)
 	if err != nil {
@@ -688,7 +694,7 @@ func (r *FarmMonitoringDataRepository) GetByFarmIDAndParameterNameWithPolicyStat
 	argIndex := 3
 
 	query := `
-		SELECT
+		SELECT DISTINCT ON (fmd.id)
 			fmd.id,
 			fmd.farm_id,
 			fmd.base_policy_trigger_condition_id,
@@ -708,6 +714,9 @@ func (r *FarmMonitoringDataRepository) GetByFarmIDAndParameterNameWithPolicyStat
 			rp.policy_number
 		FROM farm_monitoring_data fmd
 		LEFT JOIN registered_policy rp ON fmd.farm_id = rp.farm_id
+			AND rp.status IN ('active', 'pending_payment', 'pending_review')
+			AND (rp.coverage_start_date = 0 OR fmd.measurement_timestamp >= rp.coverage_start_date)
+			AND (rp.coverage_end_date = 0 OR fmd.measurement_timestamp <= rp.coverage_end_date)
 		WHERE fmd.farm_id = $1 AND fmd.parameter_name = $2`
 
 	if startTimestamp != nil {
@@ -720,7 +729,7 @@ func (r *FarmMonitoringDataRepository) GetByFarmIDAndParameterNameWithPolicyStat
 		args = append(args, *endTimestamp)
 	}
 
-	query += " ORDER BY fmd.measurement_timestamp DESC"
+	query += " ORDER BY fmd.id, rp.created_at DESC NULLS LAST, fmd.measurement_timestamp DESC"
 
 	err := r.db.SelectContext(ctx, &dataList, query, args...)
 	if err != nil {
