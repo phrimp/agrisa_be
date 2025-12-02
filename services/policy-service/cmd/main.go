@@ -230,7 +230,7 @@ func main() {
 	// Initialize handlers
 	dataTierHandler := handlers.NewDataTierHandler(dataTierService)
 	dataSourceHandler := handlers.NewDataSourceHandler(dataSourceService)
-	basePolicyHandler := handlers.NewBasePolicyHandler(basePolicyService, minioClient, workerManager)
+	basePolicyHandler := handlers.NewBasePolicyHandler(basePolicyService, minioClient, workerManager, registeredPolicyService)
 	farmHandler := handlers.NewFarmHandler(farmService, minioClient)
 	policyHandler := handlers.NewPolicyHandler(registeredPolicyService, riskAnalysisService, basePolicyService)
 	basePolicyTriggerHandler := handlers.NewBasePolicyTriggerHandler(basePolicyTriggerService)
