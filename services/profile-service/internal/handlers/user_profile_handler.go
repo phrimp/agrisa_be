@@ -22,6 +22,7 @@ func (h *UserProfileHandler) RegisterRoutes(router *gin.Engine) {
 
 	userProfilePubGr := router.Group("/profile/public/api/v1")
 	userProfilePubGr.POST("/farmers", h.CreateFarmerProfile)
+	userProfilePubGr.GET("/users/:partner_id", h.GetUserProfilesByPartnerID)
 
 	userProfileProGr := router.Group("/profile/protected/api/v1")
 	userProfileProGr.PUT("/users", h.UpdateUserProfile)
@@ -100,5 +101,18 @@ func (h *UserProfileHandler) UpdateUserProfile(c *gin.Context) {
 	}
 
 	successResponse := utils.CreateSuccessResponse(updatedProfile)
+	c.JSON(200, successResponse)
+}
+
+func (h *UserProfileHandler) GetUserProfilesByPartnerID(c *gin.Context) {
+	partnerID := c.Param("partner_id")
+	userProfiles, err := h.UserService.GetUserProfilesByPartnerID(partnerID)
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	successResponse := utils.CreateSuccessResponse(userProfiles)
 	c.JSON(200, successResponse)
 }

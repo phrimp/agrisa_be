@@ -887,3 +887,7 @@ type MonthlyDataCostRequest struct {
 	UnderwritingStatus string `json:"underwriting_status,omitempty"`
 	OrderBy            string `json:"order_by,omitempty"`
 }
+
+type CreateNewClaimRejectionReponse struct {
+	ClaimRejectionID uuid.UUID `json:"claim_rejection_id"`
+}

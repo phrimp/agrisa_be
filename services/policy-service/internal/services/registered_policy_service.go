@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"policy-service/internal/ai/gemini"
 	"policy-service/internal/database/minio"
+	"policy-service/internal/event/publisher"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
@@ -33,6 +34,7 @@ type RegisteredPolicyService struct {
 	dataSourceRepo         *repository.DataSourceRepository
 	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository
 	minioClient            *minio.MinioClient
+	notiPublisher          *publisher.NotificationHelper
 	geminiSelector         *gemini.GeminiClientSelector
 }
 
@@ -47,6 +49,7 @@ func NewRegisteredPolicyService(
 	dataSourceRepo *repository.DataSourceRepository,
 	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository,
 	minioClient *minio.MinioClient,
+	notiPublisher *publisher.NotificationHelper,
 	geminiSelector *gemini.GeminiClientSelector,
 ) *RegisteredPolicyService {
 	return &RegisteredPolicyService{
@@ -59,6 +62,7 @@ func NewRegisteredPolicyService(
 		dataSourceRepo:         dataSourceRepo,
 		farmMonitoringDataRepo: farmMonitoringDataRepo,
 		minioClient:            minioClient,
+		notiPublisher:          notiPublisher,
 		geminiSelector:         geminiSelector,
 	}
 }
@@ -151,7 +155,7 @@ func (s *RegisteredPolicyService) ArchiveExpiredPolicy(ctx context.Context, poli
 }
 
 // RecoverActivePolicies recovers worker infrastructure for all active policies after restart
-func (s *RegisteredPolicyService) RecoverActivePolicies(ctx context.Context) error {
+func (s *RegisteredPolicyService) RecoverPolicies(ctx context.Context) error {
 	slog.Info("Recovering active policy worker infrastructure")
 
 	// Load active policy IDs from database
@@ -354,6 +358,26 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	// Extract optional check_policy parameter (defaults to false)
 	checkPolicy, _ := params["check_policy"].(bool)
 
+	// Extract optional inject_test parameter for testing claim generation
+	// inject_test should be an array of FarmMonitoringData objects
+	var testMonitoringData []models.FarmMonitoringData
+	if injectTestRaw, ok := params["inject_test"]; ok {
+		// Parse test data from parameter
+		if testDataArray, ok := injectTestRaw.([]interface{}); ok {
+			for _, item := range testDataArray {
+				if testDataMap, ok := item.(map[string]interface{}); ok {
+					// Convert map to FarmMonitoringData
+					testData := parseFarmMonitoringDataFromMap(testDataMap, farmID)
+					testMonitoringData = append(testMonitoringData, testData)
+				}
+			}
+			slog.Info("Test monitoring data injected for testing",
+				"policy_id", policyID,
+				"farm_id", farmID,
+				"test_data_count", len(testMonitoringData))
+		}
+	}
+
 	// Get triggers and conditions for this base policy
 	triggers, err := s.basePolicyRepo.GetBasePolicyTriggersByPolicyID(basePolicyID)
 	if err != nil {
@@ -457,8 +481,78 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 	ctx := context.Background()
 
+	// Initialize result variables
+	var allMonitoringData []models.FarmMonitoringData
+	var agroPolygonID string
+
+	// If test data is injected, skip API fetching and use test data directly
+	if len(testMonitoringData) > 0 {
+		slog.Info("Using injected test data, skipping API fetch",
+			"policy_id", policyID,
+			"farm_id", farmID,
+			"test_records", len(testMonitoringData))
+
+		allMonitoringData = testMonitoringData
+
+		// Store test monitoring data in database for consistency
+		if err := s.farmMonitoringDataRepo.CreateBatch(ctx, allMonitoringData); err != nil {
+			return fmt.Errorf("failed to store test monitoring data: %w", err)
+		}
+		slog.Info("Test monitoring data stored successfully",
+			"farm_id", farmID,
+			"total_records", len(allMonitoringData))
+
+		// Check policy trigger conditions with test data
+		if checkPolicy && len(allMonitoringData) > 0 {
+			slog.Info("Checking policy trigger conditions with test data",
+				"policy_id", policyID,
+				"farm_id", farmID,
+				"data_points", len(allMonitoringData))
+
+			// Evaluate trigger conditions against test data
+			triggeredConditions := s.evaluateTriggerConditions(ctx, triggers, allMonitoringData, farmID)
+
+			if len(triggeredConditions) > 0 {
+				slog.Info("Trigger conditions satisfied with test data",
+					"policy_id", policyID,
+					"triggered_conditions", len(triggeredConditions))
+
+				// Generate Claim
+				claim, err := s.generateClaimFromTrigger(ctx, policyID, basePolicyID, farmID, triggers[0].ID, triggeredConditions)
+				if err != nil {
+					slog.Error("Failed to generate claim from trigger",
+						"policy_id", policyID,
+						"error", err)
+				} else {
+					slog.Info("Claim generated successfully from test data",
+						"claim_id", claim.ID,
+						"claim_number", claim.ClaimNumber,
+						"claim_amount", claim.ClaimAmount,
+						"policy_id", policyID)
+
+					for _, tc := range triggeredConditions {
+						slog.Info("Triggered condition details",
+							"claim_id", claim.ID,
+							"condition_id", tc.ConditionID,
+							"parameter", tc.ParameterName,
+							"measured_value", tc.MeasuredValue,
+							"threshold_value", tc.ThresholdValue,
+							"operator", tc.Operator,
+							"consecutive_days", tc.ConsecutiveDays,
+							"is_early_warning", tc.IsEarlyWarning)
+					}
+				}
+			}
+		}
+
+		// Schedule risk analysis
+		scheduler.AddJob(riskAnalysisJob)
+		return nil
+	}
+
 	// Load farm to get boundary coordinates
-	farm, err := s.farmService.GetByFarmID(ctx, farmID.String())
+	var farm *models.Farm
+	farm, err = s.farmService.GetByFarmID(ctx, farmID.String())
 	if err != nil {
 		return fmt.Errorf("failed to load farm: %w", err)
 	}
@@ -555,10 +649,8 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	}
 
 	// Collect results from all workers
-	allMonitoringData := []models.FarmMonitoringData{}
 	errorSummary := make(map[models.DataSourceParameterName]error)
 	skipSummary := make(map[models.DataSourceParameterName]string)
-	var agroPolygonID string // Store polygon ID from weather API
 
 	for i := 0; i < jobsEnqueued; i++ {
 		resp := <-results
@@ -618,24 +710,26 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		}
 	}
 
-	// Log summary
-	successCount := len(conditionsWithDataSources) - len(errorSummary) - len(skipSummary)
-	successRate := float64(successCount) / float64(len(conditionsWithDataSources)) * 100
+	// Log summary (only for non-test data path)
+	if len(testMonitoringData) == 0 {
+		successCount := len(conditionsWithDataSources) - len(errorSummary) - len(skipSummary)
+		successRate := float64(successCount) / float64(len(conditionsWithDataSources)) * 100
 
-	slog.Info("Farm monitoring data fetch completed",
-		"policy_id", policyID,
-		"farm_id", farmID,
-		"base_policy_id", basePolicyID,
-		"total_conditions", len(conditionsWithDataSources),
-		"successful", successCount,
-		"failed", len(errorSummary),
-		"skipped", len(skipSummary),
-		"success_rate", fmt.Sprintf("%.1f%%", successRate),
-		"records_stored", len(allMonitoringData))
+		slog.Info("Farm monitoring data fetch completed",
+			"policy_id", policyID,
+			"farm_id", farmID,
+			"base_policy_id", basePolicyID,
+			"total_conditions", len(conditionsWithDataSources),
+			"successful", successCount,
+			"failed", len(errorSummary),
+			"skipped", len(skipSummary),
+			"success_rate", fmt.Sprintf("%.1f%%", successRate),
+			"records_stored", len(allMonitoringData))
 
-	// Only fail if ALL sources failed
-	if len(errorSummary) == len(conditionsWithDataSources) {
-		return fmt.Errorf("all %d data sources failed to fetch", len(conditionsWithDataSources))
+		// Only fail if ALL sources failed
+		if len(errorSummary) == len(conditionsWithDataSources) {
+			return fmt.Errorf("all %d data sources failed to fetch", len(conditionsWithDataSources))
+		}
 	}
 
 	// Check policy trigger conditions if enabled
@@ -1574,7 +1668,7 @@ func fetchWeatherData(client *http.Client,
 	}
 
 	// Execute request with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	httpReq = httpReq.WithContext(ctx)
 
@@ -1901,6 +1995,71 @@ func min(a, b int) int {
 	return b
 }
 
+// parseFarmMonitoringDataFromMap converts a map to FarmMonitoringData for test injection
+func parseFarmMonitoringDataFromMap(dataMap map[string]interface{}, farmID uuid.UUID) models.FarmMonitoringData {
+	data := models.FarmMonitoringData{
+		ID:     uuid.New(),
+		FarmID: farmID,
+	}
+
+	// Parse BasePolicyTriggerConditionID
+	if condIDStr, ok := dataMap["base_policy_trigger_condition_id"].(string); ok {
+		if condID, err := uuid.Parse(condIDStr); err == nil {
+			data.BasePolicyTriggerConditionID = condID
+		}
+	}
+
+	// Parse ParameterName
+	if paramName, ok := dataMap["parameter_name"].(string); ok {
+		data.ParameterName = models.DataSourceParameterName(paramName)
+	}
+
+	// Parse MeasuredValue
+	if measuredValue, ok := dataMap["measured_value"].(float64); ok {
+		data.MeasuredValue = measuredValue
+	}
+
+	// Parse Unit (optional)
+	if unit, ok := dataMap["unit"].(string); ok {
+		data.Unit = &unit
+	}
+
+	// Parse MeasurementTimestamp
+	if timestamp, ok := dataMap["measurement_timestamp"].(float64); ok {
+		data.MeasurementTimestamp = int64(timestamp)
+	} else {
+		// Default to current time if not provided
+		data.MeasurementTimestamp = time.Now().Unix()
+	}
+
+	// Parse ComponentData (optional)
+	if componentData, ok := dataMap["component_data"].(map[string]interface{}); ok {
+		data.ComponentData = componentData
+	}
+
+	// Parse DataQuality (optional, defaults to "good")
+	if quality, ok := dataMap["data_quality"].(string); ok {
+		data.DataQuality = models.DataQuality(quality)
+	} else {
+		data.DataQuality = models.DataQualityGood
+	}
+
+	// Parse ConfidenceScore (optional)
+	if score, ok := dataMap["confidence_score"].(float64); ok {
+		data.ConfidenceScore = &score
+	}
+
+	// Parse MeasurementSource (optional)
+	if source, ok := dataMap["measurement_source"].(string); ok {
+		data.MeasurementSource = &source
+	}
+
+	// Set CreatedAt to now
+	data.CreatedAt = time.Now()
+
+	return data
+}
+
 // ============================================================================
 // Validation
 // ============================================================================
@@ -1938,7 +2097,7 @@ func (s *RegisteredPolicyService) validatePolicyTags(tags map[string]string, req
 // BUSINESS PROCESS
 // ============================================================================
 
-func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicyRequest, ctx context.Context) (*models.RegisterAPolicyResponse, error) {
+func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicyRequest, ctx context.Context, partnerUserIDs []string) (*models.RegisterAPolicyResponse, error) {
 	var err error
 	tx, err := s.registeredPolicyRepo.BeginTransaction()
 	if err != nil {
@@ -1964,15 +2123,53 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 	var farm *models.Farm
 
 	if request.IsNewFarm {
-		// create new farm
-		return nil, fmt.Errorf("feature unimplemented, comeback later") // TODO: delete later
+		// Create new farm with validation
 		farm = &request.Farm
 		slog.Info("new farm creation request for a new registered policy", "farm", farm)
-		err := s.farmService.CreateFarmTx(farm, request.RegisteredPolicy.FarmerID, tx)
+
+		// Validate required fields (using same validation logic as CreateFarmValidate)
+		if farm.CropType == "" {
+			return nil, fmt.Errorf("crop_type is required")
+		}
+
+		if farm.AreaSqm <= 0 {
+			return nil, fmt.Errorf("area_sqm must be greater than 0")
+		}
+
+		if !ValidateCroptype(farm.CropType) {
+			return nil, fmt.Errorf("invalid crop_type (only rice or coffee allowed)")
+		}
+
+		if farm.SoilType == nil {
+			return nil, fmt.Errorf("soil_type is required")
+		}
+
+		if !ValidateSoilType(farm.SoilType, farm.CropType) {
+			return nil, fmt.Errorf("invalid soil_type for the given crop_type")
+		}
+
+		// Validate harvest date if provided
+		if farm.ExpectedHarvestDate != nil {
+			if farm.PlantingDate == nil {
+				return nil, fmt.Errorf("planting_date is required when expected_harvest_date is provided")
+			}
+			if *farm.ExpectedHarvestDate < *farm.PlantingDate {
+				return nil, fmt.Errorf("expected_harvest_date must be greater than or equal to planting_date")
+			}
+		}
+
+		if farm.OwnerNationalID == nil {
+			return nil, fmt.Errorf("owner_national_id is required")
+		}
+
+		// Create farm in transaction
+		err = s.farmService.CreateFarmTx(farm, request.RegisteredPolicy.FarmerID, tx)
 		if err != nil {
 			slog.Error("error creating new farm", "error", err)
 			return nil, fmt.Errorf("error creating farm: %w", err)
 		}
+
+		slog.Info("new farm created successfully", "farm_id", farm.ID)
 	} else {
 		farm, err = s.farmService.GetByFarmID(ctx, request.FarmID)
 		if err != nil {
@@ -2105,6 +2302,30 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 			slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist")
 		}
 		scheduler.AddJob(fullYearJob)
+	}()
+
+	go func() {
+		for {
+			err := s.notiPublisher.NotifyPolicyRegistered(ctx, request.RegisteredPolicy.FarmerID, request.RegisteredPolicy.PolicyNumber)
+			if err == nil {
+				slog.Info("policy registeration notification sent", "policy id", request.RegisteredPolicy.ID)
+				return
+			}
+			slog.Error("error sending policy registeration notification", "error", err)
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
+	go func() {
+		for {
+			err := s.notiPublisher.NotifyPolicyRegisteredPartner(ctx, partnerUserIDs, request.RegisteredPolicy.PolicyNumber)
+			if err == nil {
+				slog.Info("policy registeration partner notification sent", "policy id", request.RegisteredPolicy.ID)
+				return
+			}
+			slog.Error("error sending policy registeration partner notification", "error", err)
+			time.Sleep(10 * time.Second)
+		}
 	}()
 
 	return &models.RegisterAPolicyResponse{
@@ -2379,6 +2600,22 @@ func (s *RegisteredPolicyService) GetFarmerMonitoringData(
 	return data, nil
 }
 
+func (s *RegisteredPolicyService) GetUnderwritingByPolicyID(policyID uuid.UUID) ([]models.RegisteredPolicyUnderwriting, error) {
+	return s.registeredPolicyRepo.GetUnderwritingsByPolicyID(policyID)
+}
+
+func (s *RegisteredPolicyService) GetUnderwritingByPolicyIDAndFarmerID(policyID uuid.UUID, farmerID string) ([]models.RegisteredPolicyUnderwriting, error) {
+	return s.registeredPolicyRepo.GetUnderwritingsByPolicyIDAndFarmerID(policyID, farmerID)
+}
+
+func (s *RegisteredPolicyService) GetAllUnderwriting() ([]models.RegisteredPolicyUnderwriting, error) {
+	return s.registeredPolicyRepo.GetAllUnderwriting()
+}
+
+func (s *RegisteredPolicyService) GetInsuranceProviderIDByID(policyID uuid.UUID) (string, error) {
+	return s.registeredPolicyRepo.GetInsuranceProviderIDByID(policyID)
+}
+
 // GetFarmerMonitoringDataByParameter retrieves monitoring data for a specific parameter from a farmer's own farm
 func (s *RegisteredPolicyService) GetFarmerMonitoringDataByParameter(
 	ctx context.Context,
@@ -2502,7 +2739,6 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 }
 
 func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]interface{}, error) {
-
 	url := "https://agrisa-api.phrimp.io.vn/profile/protected/api/v1/insurance-partners/me/profile"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -2607,4 +2843,56 @@ func (s *RegisteredPolicyService) GetMonthlyDataCost(
 	}
 
 	return response, nil
+}
+
+func (s *RegisteredPolicyService) GetAllUserIDsFromInsuranceProvider(providerID string, token string) ([]string, error) {
+	url := "http://profile-service:8087/profile/public/api/v1/users/" + providerID
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		slog.Error("Error creating request for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Add("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error("Error making request for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		slog.Error("Error reading response body for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error reading response: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Error("Unexpected status code for insurance partner profile", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		slog.Error("Error parsing JSON for insurance partner profile", "error", err)
+		return nil, fmt.Errorf("error parsing JSON: %v", err)
+	}
+	profileDatas, ok := result["data"].([]any)
+	if !ok {
+		slog.Error("profile data not fould", "full response", result)
+		return nil, fmt.Errorf("profile data not fould")
+	}
+	userID := []string{}
+	for _, userRawData := range profileDatas {
+		userData := userRawData.(map[string]any)
+		id, ok := userData["user_id"].(string)
+		if !ok {
+			slog.Warn("user id not found in profile data", "profile data", userRawData)
+			continue
+		}
+		userID = append(userID, id)
+	}
+	return userID, nil
 }

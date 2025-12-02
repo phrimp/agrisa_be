@@ -139,6 +139,7 @@ func (h *InsurancePartnerHandler) CreateInsurancePartner(c *gin.Context) {
 
 func (h *InsurancePartnerHandler) GetInsurancePartnerPrivateByID(c *gin.Context) {
 	staffID := c.GetHeader("X-User-ID")
+	log.Printf("Fetching private profile for staffID: %s", staffID)
 	result, err := h.InsurancePartnerService.GetPrivateProfile(staffID)
 	if err != nil {
 		log.Printf("Error getting insurance partner private by staffID %s: %s", staffID, err.Error())

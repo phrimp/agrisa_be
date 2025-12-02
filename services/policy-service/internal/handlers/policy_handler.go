@@ -16,11 +16,13 @@ import (
 
 type PolicyHandler struct {
 	registeredPolicyService *services.RegisteredPolicyService
+	riskAnalysisService     *services.RiskAnalysisCRUDService
 }
 
-func NewPolicyHandler(registeredPolicyService *services.RegisteredPolicyService) *PolicyHandler {
+func NewPolicyHandler(registeredPolicyService *services.RegisteredPolicyService, riskAnalysisService *services.RiskAnalysisCRUDService) *PolicyHandler {
 	return &PolicyHandler{
 		registeredPolicyService: registeredPolicyService,
+		riskAnalysisService:     riskAnalysisService,
 	}
 }
 
@@ -45,6 +47,7 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 	farmerGroup.Get("/stats/overview", h.GetStatsOverview)                                             // GET /policies/read-own/stats/overview
 	farmerGroup.Get("/monitoring-data/:farm_id", h.GetFarmerMonitoringData)                            // GET /policies/read-own/monitoring-data/:farm_id
 	farmerGroup.Get("/monitoring-data/:farm_id/:parameter_name", h.GetFarmerMonitoringDataByParameter) // GET /policies/read-own/monitoring-data/:farm_id/:parameter_name
+	farmerGroup.Get("/underwriting/:policy_id", h.GetFarmerUnderwriting)
 
 	// Insurance Partner routes - read/manage partner's policies
 	partnerGroup := policyGroup.Group("/read-partner")
@@ -52,8 +55,9 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 	partnerGroup.Get("/detail/:id", h.GetPartnerPolicyDetail)                                 // GET /policies/read-partner/detail/:id
 	partnerGroup.Get("/stats", h.GetPartnerPolicyStats)                                       // GET /policies/read-partner/stats
 	partnerGroup.Get("/monitoring-data/:farm_id/:parameter_name", h.GetPartnerMonitoringData) // GET /policies/read-partner/monitoring-data/:farm_id/:parameter_name
-	partnerUpdateGroup := policyGroup.Group("/create-partner")
-	partnerUpdateGroup.Post("/underwriting/:id", h.CreatePartnerPolicyUnderwriting) // PATCH /policies/update-partner/underwriting/:id]
+	partnerGroup.Get("/underwriting/:id", h.GetUnderwritingsByPolicyID)
+	partnerCreateGroup := policyGroup.Group("/create-partner")
+	partnerCreateGroup.Post("/underwriting/:id", h.CreatePartnerPolicyUnderwriting) // PATCH /policies/update-partner/underwriting/:id]
 	partnerGroup.Post("/monthly-data-cost", h.GetMonthlyDataCost)
 
 	// Admin routes - full access to all policies
@@ -64,10 +68,15 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 	adminReadGroup.Get("/filter", h.GetPoliciesWithFilter)                     // GET /policies/filter - Get policies with filters
 	adminReadGroup.Get("/monitoring-data", h.GetAllMonitoringData)             // GET /policies/read-all/monitoring-data - Get all monitoring data with policy status
 	adminReadGroup.Get("/monitoring-data/:farm_id", h.GetMonitoringDataByFarm) // GET /policies/read-all/monitoring-data/:farm_id - Get monitoring data by farm
+	adminReadGroup.Get("/underwriting", h.GetAllUnderwriting)
 
 	adminUpdateGroup := policyGroup.Group("/update-any")
 	adminUpdateGroup.Patch("/status/:id", h.UpdatePolicyStatusAdmin)             // PATCH /policies/update-any/status/:id
 	adminUpdateGroup.Patch("/underwriting/:id", h.UpdatePolicyUnderwritingAdmin) // PATCH /policies/update-any/underwriting/:id
+
+	// Admin test routes
+	adminTestGroup := policyGroup.Group("/test")
+	adminTestGroup.Post("/trigger-claim/:policy_id", h.TestTriggerClaim) // POST /policies/test/trigger-claim/:policy_id - Test claim generation with injected data
 }
 
 // ============================================================================
@@ -126,9 +135,17 @@ func (h *PolicyHandler) RegisterPolicy(c fiber.Ctx) error {
 		return c.Status(http.StatusForbidden).JSON(
 			utils.CreateErrorResponse("FORBIDDEN", "Cannot register policy for another user"))
 	}
+	tokenString := c.Get("Authorization")
+	token := strings.TrimPrefix(tokenString, "Bearer ")
 
+	partnerUserIDs, err := h.registeredPolicyService.GetAllUserIDsFromInsuranceProvider(registerRequest.RegisteredPolicy.InsuranceProviderID, token)
+	if err != nil {
+		slog.Error("error retrieving partner user ids", "error", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("INTERNAL", "error retrieving partner user ids"))
+	}
 	// Call service to register the policy
-	response, err := h.registeredPolicyService.RegisterAPolicy(registerRequest, c.Context())
+	response, err := h.registeredPolicyService.RegisterAPolicy(registerRequest, c.Context(), partnerUserIDs)
 	if err != nil {
 		// Parse error and return appropriate status code
 		errMsg := err.Error()
@@ -347,7 +364,19 @@ func (h *PolicyHandler) GetPartnerPolicies(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
 	}
 
-	//partnerProfileID := partnerProfileData["partner_id"].(string)
+	profileData, ok := partnerProfileData["data"].(map[string]any)
+	if ok {
+		partnerIDProfile, ok := profileData["partner_id"].(string)
+		if ok {
+			if partnerID != partnerIDProfile {
+				return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "Cannot underwrite others policies"))
+			}
+		} else {
+			return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "partner id not found"))
+		}
+	} else {
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "profile data not fould"))
+	}
 
 	// userID is the insurance provider ID for partners
 	policies, err := h.registeredPolicyService.GetPoliciesByProviderID(partnerID)
@@ -412,8 +441,18 @@ func (h *PolicyHandler) GetPartnerPolicyStats(c fiber.Ctx) error {
 		return c.Status(http.StatusUnauthorized).JSON(
 			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
 	}
+	partnerIDQuery := c.Query("partner_id")
+	partnerProfileID, err := h.getPartnerIDFromToken(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", err.Error()))
+	}
+	if partnerIDQuery != partnerProfileID {
+		return c.Status(http.StatusForbidden).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "You do not have permission to view this policy"))
+	}
 
-	stats, err := h.registeredPolicyService.GetPolicyStats(userID)
+	stats, err := h.registeredPolicyService.GetPolicyStats(partnerIDQuery)
 	if err != nil {
 		slog.Error("Failed to get partner policy stats", "provider_id", userID, "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(
@@ -484,6 +523,44 @@ func (h *PolicyHandler) GetPartnerMonitoringData(c fiber.Ctx) error {
 	}))
 }
 
+func (h *PolicyHandler) GetUnderwritingsByPolicyID(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	policyIDStr := c.Params("id")
+	policyID, err := uuid.Parse(policyIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid policy ID format"))
+	}
+
+	insuranceID, err := h.registeredPolicyService.GetInsuranceProviderIDByID(policyID)
+	if err != nil {
+		slog.Error("error retrieve insuranceID by policy id", "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "Failed to retrieve underwritings"))
+	}
+
+	partnerProfileID, err := h.getPartnerIDFromToken(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", err.Error()))
+	}
+
+	if insuranceID != partnerProfileID {
+		return c.Status(fiber.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "access unauthorized"))
+	}
+
+	underwritings, err := h.registeredPolicyService.GetUnderwritingByPolicyID(policyID)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "Failed to retrieve underwritings"))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(underwritings))
+}
+
 // CreatePartnerPolicyUnderwriting creates an underwriting record for partner's policy
 func (h *PolicyHandler) CreatePartnerPolicyUnderwriting(c fiber.Ctx) error {
 	userID := c.Get("X-User-ID")
@@ -525,12 +602,37 @@ func (h *PolicyHandler) CreatePartnerPolicyUnderwriting(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve policy"))
 	}
 
-	// TODO: Add authorization check - verify user belongs to the insurance provider
-	// This will need a profile service call to check if user exists in insurance provider profile
-	// For now, we log a warning but allow the operation
-	slog.Warn("Authorization check not fully implemented",
-		"user_id", userID,
-		"insurance_provider_id", policy.InsuranceProviderID)
+	// Verify if risk analysis exists
+	_, err = h.riskAnalysisService.GetByPolicyID(c.Context(), policyID)
+	if err != nil {
+		return c.Status(http.StatusNotFound).JSON(utils.CreateErrorResponse("NOT_FOUND", "Risk analysis not found: 1 risk analysis is require for underwriting"))
+	}
+
+	tokenString := c.Get("Authorization")
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	slog.Info("Fetching partner policies token: ", "token", token)
+	// calling api to get profile by token
+	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+	}
+
+	profileData, ok := partnerProfileData["data"].(map[string]any)
+	if ok {
+		partnerID, ok := profileData["partner_id"].(string)
+		if ok {
+			if policy.InsuranceProviderID != partnerID {
+				return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "Cannot underwrite others policies"))
+			}
+		} else {
+			return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "partner id not found"))
+		}
+	} else {
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "profile data not fould"))
+	}
 
 	// Call service to create underwriting
 	response, err := h.registeredPolicyService.CreatePartnerPolicyUnderwriting(
@@ -586,6 +688,21 @@ func (h *PolicyHandler) GetAllPoliciesAdmin(c fiber.Ctx) error {
 		"count":        len(policies),
 		"requested_by": userID,
 	}))
+}
+
+func (h *PolicyHandler) GetAllUnderwriting(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	underwritings, err := h.registeredPolicyService.GetAllUnderwriting()
+	if err != nil {
+		slog.Error("error retrieve all underwritings", "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "Failed to retrieve underwritings"))
+	}
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(underwritings))
 }
 
 // GetPolicyDetailAdmin retrieves any policy detail (admin access)
@@ -855,6 +972,28 @@ func (h *PolicyHandler) GetFarmerMonitoringDataByParameter(c fiber.Ctx) error {
 	}))
 }
 
+func (h *PolicyHandler) GetFarmerUnderwriting(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	policyIDStr := c.Params("policy_id")
+	policyID, err := uuid.Parse(policyIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid policy ID format"))
+	}
+
+	underwritings, err := h.registeredPolicyService.GetUnderwritingByPolicyIDAndFarmerID(policyID, userID)
+	if err != nil {
+		slog.Error("failed to retrieve underwritings by policy_id and farmer_id", "error", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "failed to retrieve underwritings"))
+	}
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(underwritings))
+}
+
 // ============================================================================
 // MONITORING DATA ENDPOINTS
 // ============================================================================
@@ -950,7 +1089,6 @@ func (h *PolicyHandler) GetMonitoringDataByFarm(c fiber.Ctx) error {
 }
 
 func (h *PolicyHandler) GetMonthlyDataCost(c fiber.Ctx) error {
-
 	var request models.MonthlyDataCostRequest
 
 	if err := c.Bind().Body(&request); err != nil {
@@ -1019,4 +1157,90 @@ func (h *PolicyHandler) getPartnerIDFromToken(c fiber.Ctx) (string, error) {
 	}
 
 	return partnerID, nil
+}
+
+// ============================================================================
+// ADMIN TEST OPERATIONS
+// ============================================================================
+
+// TestTriggerClaim tests claim generation by injecting monitoring data
+func (h *PolicyHandler) TestTriggerClaim(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	// Parse policy ID from URL
+	policyIDStr := c.Params("policy_id")
+	policyID, err := uuid.Parse(policyIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid policy ID format"))
+	}
+
+	// Parse request body
+	var req struct {
+		MonitoringData []map[string]interface{} `json:"monitoring_data" binding:"required"`
+		CheckPolicy    bool                     `json:"check_policy"`
+	}
+
+	if err := c.Bind().JSON(&req); err != nil {
+		slog.Error("Failed to parse request body", "error", err)
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body"))
+	}
+
+	// Validate monitoring data
+	if len(req.MonitoringData) == 0 {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("VALIDATION_ERROR", "monitoring_data is required and must not be empty"))
+	}
+
+	// Prepare job parameters
+	params := map[string]any{
+		"policy_id":    policyID.String(),
+		"start_date":   float64(0), // Not used in test mode
+		"end_date":     float64(0), // Not used in test mode
+		"check_policy": req.CheckPolicy,
+		"inject_test":  convertToInterfaceSlice(req.MonitoringData),
+	}
+
+	slog.Info("Test claim trigger requested",
+		"policy_id", policyID,
+		"user_id", userID,
+		"test_data_count", len(req.MonitoringData),
+		"check_policy", req.CheckPolicy)
+
+	// Execute the job with test data
+	err = h.registeredPolicyService.FetchFarmMonitoringDataJob(params)
+	if err != nil {
+		slog.Error("Failed to execute test claim trigger",
+			"policy_id", policyID,
+			"user_id", userID,
+			"error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("TEST_FAILED", "Failed to trigger test claim: "+err.Error()))
+	}
+
+	slog.Info("Test claim trigger completed successfully",
+		"policy_id", policyID,
+		"user_id", userID)
+
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+		"message":           "Test claim trigger executed successfully",
+		"policy_id":         policyID,
+		"test_data_count":   len(req.MonitoringData),
+		"check_policy":      req.CheckPolicy,
+		"monitoring_stored": true,
+	}))
+}
+
+// Helper function to convert []map[string]interface{} to []interface{}
+func convertToInterfaceSlice(data []map[string]interface{}) []interface{} {
+	result := make([]interface{}, len(data))
+	for i, item := range data {
+		result[i] = item
+	}
+	return result
 }

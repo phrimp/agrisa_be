@@ -14,6 +14,7 @@ import (
 	"policy-service/internal/database/postgres"
 	"policy-service/internal/database/redis"
 	"policy-service/internal/event"
+	"policy-service/internal/event/publisher"
 	"policy-service/internal/handlers"
 	"policy-service/internal/repository"
 	"policy-service/internal/services"
@@ -128,6 +129,13 @@ func main() {
 		minioClient = nil // Continue without MinIO
 	}
 
+	// Initialize notification publisher
+	notificationPublisher := publisher.NewNotificationPublisher(rabbitConn)
+	notificationHelper := publisher.NewNotificationHelper(notificationPublisher)
+	log.Println("Notification publisher initialized successfully")
+
+	_ = notificationHelper // Available for future integration
+
 	// Initialize repositories
 	dataTierRepo := repository.NewDataTierRepository(db)
 	basePolicyRepo := repository.NewBasePolicyRepository(db, redisClient.GetClient())
@@ -136,6 +144,7 @@ func main() {
 	farmRepo := repository.NewFarmRepository(db)
 	farmMonitoringDataRepo := repository.NewFarmMonitoringDataRepository(db)
 	basePolicyTriggerRepo := repository.NewBasePolicyTriggerRepository(db, redisClient.GetClient())
+	claimRepo := repository.NewClaimRepository(db)
 
 	// Initialize WorkerManagerV2
 	workerManager := worker.NewWorkerManagerV2(db, redisClient)
@@ -149,10 +158,11 @@ func main() {
 	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, gemini.GeminiClients)
 	farmService := services.NewFarmService(farmRepo, cfg, minioClient, workerManager)
 	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
-	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, geminiSelector)
+	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, notificationHelper, geminiSelector)
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient)
 	basePolicyTriggerService := services.NewBasePolicyTriggerService(basePolicyTriggerRepo)
 	riskAnalysisService := services.NewRiskAnalysisCRUDService(registeredPolicyRepo)
+	claimService := services.NewClaimService(claimRepo, registeredPolicyRepo, farmRepo)
 
 	// Expiration Listener
 	ctx, cancel := context.WithCancel(context.Background())
@@ -165,7 +175,7 @@ func main() {
 	}()
 
 	// Start payment event consumer
-	paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyService, registeredPolicyRepo, workerManager)
+	paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyRepo, workerManager)
 	paymentConsumer := event.NewPaymentConsumer(rabbitConn, paymentHandler)
 	if err := paymentConsumer.Start(ctx); err != nil {
 		log.Printf("error starting payment consumer: %v", err)
@@ -181,12 +191,6 @@ func main() {
 		}
 		return c.Status(fiber.StatusServiceUnavailable).JSON(status)
 	}
-
-	// Register metrics endpoint for payment consumer
-	app.Get("/metrics/payment-consumer", func(c fiber.Ctx) error {
-		metrics := paymentConsumer.GetMetrics()
-		return c.JSON(metrics)
-	})
 
 	go func() {
 		retryWait := 0.5
@@ -218,7 +222,7 @@ func main() {
 	}
 
 	// Recover active policy worker infrastructure after restart
-	if err := registeredPolicyService.RecoverActivePolicies(ctx); err != nil {
+	if err := registeredPolicyService.RecoverPolicies(ctx); err != nil {
 		log.Printf("Warning: failed to recover active policies: %v", err)
 		// Non-fatal: continue startup even if recovery fails
 	}
@@ -228,9 +232,10 @@ func main() {
 	dataSourceHandler := handlers.NewDataSourceHandler(dataSourceService)
 	basePolicyHandler := handlers.NewBasePolicyHandler(basePolicyService, minioClient, workerManager)
 	farmHandler := handlers.NewFarmHandler(farmService, minioClient)
-	policyHandler := handlers.NewPolicyHandler(registeredPolicyService)
+	policyHandler := handlers.NewPolicyHandler(registeredPolicyService, riskAnalysisService)
 	basePolicyTriggerHandler := handlers.NewBasePolicyTriggerHandler(basePolicyTriggerService)
 	riskAnalysisHandler := handlers.NewRiskAnalysisHandler(riskAnalysisService)
+	claimHandler := handlers.NewClaimHandler(claimService, registeredPolicyService)
 
 	// Register routes
 	dataTierHandler.Register(app)
@@ -240,6 +245,7 @@ func main() {
 	policyHandler.Register(app)
 	basePolicyTriggerHandler.Register(app)
 	riskAnalysisHandler.Register(app)
+	claimHandler.Register(app)
 
 	// Register payment consumer health check endpoint
 	app.Get("/health/payment-consumer", paymentConsumerHealthHandler)

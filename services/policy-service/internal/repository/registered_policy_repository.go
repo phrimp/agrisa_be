@@ -64,6 +64,17 @@ func (r *RegisteredPolicyRepository) GetByID(id uuid.UUID) (*models.RegisteredPo
 	return &policy, nil
 }
 
+func (r *RegisteredPolicyRepository) GetInsuranceProviderIDByID(id uuid.UUID) (string, error) {
+	var insuranceID string
+	query := `SELECT insurance_provider_id FROM public.registered_policy where id = $1;`
+	err := r.db.Get(&insuranceID, query, id)
+	if err != nil {
+		slog.Error("failed to get insurance provider id by policy id", "policy id", id, "error", err)
+		return "", fmt.Errorf("failed to get insurance provider id by policy id: %w", err)
+	}
+	return insuranceID, nil
+}
+
 func (r *RegisteredPolicyRepository) GetByPolicyNumber(policyNumber string) (*models.RegisteredPolicy, error) {
 	var policy models.RegisteredPolicy
 	query := `SELECT * FROM registered_policy WHERE policy_number = $1`
@@ -146,6 +157,31 @@ func (r *RegisteredPolicyRepository) Delete(id uuid.UUID) error {
 	}
 
 	return nil
+}
+
+func (r *RegisteredPolicyRepository) GetAllPoliciesAndStatus() (map[uuid.UUID]models.PolicyStatus, error) {
+	query := `
+  		SELECT id, status
+  		FROM public.registered_policy 
+  		WHERE status NOT IN ('rejected', 'cancelled', 'expired')
+  	`
+
+	var results []struct {
+		ID     uuid.UUID           `db:"id"`
+		Status models.PolicyStatus `db:"status"`
+	}
+
+	err := r.db.Select(&results, query)
+	if err != nil {
+		return nil, fmt.Errorf("error getting policy ids and status: %w", err)
+	}
+
+	queryResult := make(map[uuid.UUID]models.PolicyStatus, len(results))
+	for _, row := range results {
+		queryResult[row.ID] = row.Status
+	}
+
+	return queryResult, nil
 }
 
 // GetByIDWithFarm retrieves a registered policy with farm details using FastAssembleWithPrefix
@@ -899,6 +935,54 @@ func (r *RegisteredPolicyRepository) GetUnderwritingsByPolicyID(policyID uuid.UU
 	return underwritings, nil
 }
 
+func (r *RegisteredPolicyRepository) GetUnderwritingsByPolicyIDAndFarmerID(policyID uuid.UUID, farmerID string) ([]models.RegisteredPolicyUnderwriting, error) {
+	slog.Debug("Retrieving underwritings by policy ID and farmer ID", "registered_policy_id", policyID, "farmer_id", farmerID)
+
+	var underwritings []models.RegisteredPolicyUnderwriting
+	query := `
+    SELECT rpu.* 
+    FROM registered_policy_underwriting rpu
+    JOIN registered_policy rp ON rpu.registered_policy_id = rp.id 
+    WHERE rpu.registered_policy_id = $1 
+      AND rp.farmer_id = $2 
+    ORDER BY rpu.validation_timestamp DESC`
+
+	err := r.db.Select(&underwritings, query, policyID, farmerID)
+	if err != nil {
+		slog.Error("Failed to get underwritings by policy ID and farmer ID",
+			"registered_policy_id", policyID,
+			"farmer_id", farmerID,
+			"error", err)
+		return nil, fmt.Errorf("failed to get underwritings: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved underwritings",
+		"registered_policy_id", policyID,
+		"farmer_id", farmerID,
+		"count", len(underwritings))
+	return underwritings, nil
+}
+
+func (r *RegisteredPolicyRepository) GetAllUnderwriting() ([]models.RegisteredPolicyUnderwriting, error) {
+	slog.Debug("Retrieving all underwritings")
+
+	var underwritings []models.RegisteredPolicyUnderwriting
+	query := `
+		SELECT * FROM registered_policy_underwriting
+		ORDER BY validation_timestamp DESC`
+
+	err := r.db.Select(&underwritings, query)
+	if err != nil {
+		slog.Error("Failed to get all underwritings",
+			"error", err)
+		return nil, fmt.Errorf("failed to get underwritings: %w", err)
+	}
+
+	slog.Debug("Successfully retrieved underwritings",
+		"count", len(underwritings))
+	return underwritings, nil
+}
+
 // GetLatestUnderwriting retrieves the most recent underwriting for a policy
 func (r *RegisteredPolicyRepository) GetLatestUnderwriting(policyID uuid.UUID) (*models.RegisteredPolicyUnderwriting, error) {
 	slog.Debug("Retrieving latest underwriting", "registered_policy_id", policyID)
@@ -1070,10 +1154,40 @@ func (r *RegisteredPolicyRepository) GetMonthlyDataCostByProvider(
 		startTimestamp,
 		endTimestamp,
 	)
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to get monthly data cost: %w", err)
 	}
 
 	return costs, nil
+}
+
+func (r *RegisteredPolicyRepository) GetTotalFilterStatusProviders(status string, underwritingStatus string) (int64, error) {
+	query := `
+		SELECT COUNT(DISTINCT insurance_provider_id) 
+		FROM registered_policy 
+		WHERE status = $1 AND underwriting_status = $2
+	`
+
+	var count int64
+	err := r.db.GetContext(context.Background(), &count, query, status, underwritingStatus)
+	if err != nil {
+		slog.Error("Failed to count active approved providers", "error", err)
+		return 0, fmt.Errorf("failed to count active approved providers: %w", err)
+	}
+	return count, nil
+}
+
+func (r *RegisteredPolicyRepository) GetTotalFilterStatusPolicies(status string, underwritingStatus string) (int64, error) {
+	query := `
+		SELECT COUNT(*) 
+		FROM registered_policy 
+		WHERE status = $1 AND underwriting_status = $2
+	`
+	var count int64
+	err := r.db.GetContext(context.Background(), &count, query, "active", "approved")
+	if err != nil {
+		slog.Error("Failed to count active approved policies", "error", err)
+		return 0, fmt.Errorf("failed to count active approved policies: %w", err)
+	}
+	return count, nil
 }
