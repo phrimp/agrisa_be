@@ -90,7 +90,7 @@ func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 	req.BasePolicy.CreatedBy = &createdBy
 
 	// Set default expiration if not provided (24 hours)
-	expiration := 24 * time.Hour
+	expiration := 10 * time.Minute // TODO: update to 24h
 	if expirationParam := c.Query("expiration_hours"); expirationParam != "" {
 		if hours, err := time.ParseDuration(expirationParam + "h"); err == nil {
 			expiration = hours
