@@ -569,9 +569,10 @@ func (h *DefaultPaymentEventHandler) startPolicyMonitoring(
 		JobID: uuid.NewString(),
 		Type:  "fetch-farm-monitoring-data",
 		Params: map[string]any{
-			"policy_id":  registeredPolicyID.String(),
-			"start_date": 0,
-			"end_date":   0,
+			"policy_id":    registeredPolicyID.String(),
+			"start_date":   0,
+			"end_date":     0,
+			"check_policy": true,
 		},
 		MaxRetries: 5,
 		RunNow:     true,
