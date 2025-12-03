@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"policy-service/internal/models"
 
 	"github.com/google/uuid"
@@ -15,6 +16,16 @@ type ClaimRepository struct {
 
 func NewClaimRepository(db *sqlx.DB) *ClaimRepository {
 	return &ClaimRepository{db: db}
+}
+
+func (r *ClaimRepository) BeginTransaction() (*sqlx.Tx, error) {
+	slog.Info("Beginning database transaction")
+	tx, err := r.db.Beginx()
+	if err != nil {
+		slog.Error("Failed to begin transaction", "error", err)
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	return tx, nil
 }
 
 // GetByID retrieves a claim by its ID
@@ -163,4 +174,53 @@ func (r *ClaimRepository) Exists(ctx context.Context, id uuid.UUID) (bool, error
 	}
 
 	return exists, nil
+}
+
+// UpdateStatus updates the status of a claim
+func (r *ClaimRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status models.ClaimStatus) error {
+	query := `
+		UPDATE claim
+		SET status = $1, updated_at = NOW()
+		WHERE id = $2
+	`
+
+	result, err := r.db.ExecContext(ctx, query, status, id)
+	if err != nil {
+		return fmt.Errorf("failed to update claim status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("claim not found")
+	}
+
+	return nil
+}
+
+func (r *ClaimRepository) UpdateStatusTX(tx *sqlx.Tx, ctx context.Context, id uuid.UUID, status models.ClaimStatus) error {
+	query := `
+		UPDATE claim
+		SET status = $1, updated_at = NOW()
+		WHERE id = $2
+	`
+
+	result, err := tx.ExecContext(ctx, query, status, id)
+	if err != nil {
+		return fmt.Errorf("failed to update claim status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("claim not found")
+	}
+
+	return nil
 }
