@@ -516,6 +516,7 @@ class GEEBoundaryDetectionService:
         end_date: str = "2024-12-31",
         max_cloud_cover: float = 30.0,
         max_images: int = None,
+        buffer_meters: float = 0.0,
     ) -> Dict[str, Any]:
         """
         Get natural color satellite imagery for all images of a farm boundary.
@@ -528,19 +529,28 @@ class GEEBoundaryDetectionService:
             end_date: End date for imagery
             max_cloud_cover: Maximum cloud coverage
             max_images: Maximum number of images to return (None = unlimited, get all)
+            buffer_meters: Buffer distance in meters to expand viewing area (0 = no buffer)
 
         Returns:
             List of all images with natural color thumbnails only
         """
         try:
-            logger.info("Getting farm imagery for provided boundary (all images, natural color only)")
+            logger.info(f"Getting farm imagery for provided boundary (all images, natural color only, buffer: {buffer_meters}m)")
 
-            # Create farm geometry
+            # Create farm geometry (actual boundary)
             farm_geometry = ee.Geometry.Polygon(
                 coords=[coordinates], proj=coordinate_crs, geodesic=False
             )
 
+            # Create viewing geometry (for thumbnail generation)
+            if buffer_meters > 0:
+                view_geometry = farm_geometry.buffer(buffer_meters)
+                logger.info(f"Applied {buffer_meters}m buffer for imagery viewing area")
+            else:
+                view_geometry = farm_geometry
+
             # Get Sentinel-2 collection (all images)
+            # Filter by actual farm geometry, not buffered view
             s2_collection = (
                 ee.ImageCollection("COPERNICUS/S2_SR_HARMONIZED")
                 .filterBounds(farm_geometry)
@@ -557,7 +567,7 @@ class GEEBoundaryDetectionService:
             if image_count == 0:
                 raise ValueError("No cloud-free imagery found")
 
-            # Calculate area once
+            # Calculate area once (actual farm area, not buffered)
             area_ha = farm_geometry.area(maxError=1).divide(10000).getInfo()
 
             # Process ALL images
@@ -593,7 +603,7 @@ class GEEBoundaryDetectionService:
                             "min": 0,
                             "max": 3000,
                             "dimensions": 512,
-                            "region": farm_geometry,
+                            "region": view_geometry,  # Use buffered geometry for viewing
                             "format": "png",
                         }
                     )
@@ -632,6 +642,10 @@ class GEEBoundaryDetectionService:
                     "max_cloud_cover_filter": {
                         "value": max_cloud_cover,
                         "unit": "percentage"
+                    },
+                    "buffer_applied": {
+                        "value": buffer_meters,
+                        "unit": "meters"
                     }
                 },
                 "farm_info": {

@@ -262,6 +262,17 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 
 		slog.Info("new farm created successfully", "farm_id", farm.ID)
 	} else {
+		farmID, err := uuid.Parse(request.FarmID)
+		if err != nil {
+			slog.Error("error parsing farm id", "error", err)
+			return nil, fmt.Errorf("error parsing farm id: %w", err)
+		}
+		existingPolicy, err := s.registeredPolicyRepo.GetByBasePolicyIDAndFarmID(request.RegisteredPolicy.BasePolicyID, farmID)
+		if existingPolicy != nil {
+			slog.Error("farm already registered to this base policy, additional error", "error", err)
+			return nil, fmt.Errorf("farm already registered to this base policy")
+		}
+
 		farm, err = s.farmService.GetByFarmID(ctx, request.FarmID)
 		if err != nil {
 			slog.Error("error getting farm by id", "id", request.FarmID, "error", err)
@@ -840,9 +851,15 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 
 	// Payment Window
 	if req.UnderwritingStatus == models.UnderwritingApproved {
+
+		basePolicy, err := s.basePolicyRepo.GetBasePolicyByID(policy.BasePolicyID)
+		if err != nil {
+			slog.Error("CRITICAL: retrieve base policy failed", "error", err)
+		}
+
 		go func() {
 			slog.Info("underwriting approved, start payment window: 24h before policy auto cancel", "policy_id", policyID)
-			time.Sleep(5 * time.Minute) // TODO: Update to 24h
+			time.Sleep(time.Duration(*basePolicy.MaxPremiumPaymentProlong) * time.Minute) // TODO: Change to hour
 			policy, err := s.registeredPolicyRepo.GetByID(policyID)
 			if err != nil {
 				slog.Error("CRITICAL: policy not found skip payment window", "error", err)
@@ -853,6 +870,11 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 				return
 			}
 			policy.Status = models.PolicyCancelled
+			err = s.registeredPolicyRepo.Update(policy)
+			if err != nil {
+				slog.Info("error updating policy", "error", err)
+				return
+			}
 			slog.Info("payment pending due: policy status set to cancelled", "policy_id", policy.ID)
 		}()
 	}
@@ -866,7 +888,7 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 	}, nil
 }
 
-func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]interface{}, error) {
+func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]any, error) {
 	url := "https://agrisa-api.phrimp.io.vn/profile/protected/api/v1/insurance-partners/me/profile"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

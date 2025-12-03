@@ -90,7 +90,7 @@ func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 	req.BasePolicy.CreatedBy = &createdBy
 
 	// Set default expiration if not provided (24 hours)
-	expiration := 24 * time.Hour
+	expiration := 10 * time.Minute // TODO: update to 24h
 	if expirationParam := c.Query("expiration_hours"); expirationParam != "" {
 		if hours, err := time.ParseDuration(expirationParam + "h"); err == nil {
 			expiration = hours
@@ -103,6 +103,7 @@ func (bph *BasePolicyHandler) CreateCompletePolicy(c fiber.Ctx) error {
 
 	response, err := bph.basePolicyService.CreateCompletePolicy(c.Context(), &req, expiration)
 	if err != nil {
+		slog.Error("base policy creation failed", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("CREATION_FAILED", err.Error()))
 	}
 
@@ -390,9 +391,6 @@ func (bph *BasePolicyHandler) GetByProvider(c fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
 	}
-
-	// log the partner profile data
-	slog.Info("Partner profile data", "data", partnerProfileData)
 
 	// get partner id from profile data
 	partnerID, err := bph.registeredPolicyService.GetPartnerID(partnerProfileData)

@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from app.config.settings import get_settings
 from app.database.connection import init_db
 from app.api.handlers import router
+from app.utils.async_helpers import shutdown_executor, get_executor
 
 # Configure logging
 logging.basicConfig(
@@ -30,6 +31,12 @@ async def lifespan(app: FastAPI):
         # Initialize database
         await init_db()
         logger.info("Database initialized successfully with PostGIS extension")
+
+        # Initialize thread pool executor for blocking GEE operations
+        executor = get_executor()
+        logger.info(f"Thread pool executor initialized with {executor._max_workers} workers")
+        logger.info("Parallel processing enabled for satellite image analysis")
+
         logger.info("Infrastructure layers ready for service implementation")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
@@ -39,6 +46,10 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info(f"Shutting down {settings.app_name} infrastructure")
+
+    # Cleanup thread pool executor
+    shutdown_executor()
+    logger.info("Thread pool executor shutdown complete")
 
 
 # Create FastAPI app
@@ -59,11 +70,16 @@ if __name__ == "__main__":
     import uvicorn
 
     logger.info("Starting FastAPI server for development...")
+    logger.info("Development mode: Using reload instead of workers")
     # Use uvicorn.run() directly without asyncio.run()
+    # Note: In dev mode, use reload instead of workers (can't use both)
     uvicorn.run(
         "app.main:app",
         host=settings.host,
         port=settings.port,
         reload=settings.debug,
         log_level=settings.log_level.lower(),
+        timeout_keep_alive=120,
+        limit_concurrency=50,
+        backlog=2048,
     )

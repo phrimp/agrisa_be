@@ -71,6 +71,29 @@ func (cj *ClaimRejectionRepository) CreateNewClaimRejection(claimRejection model
 	return nil
 }
 
+func (cj *ClaimRejectionRepository) CreateNewClaimRejectionTX(tx *sqlx.Tx, claimRejection models.ClaimRejection) error {
+	if claimRejection.ID == uuid.Nil {
+		claimRejection.ID = uuid.New()
+	}
+
+	claimRejection.CreatedAt = time.Now()
+
+	query := `
+		INSERT INTO claim_rejection (
+			id, claim_id, validation_timestamp, claim_rejection_type,
+			reason, reason_evidence, validated_by, validation_notes, created_at
+		) VALUES (
+			:id, :claim_id, :validation_timestamp, :claim_rejection_type,
+			:reason, :reason_evidence, :validated_by, :validation_notes, :created_at
+		)
+	`
+	_, err := tx.NamedExec(query, claimRejection)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (cj *ClaimRejectionRepository) UpdateClaimRejection(claimRejection models.ClaimRejection) error {
 	query := `
 		UPDATE claim_rejection SET

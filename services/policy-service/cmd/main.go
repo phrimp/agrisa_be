@@ -145,6 +145,7 @@ func main() {
 	farmMonitoringDataRepo := repository.NewFarmMonitoringDataRepository(db)
 	basePolicyTriggerRepo := repository.NewBasePolicyTriggerRepository(db, redisClient.GetClient())
 	claimRepo := repository.NewClaimRepository(db)
+	claimRejectionRepo := repository.NewClaimRejectionRepository(db)
 
 	// Initialize WorkerManagerV2
 	workerManager := worker.NewWorkerManagerV2(db, redisClient)
@@ -163,6 +164,7 @@ func main() {
 	basePolicyTriggerService := services.NewBasePolicyTriggerService(basePolicyTriggerRepo)
 	riskAnalysisService := services.NewRiskAnalysisCRUDService(registeredPolicyRepo)
 	claimService := services.NewClaimService(claimRepo, registeredPolicyRepo, farmRepo)
+	claimRejectionService := services.NewClaimRejectionService(registeredPolicyRepo, claimRepo, claimRejectionRepo)
 
 	// Expiration Listener
 	ctx, cancel := context.WithCancel(context.Background())
@@ -236,6 +238,7 @@ func main() {
 	basePolicyTriggerHandler := handlers.NewBasePolicyTriggerHandler(basePolicyTriggerService)
 	riskAnalysisHandler := handlers.NewRiskAnalysisHandler(riskAnalysisService)
 	claimHandler := handlers.NewClaimHandler(claimService, registeredPolicyService)
+	claimRejectionHandler := handlers.NewClaimRejectionHandler(claimRejectionService, registeredPolicyService)
 
 	// Register routes
 	dataTierHandler.Register(app)
@@ -246,6 +249,7 @@ func main() {
 	basePolicyTriggerHandler.Register(app)
 	riskAnalysisHandler.Register(app)
 	claimHandler.Register(app)
+	claimRejectionHandler.Register(app)
 
 	// Register payment consumer health check endpoint
 	app.Get("/health/payment-consumer", paymentConsumerHealthHandler)

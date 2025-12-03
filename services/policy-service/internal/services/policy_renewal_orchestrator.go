@@ -124,26 +124,37 @@ func (o *PolicyRenewalOrchestrator) PrepareRenewal(
 			models.PolicyActive: true,
 			models.PolicyPayout: true,
 		}
+		skipStatus := map[models.PolicyStatus]bool{
+			models.PolicyCancelled: true,
+			models.PolicyRejected:  true,
+		}
 		// Step 3: Update all registered policies
 		for _, policy := range registeredPolicies {
 
-			if !allowedStatus[policy.Status] {
+			if skipStatus[policy.Status] {
 				continue
 			}
 
-			originalPremium := policy.TotalFarmerPremium
-			policy.TotalFarmerPremium = o.calculateRenewalPremium(originalPremium, discountRate)
-			policy.CoverageEndDate = int64(*basePolicy.InsuranceValidToDay)
-			policy.PremiumPaidAt = nil
-			policy.PremiumPaidByFarmer = false
-			policy.Status = models.PolicyPendingPayment
-			policy.UpdatedAt = time.Now()
+			if !allowedStatus[policy.Status] {
+				policy.Status = models.PolicyExpired
+				continue
+			} else {
+				originalPremium := policy.TotalFarmerPremium
+				policy.TotalFarmerPremium = o.calculateRenewalPremium(originalPremium, discountRate)
+				policy.CoverageEndDate = int64(*basePolicy.InsuranceValidToDay)
+				policy.PremiumPaidAt = nil
+				policy.PremiumPaidByFarmer = false
+				policy.Status = models.PolicyPendingPayment
 
-			slog.Info("Calculated renewal premium",
-				"base_policy_id", basePolicy.ID,
-				"original_premium", originalPremium,
-				"discount_rate", discountRate,
-				"renewed_premium", policy.TotalFarmerPremium)
+				slog.Info("Calculated renewal premium",
+					"base_policy_id", basePolicy.ID,
+					"original_premium", originalPremium,
+					"discount_rate", discountRate,
+					"renewed_premium", policy.TotalFarmerPremium)
+			}
+
+			policy.UpdatedAt = time.Now()
+			slog.Info("updating registered policy after expired", "policy", policy)
 
 			if err := o.registeredPolicyRepo.Update(&policy); err != nil {
 				errMsg := fmt.Errorf("failed to update policy %s : %w", policy.ID, err)
@@ -195,8 +206,16 @@ func (o *PolicyRenewalOrchestrator) PrepareExpired(
 
 	if len(registeredPolicies) > 0 {
 
+		skipStatus := map[models.PolicyStatus]bool{
+			models.PolicyCancelled: true,
+			models.PolicyRejected:  true,
+		}
 		for _, policy := range registeredPolicies {
 
+			if skipStatus[policy.Status] {
+				slog.Info("skipping status for expired policy", "status", policy.Status, "id", policy.ID)
+				continue
+			}
 			policy.Status = models.PolicyExpired
 			policy.UpdatedAt = time.Now()
 

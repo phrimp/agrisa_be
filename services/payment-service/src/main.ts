@@ -5,6 +5,7 @@ import { GlobalExceptionFilter } from './common/exception.filter';
 import { winstonLoggerService } from './logger';
 
 async function bootstrap() {
+  process.env.TZ = 'Asia/Ho_Chi_Minh';
   const app = await NestFactory.create(AppModule, {
     logger: winstonLoggerService,
   });

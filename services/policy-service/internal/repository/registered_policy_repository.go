@@ -1469,3 +1469,13 @@ func (r *RegisteredPolicyRepository) GetTotalProvidersByMonth(year int, month in
 
 	return count, nil
 }
+
+func (r *RegisteredPolicyRepository) GetByBasePolicyIDAndFarmID(basePolicyID, farmID uuid.UUID) (*models.RegisteredPolicy, error) {
+	var result models.RegisteredPolicy
+	query := `SELECT * FROM public.registered_policy where base_policy_id = $1 and farm_id = $2;`
+	err := r.db.Get(&result, query, basePolicyID, farmID)
+	if err != nil {
+		return nil, fmt.Errorf("error getting registered_policy by base_policy_id and farm_id: %w", err)
+	}
+	return &result, nil
+}
