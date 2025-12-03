@@ -1703,7 +1703,19 @@ class GoogleEarthEngineService:
 
             # Interpret moisture
             mean_ndmi = ndmi_stats.get("NDMI_mean", 0)
-            moisture_status, irrigation_recommendation = interpret_ndmi_moisture_detailed(mean_ndmi)
+            moisture_status = interpret_ndmi_moisture(mean_ndmi)
+
+            # Determine irrigation recommendation based on NDMI value
+            if mean_ndmi > 0.4:
+                irrigation_recommendation = "Adequate moisture - No irrigation needed"
+            elif mean_ndmi > 0.2:
+                irrigation_recommendation = "Monitor closely - May need irrigation soon"
+            elif mean_ndmi > 0:
+                irrigation_recommendation = "Irrigation recommended"
+            elif mean_ndmi > -0.2:
+                irrigation_recommendation = "Immediate irrigation required"
+            else:
+                irrigation_recommendation = "Critical - Immediate intervention needed"
 
             # Compile image data
             image_data = {
