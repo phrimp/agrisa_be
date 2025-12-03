@@ -631,6 +631,12 @@ async def get_boundary_imagery(
         None, description="Maximum number of images to return (default: unlimited - returns all images)", ge=1
     ),
     crs: str = Query("EPSG:4326", description="Coordinate reference system"),
+    buffer_meters: float = Query(
+        0.0,
+        description="Buffer distance in meters to expand viewing area (0-5000m, 0=no buffer). Useful for small farms to show context.",
+        ge=0,
+        le=5000
+    ),
 ) -> Dict[str, Any]:
     """
     **PURE GEE SOLUTION: Get natural color imagery for all images of farm boundary.**
@@ -646,6 +652,9 @@ async def get_boundary_imagery(
     - `max_cloud_cover`: Maximum cloud coverage % (default: 30%)
     - `max_images`: Maximum number of images to return (default: unlimited - returns ALL images)
     - `crs`: Coordinate reference system (default: EPSG:4326)
+    - `buffer_meters`: Buffer distance in meters to expand viewing area (default: 0, range: 0-5000m)
+      Use this for small farms where exact boundary creates too zoomed-in view.
+      Recommended: 250-400m for farms < 0.1ha, 150-250m for 0.1-1ha, 75-150m for 1-5ha
 
     **Returns:**
     - **summary**: Total images found and processed
@@ -709,7 +718,7 @@ async def get_boundary_imagery(
                 "Coordinates must be a list of at least 3 points forming a polygon"
             )
 
-        logger.info(f"Getting imagery for {len(coords_list)} point boundary (all images, natural color only)")
+        logger.info(f"Getting imagery for {len(coords_list)} point boundary (all images, natural color only, buffer: {buffer_meters}m)")
 
         # Initialize service
         gee_boundary_service = GEEBoundaryDetectionService()
@@ -722,6 +731,7 @@ async def get_boundary_imagery(
             end_date=end_date,
             max_cloud_cover=max_cloud_cover,
             max_images=max_images,
+            buffer_meters=buffer_meters,
         )
 
         return {
