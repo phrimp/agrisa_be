@@ -262,6 +262,17 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 
 		slog.Info("new farm created successfully", "farm_id", farm.ID)
 	} else {
+		farmID, err := uuid.Parse(request.FarmID)
+		if err != nil {
+			slog.Error("error parsing farm id", "error", err)
+			return nil, fmt.Errorf("error parsing farm id: %w", err)
+		}
+		existingPolicy, err := s.registeredPolicyRepo.GetByBasePolicyIDAndFarmID(request.RegisteredPolicy.BasePolicyID, farmID)
+		if existingPolicy != nil {
+			slog.Error("farm already registered to this base policy, additional error", "error", err)
+			return nil, fmt.Errorf("farm already registered to this base policy")
+		}
+
 		farm, err = s.farmService.GetByFarmID(ctx, request.FarmID)
 		if err != nil {
 			slog.Error("error getting farm by id", "id", request.FarmID, "error", err)
