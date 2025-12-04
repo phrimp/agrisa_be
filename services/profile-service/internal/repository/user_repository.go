@@ -135,6 +135,7 @@ func (r *UserRepository) GetUserBankInfoByUserIDs(userIDs []string) ([]models.Us
 
 	query := `
         SELECT 
+			up.user_id,
             up.account_number, 
             up.account_name, 
             up.bank_code

@@ -189,6 +189,7 @@ type CreatePartnerDeletionRequest struct {
 }
 
 type UserBankInfo struct {
+	UserID        string `json:"user_id" db:"user_id"`
 	AccountNumber string `json:"account_number" db:"account_number"`
 	AccountName   string `json:"account_name" db:"account_name"`
 	BankCode      string `json:"bank_code" db:"bank_code"`
