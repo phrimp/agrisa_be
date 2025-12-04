@@ -6,6 +6,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import * as webpush from 'web-push';
 import type { Subscriber } from '../entities/subscriber.entity';
+import type { INotificationService } from './notification.service';
 import type {
   IPushNotificationService,
   NotificationPayload,
@@ -20,6 +21,8 @@ export class ImplPushNotificationService implements IPushNotificationService {
   constructor(
     @Inject('ISubscriberService')
     private readonly subscriberService: ISubscriberService,
+    @Inject('INotificationService')
+    private readonly notificationService: INotificationService,
   ) {
     this.expo = new Expo();
     this.initializeWebPush();
@@ -60,13 +63,35 @@ export class ImplPushNotificationService implements IPushNotificationService {
       return;
     }
 
-    const promises = subscribers.map((subscriber: Subscriber) => {
-      if (subscriber.type === 'expo') {
-        return this.sendExpoNotification(subscriber.expo_token, notification);
-      } else if (subscriber.type === 'web') {
-        return this.sendWebPushNotification(subscriber, notification);
+    const promises = subscribers.map(async (subscriber: Subscriber) => {
+      try {
+        if (subscriber.type === 'expo') {
+          await this.sendExpoNotification(subscriber.expo_token, notification);
+        } else if (subscriber.type === 'web') {
+          await this.sendWebPushNotification(subscriber, notification);
+        }
+
+        // Lưu thành công vào DB
+        await this.notificationService.createNotification({
+          user_id: userId,
+          title: notification.title,
+          body: notification.body,
+          data: notification.data,
+          type: subscriber.type,
+          status: 'sent',
+        });
+      } catch (error) {
+        // Lưu lỗi vào DB
+        await this.notificationService.createNotification({
+          user_id: userId,
+          title: notification.title,
+          body: notification.body,
+          data: notification.data,
+          type: subscriber.type,
+          status: 'failed',
+          error_message: (error as Error).message,
+        });
       }
-      return Promise.resolve();
     });
 
     await Promise.allSettled(promises);

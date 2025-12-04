@@ -1,6 +1,18 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
-import { Controller, Post, Body, Inject, Get, Headers } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Headers,
+  Inject,
+  Param,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
+import type { INotificationService } from 'src/services/notification.service';
 import type { IPushNotificationService } from 'src/services/push-notification.service';
 import type { ISubscriberService } from 'src/services/subscriber.service';
 
@@ -11,6 +23,8 @@ export class NotiController {
     private readonly pushNotificationService: IPushNotificationService,
     @Inject('ISubscriberService')
     private readonly subscriberService: ISubscriberService,
+    @Inject('INotificationService')
+    private readonly notificationService: INotificationService,
   ) {}
 
   @Get('/protected/permission')
@@ -103,5 +117,41 @@ export class NotiController {
       data: body.data,
     });
     return { success: true, message: 'Notifications sent to all users' };
+  }
+
+  // Unsubscribe - Hủy đăng ký notification
+  @Delete('/public/unsubscribe')
+  async unsubscribe(@Body() body: { user_id: string; type: 'expo' | 'web' }) {
+    await this.subscriberService.unsubscribe(body.user_id, body.type);
+    return { success: true, message: 'Unsubscribed successfully' };
+  }
+
+  // Lấy lịch sử notification của user
+  @Get('/protected/history')
+  async getHistory(
+    @Headers('x-user-id') user_id: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const result = await this.notificationService.getNotificationsByUserId(
+      user_id,
+      page ? parseInt(page) : 1,
+      limit ? parseInt(limit) : 20,
+    );
+    return { success: true, ...result };
+  }
+
+  // Đánh dấu notification đã đọc
+  @Patch('/protected/read/:id')
+  async markAsRead(@Param('id') id: string) {
+    await this.notificationService.markAsRead(id);
+    return { success: true, message: 'Marked as read' };
+  }
+
+  // Đếm số notification chưa đọc
+  @Get('/protected/unread-count')
+  async getUnreadCount(@Headers('x-user-id') user_id: string) {
+    const count = await this.notificationService.getUnreadCount(user_id);
+    return { success: true, count };
   }
 }

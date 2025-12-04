@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { Subscriber } from 'src/entities/subscriber.entity';
+import { Repository } from 'typeorm';
 import { ISubscriberService } from './subscriber.service';
 
 @Injectable()
@@ -77,5 +77,13 @@ export class ImplSubscriberService implements ISubscriberService {
 
   async getAllSubscribers(): Promise<Subscriber[]> {
     return await this.subscriberRepo.find();
+  }
+
+  async unsubscribe(userId: string, type: string): Promise<void> {
+    await this.subscriberRepo.delete({ user_id: userId, type });
+  }
+
+  async deleteSubscriber(id: string): Promise<void> {
+    await this.subscriberRepo.delete(id);
   }
 }

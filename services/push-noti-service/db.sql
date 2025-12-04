@@ -78,3 +78,34 @@ $$ LANGUAGE plpgsql;
 -- GRANT ALL PRIVILEGES ON DATABASE push_noti TO your_user;
 -- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO your_user;
 -- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO your_user;
+
+-- Create notifications table for storing notification history
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id VARCHAR(255) NOT NULL,
+  title VARCHAR(500) NOT NULL,
+  body TEXT NOT NULL,
+  data JSONB NULL,
+  type VARCHAR(50) NOT NULL, -- 'expo' | 'web'
+  status VARCHAR(50) DEFAULT 'sent', -- 'sent' | 'failed' | 'read'
+  error_message TEXT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create indexes for notifications
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_status ON notifications(status);
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_status ON notifications(user_id, status);
+
+-- View to see notification statistics per user
+CREATE OR REPLACE VIEW notification_stats AS
+SELECT
+  user_id,
+  COUNT(*) as total_notifications,
+  COUNT(CASE WHEN status = 'sent' THEN 1 END) as unread_count,
+  COUNT(CASE WHEN status = 'read' THEN 1 END) as read_count,
+  COUNT(CASE WHEN status = 'failed' THEN 1 END) as failed_count,
+  MAX(created_at) as last_notification_at
+FROM notifications
+GROUP BY user_id;
