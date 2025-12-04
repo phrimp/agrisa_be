@@ -202,6 +202,10 @@ func (s *PayoutService) GetPayoutsByFarmIDForPartner(ctx context.Context, farmID
 	return payouts, nil
 }
 
+func (s *PayoutService) GetByProviderID(ctx context.Context, providerID string) ([]models.Payout, error) {
+	return s.payoutRepo.GetByInsuranceProvider(ctx, providerID)
+}
+
 func (s *PayoutService) ConfirmPayout(ctx context.Context, providerID string, request models.ConfirmPayoutRequest, payoutID uuid.UUID) (string, error) {
 	payout, err := s.payoutRepo.GetByID(ctx, payoutID)
 	if err != nil {
