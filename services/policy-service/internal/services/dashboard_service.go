@@ -8,25 +8,25 @@ import (
 )
 
 type DashboardService struct {
-	registeredPolicyRepo repository.RegisteredPolicyRepository
+	registeredPolicyRepo *repository.RegisteredPolicyRepository
 }
 
-func NewDashboardService(registeredPolicyRepo repository.RegisteredPolicyRepository) *DashboardService {
+func NewDashboardService(registeredPolicyRepo *repository.RegisteredPolicyRepository) *DashboardService {
 	return &DashboardService{
 		registeredPolicyRepo: registeredPolicyRepo,
 	}
 }
 
-func (s *DashboardService) GetAverageRevenuePerPolicy(year int, month int) (float64, error) {
-	monthlyTotalRevenue, err := s.registeredPolicyRepo.GetTotalMonthlyRevenue(year, month, "active", "approved")
+func (s *DashboardService) GetAverageRevenuePerPolicy(options models.MonthlyRevenueOptions) (float64, error) {
+	monthlyTotalRevenue, err := s.registeredPolicyRepo.GetTotalMonthlyRevenue(options.Year, options.Month, options.Status, options.UnderwritingStatus)
 	if err != nil {
-		slog.Error("failed to get total revenue", "year", year, "month", month, "error", err)
+		slog.Error("failed to get total revenue", "year", options.Year, "month", options.Month, "error", err)
 		return 0, err
 	}
 
-	monthlyTotalRPolicy, err := s.registeredPolicyRepo.GetMonthlyTotalRegisteredPolicyByStatus(year, month, "active", "approved")
+	monthlyTotalRPolicy, err := s.registeredPolicyRepo.GetMonthlyTotalRegisteredPolicyByStatus(options.Year, options.Month, options.Status, options.UnderwritingStatus)
 	if err != nil {
-		slog.Error("failed to get total registered policy", "year", year, "month", month, "error", err)
+		slog.Error("failed to get total registered policy", "year", options.Year, "month", options.Month, "error", err)
 		return 0, err
 	}
 
@@ -39,34 +39,34 @@ func (s *DashboardService) GetAverageRevenuePerPolicy(year int, month int) (floa
 }
 
 // GetMonthlyRevenue retrieves monthly revenue data for a specific month
-func (s *DashboardService) GetMonthlyRevenue(year, month int) (*models.MonthlyRevenue, error) {
-	totalRevenue, err := s.registeredPolicyRepo.GetTotalMonthlyRevenue(year, month, "active", "approved")
+func (s *DashboardService) GetMonthlyRevenue(options models.MonthlyRevenueOptions) (*models.MonthlyRevenue, error) {
+	totalRevenue, err := s.registeredPolicyRepo.GetTotalMonthlyRevenue(options.Year, options.Month, options.Status, options.UnderwritingStatus)
 	if err != nil {
-		slog.Error("failed to get monthly revenue", "year", year, "month", month, "error", err)
+		slog.Error("failed to get monthly revenue", "year", options.Year, "month", options.Month, "error", err)
 		return nil, err
 	}
 
-	totalPolicy, err := s.registeredPolicyRepo.GetMonthlyTotalRegisteredPolicyByStatus(year, month, "active", "approved")
+	totalPolicy, err := s.registeredPolicyRepo.GetMonthlyTotalRegisteredPolicyByStatus(options.Year, options.Month, options.Status, options.UnderwritingStatus)
 	if err != nil {
-		slog.Error("failed to get monthly total registered policies", "year", year, "month", month, "error", err)
+		slog.Error("failed to get monthly total registered policies", "year", options.Year, "month", options.Month, "error", err)
 		return nil, err
 	}
 
-	totalProvider, err := s.registeredPolicyRepo.GetTotalProvidersByMonth(year, month, "active", "approved")
+	totalProvider, err := s.registeredPolicyRepo.GetTotalProvidersByMonth(options.Year, options.Month, options.Status, options.UnderwritingStatus)
 	if err != nil {
-		slog.Error("failed to get monthly total providers", "year", year, "month", month, "error", err)
+		slog.Error("failed to get monthly total providers", "year", options.Year, "month", options.Month, "error", err)
 		return nil, err
 	}
 
-	averageRevenuePerPolicy, err := s.GetAverageRevenuePerPolicy(year, month)
+	averageRevenuePerPolicy, err := s.GetAverageRevenuePerPolicy(options)
 	if err != nil {
-		slog.Error("failed to get average revenue per policy", "year", year, "month", month, "error", err)
+		slog.Error("failed to get average revenue per policy", "year", options.Year, "month", options.Month, "error", err)
 		return nil, err
 	}
 
 	return &models.MonthlyRevenue{
-		Year:                    year,
-		Month:                   month,
+		Year:                    options.Year,
+		Month:                   options.Month,
 		TotalRevenue:            totalRevenue,
 		TotalPolicies:           totalPolicy,
 		TotalProviders:          totalProvider,
@@ -74,22 +74,26 @@ func (s *DashboardService) GetMonthlyRevenue(year, month int) (*models.MonthlyRe
 	}, nil
 }
 
-func (s *DashboardService) GetCurrentMonthRevenue() (*models.MonthlyRevenue, error) {
+func (s *DashboardService) GetCurrentMonthRevenue(options models.MonthlyRevenueOptions) (*models.MonthlyRevenue, error) {
 	now := time.Now()
-	return s.GetMonthlyRevenue(now.Year(), int(now.Month()))
+	options.Year = now.Year()
+	options.Month = int(now.Month())
+	return s.GetMonthlyRevenue(options)
 }
 
-func (s *DashboardService) GetPreviousMonthRevenue() (*models.MonthlyRevenue, error) {
+func (s *DashboardService) GetPreviousMonthRevenue(options models.MonthlyRevenueOptions) (*models.MonthlyRevenue, error) {
 	previousMonth := time.Now().AddDate(0, -1, 0)
-	return s.GetMonthlyRevenue(previousMonth.Year(), int(previousMonth.Month()))
+	options.Year = previousMonth.Year()
+	options.Month = int(previousMonth.Month())
+	return s.GetMonthlyRevenue(options)
 }
 
-func (s *DashboardService) CalculateMonthlyGrowthRate() (float64, error) {
-	currentMonthRevenue, err := s.GetCurrentMonthRevenue()
+func (s *DashboardService) CalculateMonthlyGrowthRate(options models.MonthlyRevenueOptions) (float64, error) {
+	currentMonthRevenue, err := s.GetCurrentMonthRevenue(options)
 	if err != nil {
 		return 0, err
 	}
-	previousMonthRevenue, err := s.GetPreviousMonthRevenue()
+	previousMonthRevenue, err := s.GetPreviousMonthRevenue(options)
 	if err != nil {
 		return 0, err
 	}
@@ -100,4 +104,34 @@ func (s *DashboardService) CalculateMonthlyGrowthRate() (float64, error) {
 
 	growthRate := ((currentMonthRevenue.TotalRevenue - previousMonthRevenue.TotalRevenue) / previousMonthRevenue.TotalRevenue) * 100
 	return growthRate, nil
+}
+
+func (s *DashboardService) GetAdminRevenueOverview(options models.MonthlyRevenueOptions) (*models.AdminRevenueOverview, error) {
+	currentMonthRevenue, err := s.GetCurrentMonthRevenue(options)
+	if err != nil {
+		return nil, err
+	}
+	previousMonthRevenue, err := s.GetPreviousMonthRevenue(options)
+	if err != nil {
+		return nil, err
+	}
+	monthlyGrowthRate, err := s.CalculateMonthlyGrowthRate(options)
+	if err != nil {
+		return nil, err
+	}
+	totalActiveProviders, err := s.registeredPolicyRepo.GetTotalFilterStatusProviders(options.Status, options.UnderwritingStatus)
+	if err != nil {
+		return nil, err
+	}
+	totalActivePolicies, err := s.registeredPolicyRepo.GetTotalFilterStatusPolicies(options.Status, options.UnderwritingStatus)
+	if err != nil {
+		return nil, err
+	}
+	return &models.AdminRevenueOverview{
+		TotalActiveProviders: totalActiveProviders,
+		TotalActivePolicies:  totalActivePolicies,
+		CurrentMonth:         *currentMonthRevenue,
+		PreviousMonth:        *previousMonthRevenue,
+		MonthlyGrowthRate:    monthlyGrowthRate,
+	}, nil
 }
