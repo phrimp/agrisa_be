@@ -375,6 +375,34 @@ export class PaymentController {
       completed_at: new Date(),
     });
 
+    const payment_id = generateRandomString();
+    await this.paymentService.create({
+      id: payment_id,
+      amount: payout.amount,
+      description: payout.description,
+      status: 'completed',
+      user_id: payout.user_id,
+      type: 'policy_payout_payment',
+      paid_at: new Date(),
+    });
+
+    const publisher_payment = await this.paymentService.findById(payment_id);
+    if (publisher_payment) {
+      this.logger.log('Publishing payout payment to queue', {
+        payment_id,
+        type: publisher_payment.type,
+        amount: publisher_payment.amount,
+      });
+      await publisher(publisher_payment);
+      this.logger.log('Payout payment event published to queue', {
+        payment_id,
+      });
+    } else {
+      this.logger.error('Failed to fetch created payment for publishing', {
+        payment_id,
+      });
+    }
+
     return { success: true };
   }
 
