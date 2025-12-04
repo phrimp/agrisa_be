@@ -44,10 +44,10 @@ const generateReferenceId = (prefix: string = 'payout'): string => {
 };
 
 export {
+  checkPermissions,
   generateRandomString,
+  generateReferenceId,
   toCamelCase,
   toSnakeCase,
   transformKeys,
-  checkPermissions,
-  generateReferenceId,
 };
