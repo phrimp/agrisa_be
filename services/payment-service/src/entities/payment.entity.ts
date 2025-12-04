@@ -1,9 +1,9 @@
 import {
-  Entity,
   Column,
-  PrimaryColumn,
   DeleteDateColumn,
+  Entity,
   OneToMany,
+  PrimaryColumn,
 } from 'typeorm';
 import { OrderItem } from './order-item.entity';
 

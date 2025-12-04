@@ -1,10 +1,10 @@
 import {
-  Entity,
   Column,
-  PrimaryColumn,
   DeleteDateColumn,
-  ManyToOne,
+  Entity,
   JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
 } from 'typeorm';
 import { Payment } from './payment.entity';
 
