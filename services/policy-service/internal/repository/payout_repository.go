@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"policy-service/internal/models"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -54,6 +55,35 @@ func (r *PayoutRepository) UpdatePayoutTx(tx *sqlx.Tx, payout *models.Payout) er
 	_, err := tx.NamedExec(query, payout)
 	if err != nil {
 		return fmt.Errorf("failed to update payout in transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (r *PayoutRepository) CreateTx(tx *sqlx.Tx, payout *models.Payout) error {
+	if payout.ID == uuid.Nil {
+		payout.ID = uuid.New()
+	}
+	if payout.CreatedAt.IsZero() {
+		payout.CreatedAt = time.Now()
+	}
+
+	query := `
+		INSERT INTO payout (
+			id, claim_id, registered_policy_id, farm_id, farmer_id,
+			payout_amount, currency, status, initiated_at, completed_at,
+			farmer_confirmed, farmer_confirmation_timestamp, farmer_rating, farmer_feedback,
+			created_at
+		) VALUES (
+			:id, :claim_id, :registered_policy_id, :farm_id, :farmer_id,
+			:payout_amount, :currency, :status, :initiated_at, :completed_at,
+			:farmer_confirmed, :farmer_confirmation_timestamp, :farmer_rating, :farmer_feedback,
+			:created_at
+		)`
+
+	_, err := tx.NamedExec(query, payout)
+	if err != nil {
+		return fmt.Errorf("failed to create payout in transaction: %w", err)
 	}
 
 	return nil

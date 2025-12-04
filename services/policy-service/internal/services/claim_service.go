@@ -3,8 +3,10 @@ package services
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -13,17 +15,20 @@ type ClaimService struct {
 	claimRepo  *repository.ClaimRepository
 	policyRepo *repository.RegisteredPolicyRepository
 	farmRepo   *repository.FarmRepository
+	payoutRepo *repository.PayoutRepository
 }
 
 func NewClaimService(
 	claimRepo *repository.ClaimRepository,
 	policyRepo *repository.RegisteredPolicyRepository,
 	farmRepo *repository.FarmRepository,
+	payoutRepo *repository.PayoutRepository,
 ) *ClaimService {
 	return &ClaimService{
 		claimRepo:  claimRepo,
 		policyRepo: policyRepo,
 		farmRepo:   farmRepo,
+		payoutRepo: payoutRepo,
 	}
 }
 
@@ -232,4 +237,69 @@ func (s *ClaimService) GetClaimByIDForPartner(ctx context.Context, claimID uuid.
 	}
 
 	return claim, nil
+}
+
+func (s *ClaimService) ValidateClaim(ctx context.Context, claimID uuid.UUID, request models.ValidateClaimRequest, partnerID string) (*models.ValidateClaimResponse, error) {
+	claim, err := s.claimRepo.GetByID(ctx, claimID)
+	if err != nil {
+		return nil, fmt.Errorf("claim not found: %w", err)
+	}
+
+	// Verify the claim's policy belongs to the partner
+	policy, err := s.policyRepo.GetByID(claim.RegisteredPolicyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get policy: %w", err)
+	}
+
+	if policy.InsuranceProviderID != partnerID {
+		return nil, fmt.Errorf("unauthorized: claim does not belong to this partner")
+	}
+
+	if request.Status != models.ClaimApproved && request.Status != models.ClaimRejected {
+		return nil, fmt.Errorf("invalid claim status=%v", request.Status)
+	}
+	tx, err := s.claimRepo.BeginTransaction()
+	if err != nil {
+		return nil, fmt.Errorf("error starting transaction: %w", err)
+	}
+
+	claim.Status = request.Status
+	claim.PartnerDecision = &request.PartnerDecision
+	claim.PartnerNotes = &request.PartnerNotes
+	claim.ReviewedBy = &request.ReviewedBy
+	err = s.claimRepo.UpdateTx(tx, claim)
+	if err != nil {
+		tx.Rollback()
+		slog.Error("error updating claim", "error", err)
+		return nil, fmt.Errorf("error updating claim: %w", err)
+	}
+
+	now := time.Now().Unix()
+	payout := models.Payout{
+		ClaimID:            claim.ID,
+		RegisteredPolicyID: policy.ID,
+		FarmID:             policy.FarmID,
+		FarmerID:           policy.FarmerID,
+		PayoutAmount:       claim.ClaimAmount,
+		Currency:           "VND",
+		Status:             models.PayoutProcessing,
+		InitiatedAt:        &now,
+	}
+	err = s.payoutRepo.CreateTx(tx, &payout)
+	if err != nil {
+		tx.Rollback()
+		slog.Error("error creating payout", "error", err)
+		return nil, fmt.Errorf("error creating payout: %w", err)
+	}
+
+	res := models.ValidateClaimResponse{
+		ClaimID:  claim.ID,
+		PayoutID: payout.ID,
+	}
+	if err := tx.Commit(); err != nil {
+		slog.Error("error commiting transaction", "error", err)
+		return nil, fmt.Errorf("error commiting transaction: %w", err)
+	}
+
+	return &res, nil
 }

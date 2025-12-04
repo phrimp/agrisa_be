@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"policy-service/internal/models"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
@@ -220,6 +221,78 @@ func (r *ClaimRepository) UpdateStatusTX(tx *sqlx.Tx, ctx context.Context, id uu
 
 	if rowsAffected == 0 {
 		return fmt.Errorf("claim not found")
+	}
+
+	return nil
+}
+
+func (r *ClaimRepository) Update(claim *models.Claim) error {
+	// Automatically update the timestamp
+	claim.UpdatedAt = time.Now()
+
+	query := `
+		UPDATE claim SET
+			claim_number = :claim_number,
+			registered_policy_id = :registered_policy_id,
+			base_policy_id = :base_policy_id,
+			farm_id = :farm_id,
+			base_policy_trigger_id = :base_policy_trigger_id,
+			trigger_timestamp = :trigger_timestamp,
+			over_threshold_value = :over_threshold_value,
+			calculated_fix_payout = :calculated_fix_payout,
+			calculated_threshold_payout = :calculated_threshold_payout,
+			claim_amount = :claim_amount,
+			status = :status,
+			auto_generated = :auto_generated,
+			partner_review_timestamp = :partner_review_timestamp,
+			partner_decision = :partner_decision,
+			partner_notes = :partner_notes,
+			reviewed_by = :reviewed_by,
+			auto_approval_deadline = :auto_approval_deadline,
+			auto_approved = :auto_approved,
+			evidence_summary = :evidence_summary,
+			updated_at = :updated_at
+		WHERE id = :id`
+
+	_, err := r.db.NamedExec(query, claim)
+	if err != nil {
+		return fmt.Errorf("failed to update claim in transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (r *ClaimRepository) UpdateTx(tx *sqlx.Tx, claim *models.Claim) error {
+	// Automatically update the timestamp
+	claim.UpdatedAt = time.Now()
+
+	query := `
+		UPDATE claim SET
+			claim_number = :claim_number,
+			registered_policy_id = :registered_policy_id,
+			base_policy_id = :base_policy_id,
+			farm_id = :farm_id,
+			base_policy_trigger_id = :base_policy_trigger_id,
+			trigger_timestamp = :trigger_timestamp,
+			over_threshold_value = :over_threshold_value,
+			calculated_fix_payout = :calculated_fix_payout,
+			calculated_threshold_payout = :calculated_threshold_payout,
+			claim_amount = :claim_amount,
+			status = :status,
+			auto_generated = :auto_generated,
+			partner_review_timestamp = :partner_review_timestamp,
+			partner_decision = :partner_decision,
+			partner_notes = :partner_notes,
+			reviewed_by = :reviewed_by,
+			auto_approval_deadline = :auto_approval_deadline,
+			auto_approved = :auto_approved,
+			evidence_summary = :evidence_summary,
+			updated_at = :updated_at
+		WHERE id = :id`
+
+	_, err := tx.NamedExec(query, claim)
+	if err != nil {
+		return fmt.Errorf("failed to update claim in transaction: %w", err)
 	}
 
 	return nil

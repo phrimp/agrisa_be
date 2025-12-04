@@ -48,6 +48,8 @@ func (h *ClaimHandler) Register(app *fiber.App) {
 	partnerGroup.Get("/list", h.GetPartnerClaims)                         // GET /claims/read-partner/list
 	partnerGroup.Get("/detail/:id", h.GetPartnerClaimDetail)              // GET /claims/read-partner/detail/:id
 	partnerGroup.Get("/by-policy/:policy_id", h.GetPartnerClaimsByPolicy) // GET /claims/read-partner/by-policy/:policy_id
+	partnerWGroup := claimGroup.Group("/write")
+	partnerWGroup.Post("/validate/:claim_id", h.ValidateClaim)
 
 	// Admin routes - full access to all claims
 	adminReadGroup := claimGroup.Group("/read-all")
@@ -308,6 +310,51 @@ func (h *ClaimHandler) GetPartnerClaimsByPolicy(c fiber.Ctx) error {
 		"count":     len(claims),
 		"policy_id": policyID,
 	}))
+}
+
+func (h *ClaimHandler) ValidateClaim(c fiber.Ctx) error {
+	claimIDString := c.Params("claim_id")
+	if claimIDString == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "claim id is required"))
+	}
+	claimID, err := uuid.Parse(claimIDString)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "invalid claim id format"))
+	}
+
+	var req models.ValidateClaimRequest
+	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body: "+err.Error()))
+	}
+
+	if err := req.Validate(); err != nil {
+		slog.Error("Request validation failed", "error", err)
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("VALIDATION_FAILED", err.Error()))
+	}
+
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+	req.ReviewedBy = userID
+
+	partnerID, err := h.getPartnerIDFromToken(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", err.Error()))
+	}
+
+	res, err := h.claimService.ValidateClaim(c.Context(), claimID, req, partnerID)
+	if err != nil {
+		slog.Error("error validating claim", "error", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "error validating claim"))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(res))
 }
 
 // ============================================================================
