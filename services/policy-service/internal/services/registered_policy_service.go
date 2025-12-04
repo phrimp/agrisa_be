@@ -843,6 +843,18 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 		responseMessage = "Underwriting rejected, policy rejected"
 	}
 
+	go func() {
+		for {
+			err := s.notiPublisher.NotifyUnderwritingCompleted(ctx, policy.FarmerID, policy.PolicyNumber)
+			if err == nil {
+				slog.Info("policy underwriting notification sent", "policy id", policy.ID)
+				return
+			}
+			slog.Error("error sending policy underwriting notification", "error", err)
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
 	slog.Info("Successfully created partner policy underwriting",
 		"underwriting_id", underwriting.ID,
 		"policy_id", policyID,
@@ -876,6 +888,18 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 				return
 			}
 			slog.Info("payment pending due: policy status set to cancelled", "policy_id", policy.ID)
+
+			go func() {
+				for {
+					err := s.notiPublisher.NotifyPolicyCancel(ctx, policy.FarmerID, policy.PolicyNumber, "Quá hạn thanh toán")
+					if err == nil {
+						slog.Info("policy cancel notification sent", "policy id", policy.ID)
+						return
+					}
+					slog.Error("error sending policy cancel notification", "error", err)
+					time.Sleep(10 * time.Second)
+				}
+			}()
 		}()
 	}
 

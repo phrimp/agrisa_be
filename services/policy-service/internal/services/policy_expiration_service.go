@@ -42,7 +42,7 @@ type ExpirationStats struct {
 // NewPolicyExpirationService creates a new expiration service instance
 func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePolicyService, minioClient *minio.MinioClient, policyRepo *repository.RegisteredPolicyRepository, basePolicyRepo *repository.BasePolicyRepository, notiPublisher *publisher.NotificationHelper, workerManager *worker.WorkerManagerV2) *PolicyExpirationService {
 	validityCalculator := NewBasePolicyValidityCalculator()
-	policyRenewalOrchestrator := NewPolicyRenewalOrchestrator(basePolicyRepo, policyRepo, validityCalculator, workerManager)
+	policyRenewalOrchestrator := NewPolicyRenewalOrchestrator(basePolicyRepo, policyRepo, validityCalculator, workerManager, notiPublisher)
 	return &PolicyExpirationService{
 		minioClient:   minioClient,
 		redisClient:   redisClient,
@@ -170,10 +170,10 @@ func (s *PolicyExpirationService) processExpiredPolicy(ctx context.Context, expi
 			for {
 				err := s.notiPublisher.NotifyPolicyExpiredBatch(ctx, result.FarmerIDs, result.PolicyCode)
 				if err == nil {
-					slog.Info("policy registeration notification sent", "policy id", result.PolicyCode)
+					slog.Info("policy expiration notification sent", "policy id", result.PolicyCode)
 					return
 				}
-				slog.Error("error sending policy registeration notification", "error", err)
+				slog.Error("error sending policy expiration notification", "error", err)
 				time.Sleep(10 * time.Second)
 			}
 		}()
@@ -182,10 +182,10 @@ func (s *PolicyExpirationService) processExpiredPolicy(ctx context.Context, expi
 			for {
 				err := s.notiPublisher.NotifyPolicyRenewedBatch(ctx, result.FarmerIDs, result.PolicyCode)
 				if err == nil {
-					slog.Info("policy registeration notification sent", "policy id", result.PolicyCode)
+					slog.Info("policy renewed notification sent", "policy id", result.PolicyCode)
 					return
 				}
-				slog.Error("error sending policy registeration notification", "error", err)
+				slog.Error("error sending policy renewed notification", "error", err)
 				time.Sleep(10 * time.Second)
 			}
 		}()

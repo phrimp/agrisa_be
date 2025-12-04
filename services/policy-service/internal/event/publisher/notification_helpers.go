@@ -67,8 +67,8 @@ func (h *NotificationHelper) NotifyPolicyExpired(ctx context.Context, userID, po
 func (h *NotificationHelper) NotifyPolicyExpiredBatch(ctx context.Context, userIDs []string, policyNumber string) error {
 	event := NotificationEventPushModel{
 		Notification: Notification{
-			Title: "Policy Expired",
-			Body:  fmt.Sprintf("Your policy %s has expired. Please renew to continue coverage.", policyNumber),
+			Title: "Hết Hạn Hợp Đồng",
+			Body:  fmt.Sprintf("Hợp đồng bảo hiểm %s đã hết hạn.", policyNumber),
 		},
 		UserIDs: userIDs,
 	}
@@ -78,8 +78,8 @@ func (h *NotificationHelper) NotifyPolicyExpiredBatch(ctx context.Context, userI
 func (h *NotificationHelper) NotifyPolicyRenewed(ctx context.Context, userID, policyNumber string) error {
 	event := NotificationEventPushModel{
 		Notification: Notification{
-			Title: "Policy Renewed",
-			Body:  fmt.Sprintf("Your policy %s has expired. Please renew to continue coverage.", policyNumber),
+			Title: "Làm Mới Chu Kỳ Hợp Đồng",
+			Body:  fmt.Sprintf("Hợp đồng %s đã qua chu kỳ mới, vui lòng thanh toán chu kỳ tiếp theo để kích hoạt hợp đồng.", policyNumber),
 		},
 		UserIDs: []string{userID},
 	}
@@ -89,8 +89,8 @@ func (h *NotificationHelper) NotifyPolicyRenewed(ctx context.Context, userID, po
 func (h *NotificationHelper) NotifyPolicyRenewedBatch(ctx context.Context, userIDs []string, policyNumber string) error {
 	event := NotificationEventPushModel{
 		Notification: Notification{
-			Title: "Policy Renewed",
-			Body:  fmt.Sprintf("Your policy %s has been renewed. Please proceed to payment for new policy.", policyNumber),
+			Title: "Làm Mới Chu Kỳ Hợp Đồng",
+			Body:  fmt.Sprintf("Hợp đồng %s đã qua chu kỳ mới, vui lòng thanh toán chu kỳ tiếp theo để kích hoạt hợp đồng.", policyNumber),
 		},
 		UserIDs: userIDs,
 	}
@@ -98,11 +98,11 @@ func (h *NotificationHelper) NotifyPolicyRenewedBatch(ctx context.Context, userI
 }
 
 // NotifyClaimGenerated sends a notification when a claim is automatically generated
-func (h *NotificationHelper) NotifyClaimGenerated(ctx context.Context, userID, policyNumber, claimID string) error {
+func (h *NotificationHelper) NotifyClaimGenerated(ctx context.Context, userID, policyNumber string) error {
 	event := NotificationEventPushModel{
 		Notification: Notification{
-			Title: "Claim Generated",
-			Body:  fmt.Sprintf("A claim (ID: %s) has been generated for your policy %s.", claimID, policyNumber),
+			Title: "Sự Kiện Bảo Hiểm Đã Được Kích Hoạt",
+			Body:  fmt.Sprintf("Sự kiện bảo hiểm cho hợp đồng %s đã được kích hoạt.", policyNumber),
 		},
 		UserIDs: []string{userID},
 	}
@@ -110,11 +110,11 @@ func (h *NotificationHelper) NotifyClaimGenerated(ctx context.Context, userID, p
 }
 
 // NotifyClaimApproved sends a notification when a claim is approved
-func (h *NotificationHelper) NotifyClaimApproved(ctx context.Context, userID, claimID string, payoutAmount float64) error {
+func (h *NotificationHelper) NotifyClaimApproved(ctx context.Context, userID, policyNumber string, payoutAmount float64) error {
 	event := NotificationEventPushModel{
 		Notification: Notification{
-			Title: "Claim Approved",
-			Body:  fmt.Sprintf("Your claim (ID: %s) has been approved. Payout amount: %.2f", claimID, payoutAmount),
+			Title: "Sự Kiện Bảo Hiểm Đã Được Chấp Thuận",
+			Body:  fmt.Sprintf("Sự kiện bảo hiểm cho hợp đồng %s đã được chấp thuận. Số tiền nhận được %v.", policyNumber, payoutAmount),
 		},
 		UserIDs: []string{userID},
 	}
@@ -122,11 +122,11 @@ func (h *NotificationHelper) NotifyClaimApproved(ctx context.Context, userID, cl
 }
 
 // NotifyClaimRejected sends a notification when a claim is rejected
-func (h *NotificationHelper) NotifyClaimRejected(ctx context.Context, userID, claimID, reason string) error {
+func (h *NotificationHelper) NotifyClaimRejected(ctx context.Context, userID, policyNumber, reason string) error {
 	event := NotificationEventPushModel{
 		Notification: Notification{
-			Title: "Claim Rejected",
-			Body:  fmt.Sprintf("Your claim (ID: %s) has been rejected. Reason: %s", claimID, reason),
+			Title: "Từ Chối Sự Kiện Bảo Hiểm",
+			Body:  fmt.Sprintf("Sự kiện bảo hiểm cho hợp đồng %s đã bị từ chối. Quyết định của nhà cung cấp bảo hiểm: %s.", policyNumber, reason),
 		},
 		UserIDs: []string{userID},
 	}
@@ -145,12 +145,23 @@ func (h *NotificationHelper) NotifyPaymentReceived(ctx context.Context, userID, 
 	return h.publisher.PublishNotification(ctx, event)
 }
 
-// NotifyUnderwritingCompleted sends a notification when underwriting is completed
-func (h *NotificationHelper) NotifyUnderwritingCompleted(ctx context.Context, userID, policyNumber, status string) error {
+func (h *NotificationHelper) NotifyPolicyCancel(ctx context.Context, userID, policyNumber, reason string) error {
 	event := NotificationEventPushModel{
 		Notification: Notification{
-			Title: "Underwriting Completed",
-			Body:  fmt.Sprintf("Underwriting for policy %s is complete. Status: %s", policyNumber, status),
+			Title: "Hợp Đồng Bảo Hiểm Huỷ Bỏ",
+			Body:  fmt.Sprintf("Hợp đồng bảo hiểm %s đã được huỷ bỏ. Lý do: %s.", policyNumber, reason),
+		},
+		UserIDs: []string{userID},
+	}
+	return h.publisher.PublishNotification(ctx, event)
+}
+
+// NotifyUnderwritingCompleted sends a notification when underwriting is completed
+func (h *NotificationHelper) NotifyUnderwritingCompleted(ctx context.Context, userID, policyNumber string) error {
+	event := NotificationEventPushModel{
+		Notification: Notification{
+			Title: "Thẩm Định Hoàn Tất",
+			Body:  fmt.Sprintf("Thẩm định cho hợp đồng bảo hiểm %s đã hoàn tất. Trạng thái: Đang chờ thanh toán.", policyNumber),
 		},
 		UserIDs: []string{userID},
 	}

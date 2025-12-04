@@ -164,7 +164,7 @@ func main() {
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient, registeredPolicyRepo, basePolicyRepo, notificationHelper, workerManager)
 	basePolicyTriggerService := services.NewBasePolicyTriggerService(basePolicyTriggerRepo)
 	riskAnalysisService := services.NewRiskAnalysisCRUDService(registeredPolicyRepo)
-	claimService := services.NewClaimService(claimRepo, registeredPolicyRepo, farmRepo, payoutRepo)
+	claimService := services.NewClaimService(claimRepo, registeredPolicyRepo, farmRepo, payoutRepo, notificationHelper)
 	claimRejectionService := services.NewClaimRejectionService(registeredPolicyRepo, claimRepo, claimRejectionRepo)
 	dashboardService := services.NewDashboardService(registeredPolicyRepo)
 

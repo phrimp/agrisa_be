@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"policy-service/internal/event/publisher"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"time"
@@ -12,10 +13,11 @@ import (
 )
 
 type ClaimService struct {
-	claimRepo  *repository.ClaimRepository
-	policyRepo *repository.RegisteredPolicyRepository
-	farmRepo   *repository.FarmRepository
-	payoutRepo *repository.PayoutRepository
+	claimRepo     *repository.ClaimRepository
+	policyRepo    *repository.RegisteredPolicyRepository
+	farmRepo      *repository.FarmRepository
+	payoutRepo    *repository.PayoutRepository
+	notiPublisher *publisher.NotificationHelper
 }
 
 func NewClaimService(
@@ -23,12 +25,14 @@ func NewClaimService(
 	policyRepo *repository.RegisteredPolicyRepository,
 	farmRepo *repository.FarmRepository,
 	payoutRepo *repository.PayoutRepository,
+	notiPublisher *publisher.NotificationHelper,
 ) *ClaimService {
 	return &ClaimService{
-		claimRepo:  claimRepo,
-		policyRepo: policyRepo,
-		farmRepo:   farmRepo,
-		payoutRepo: payoutRepo,
+		claimRepo:     claimRepo,
+		policyRepo:    policyRepo,
+		farmRepo:      farmRepo,
+		payoutRepo:    payoutRepo,
+		notiPublisher: notiPublisher,
 	}
 }
 
@@ -299,6 +303,34 @@ func (s *ClaimService) ValidateClaim(ctx context.Context, claimID uuid.UUID, req
 	if err := tx.Commit(); err != nil {
 		slog.Error("error commiting transaction", "error", err)
 		return nil, fmt.Errorf("error commiting transaction: %w", err)
+	}
+
+	slog.Info("claim have been validated", "claim_id", claimID, "validated detail", request)
+
+	if claim.Status == models.ClaimApproved {
+		go func() {
+			for {
+				err := s.notiPublisher.NotifyClaimApproved(ctx, policy.FarmerID, policy.PolicyNumber, payout.PayoutAmount)
+				if err == nil {
+					slog.Info("claim approved notification sent", "claim_id", claimID)
+					return
+				}
+				slog.Error("error sending claim approved notificatio", "error", err)
+				time.Sleep(10 * time.Second)
+			}
+		}()
+	} else {
+		go func() {
+			for {
+				err := s.notiPublisher.NotifyClaimRejected(ctx, policy.FarmerID, policy.PolicyNumber, *claim.PartnerDecision)
+				if err == nil {
+					slog.Info("claim rejected notification sent", "policy id", policy.ID)
+					return
+				}
+				slog.Error("error sending claim rejected notification", "error", err)
+				time.Sleep(10 * time.Second)
+			}
+		}()
 	}
 
 	return &res, nil

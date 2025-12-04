@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"policy-service/internal/event/publisher"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
@@ -18,6 +19,7 @@ type PolicyRenewalOrchestrator struct {
 	registeredPolicyRepo *repository.RegisteredPolicyRepository
 	validityCalculator   *BasePolicyValidityCalculator
 	workerManager        *worker.WorkerManagerV2
+	notiPublisher        *publisher.NotificationHelper
 }
 
 // NewPolicyRenewalOrchestrator creates a new renewal orchestrator instance
@@ -26,12 +28,14 @@ func NewPolicyRenewalOrchestrator(
 	registeredPolicyRepo *repository.RegisteredPolicyRepository,
 	validityCalculator *BasePolicyValidityCalculator,
 	workerManager *worker.WorkerManagerV2,
+	notiPublisher *publisher.NotificationHelper,
 ) *PolicyRenewalOrchestrator {
 	return &PolicyRenewalOrchestrator{
 		basePolicyRepo:       basePolicyRepo,
 		registeredPolicyRepo: registeredPolicyRepo,
 		validityCalculator:   validityCalculator,
 		workerManager:        workerManager,
+		notiPublisher:        notiPublisher,
 	}
 }
 
@@ -171,6 +175,19 @@ func (o *PolicyRenewalOrchestrator) PrepareRenewal(
 					"policy_id", policy.ID,
 					"error", err)
 			}
+
+			go func() {
+				for {
+					err := o.notiPublisher.NotifyClaimGenerated(ctx, policy.FarmerID, policy.PolicyNumber)
+					if err == nil {
+						slog.Info("policy underwriting notification sent", "policy id", policy.ID)
+						return
+					}
+					slog.Error("error sending policy underwriting notification", "error", err)
+					time.Sleep(10 * time.Second)
+				}
+			}()
+
 			result.FarmerIDs = append(result.FarmerIDs, policy.FarmerID)
 		}
 
