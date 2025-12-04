@@ -1,8 +1,6 @@
 import {
   Entity,
   Column,
-  CreateDateColumn,
-  UpdateDateColumn,
   PrimaryColumn,
   DeleteDateColumn,
   OneToMany,
@@ -46,10 +44,17 @@ export class Payment {
   @Column({ type: 'varchar', length: 100, nullable: true })
   type: string | null;
 
-  @CreateDateColumn()
+  @Column({
+    type: 'timestamp',
+    default: () => "CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'",
+  })
   created_at: Date;
 
-  @UpdateDateColumn()
+  @Column({
+    type: 'timestamp',
+    default: () => "CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'",
+    onUpdate: "CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'",
+  })
   updated_at: Date;
 
   @DeleteDateColumn()

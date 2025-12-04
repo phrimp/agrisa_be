@@ -2,8 +2,6 @@ import {
   Entity,
   Column,
   PrimaryColumn,
-  CreateDateColumn,
-  UpdateDateColumn,
   DeleteDateColumn,
   ManyToOne,
   JoinColumn,
@@ -33,10 +31,17 @@ export class OrderItem {
   @Column('int', { default: 1 })
   quantity: number;
 
-  @CreateDateColumn()
+  @Column({
+    type: 'timestamp',
+    default: () => "CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'",
+  })
   created_at: Date;
 
-  @UpdateDateColumn()
+  @Column({
+    type: 'timestamp',
+    default: () => "CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'",
+    onUpdate: "CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'",
+  })
   updated_at: Date;
 
   @DeleteDateColumn()
