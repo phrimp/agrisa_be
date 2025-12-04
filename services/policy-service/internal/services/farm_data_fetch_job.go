@@ -311,7 +311,8 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(policyID)
 	if !ok {
-		slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist")
+		slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist", "policy_id", policyID)
+		return fmt.Errorf("scheduler not found for policy %s", policyID)
 	}
 
 	// Build list of conditions with their data sources
