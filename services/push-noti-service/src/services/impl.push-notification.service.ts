@@ -110,27 +110,24 @@ export class ImplPushNotificationService implements IPushNotificationService {
   async sendToAll(notification: NotificationPayload): Promise<void> {
     const subscribers = await this.subscriberService.getAllSubscribers();
 
-    const expoTokens = subscribers
-      .filter(
-        (s: Subscriber) =>
-          s.type === 'expo' && Expo.isExpoPushToken(s.expo_token),
-      )
-      .map((s: Subscriber) => s.expo_token);
+    // Lưu 1 bản ghi broadcast chung
+    await this.notificationService.createNotification({
+      user_id: 'broadcast', // hoặc '' nếu muốn để trống
+      title: notification.title,
+      body: notification.body,
+      data: notification.data,
+      type: 'broadcast',
+      status: 'sent',
+    });
 
-    const webSubscribers = subscribers.filter(
-      (s: Subscriber) => s.type === 'web',
+    // Group subscribers by user_id
+    const userIds = [...new Set(subscribers.map((s: Subscriber) => s.user_id))];
+
+    // Gửi cho từng user để đảm bảo lưu vào DB
+    const promises = userIds.map((userId) =>
+      this.sendToUser(userId, notification),
     );
-
-    // Gửi Expo notifications
-    if (expoTokens.length > 0) {
-      await this.sendBulkExpoNotifications(expoTokens, notification);
-    }
-
-    // Gửi Web Push notifications
-    const webPromises = webSubscribers.map((subscriber) =>
-      this.sendWebPushNotification(subscriber, notification),
-    );
-    await Promise.allSettled(webPromises);
+    await Promise.allSettled(promises);
   }
 
   private async sendExpoNotification(

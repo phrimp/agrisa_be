@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Notification } from 'src/entities/notification.entity';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import type {
   INotificationService,
   NotificationListResponse,
@@ -44,7 +44,7 @@ export class ImplNotificationService implements INotificationService {
     const skip = (page - 1) * limit;
 
     const [data, total] = await this.notificationRepo.findAndCount({
-      where: { user_id: userId },
+      where: { user_id: In([userId, 'broadcast']) },
       order: { created_at: 'DESC' },
       take: limit,
       skip: skip,
@@ -71,7 +71,7 @@ export class ImplNotificationService implements INotificationService {
 
   async getUnreadCount(userId: string): Promise<number> {
     return await this.notificationRepo.count({
-      where: { user_id: userId, status: 'sent' },
+      where: { user_id: In([userId, 'broadcast']), status: 'sent' },
     });
   }
 }

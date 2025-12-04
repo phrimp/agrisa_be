@@ -27,6 +27,25 @@
       "name": "Subscription",
       "item": [
         {
+          "name": "Get Permission URL",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "user123",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/push-noti/protected/permission",
+              "host": ["{{base_url}}"],
+              "path": ["push-noti", "protected", "permission"]
+            },
+            "description": "Get permission URL for notification subscription."
+          }
+        },
+        {
           "name": "Subscribe Expo Token",
           "request": {
             "method": "POST",
@@ -41,9 +60,9 @@
               "raw": "{\n  \"expo_token\": \"ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]\",\n  \"user_id\": \"user123\"\n}"
             },
             "url": {
-              "raw": "{{base_url}}/pushed-noti/subscribe/expo",
+              "raw": "{{base_url}}/push-noti/public/subscribe/expo",
               "host": ["{{base_url}}"],
-              "path": ["pushed-noti", "subscribe", "expo"]
+              "path": ["push-noti", "public", "subscribe", "expo"]
             },
             "description": "Register a user with their Expo push token for mobile notifications."
           }
@@ -63,11 +82,33 @@
               "raw": "{\n  \"user_id\": \"user123\",\n  \"endpoint\": \"https://fcm.googleapis.com/fcm/send/...\",\n  \"keys\": {\n    \"p256dh\": \"base64-encoded-public-key\",\n    \"auth\": \"base64-encoded-auth-secret\"\n  }\n}"
             },
             "url": {
-              "raw": "{{base_url}}/pushed-noti/subscribe/web",
+              "raw": "{{base_url}}/push-noti/public/subscribe/web",
               "host": ["{{base_url}}"],
-              "path": ["pushed-noti", "subscribe", "web"]
+              "path": ["push-noti", "public", "subscribe", "web"]
             },
             "description": "Register a user with their Web Push subscription for browser notifications."
+          }
+        },
+        {
+          "name": "Unsubscribe",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"type\": \"expo\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/push-noti/public/unsubscribe",
+              "host": ["{{base_url}}"],
+              "path": ["push-noti", "public", "unsubscribe"]
+            },
+            "description": "Unsubscribe user from notifications. Type can be 'expo' or 'web'."
           }
         }
       ]
@@ -87,14 +128,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_id\": \"user123\",\n  \"title\": \"Notification Title\",\n  \"body\": \"Notification message content\",\n  \"data\": {\n    \"customField\": \"customValue\"\n  }\n}"
+              "raw": "{\n  \"user_id\": \"user123\",\n  \"title\": \"Notification Title\",\n  \"body\": \"Notification message content\",\n  \"data\": {\n    \"url\": \"/page\",\n    \"customField\": \"customValue\"\n  }\n}"
             },
             "url": {
-              "raw": "{{base_url}}/pushed-noti/send/user",
+              "raw": "{{base_url}}/push-noti/public/send/user",
               "host": ["{{base_url}}"],
-              "path": ["pushed-noti", "send", "user"]
+              "path": ["push-noti", "public", "send", "user"]
             },
-            "description": "Send a push notification to a specific user by their user ID."
+            "description": "Send a push notification to a specific user by their user ID. Notification will be saved to database."
           }
         },
         {
@@ -109,14 +150,14 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"user_ids\": [\"user123\", \"user456\"],\n  \"title\": \"Notification Title\",\n  \"body\": \"Notification message content\",\n  \"data\": {\n    \"customField\": \"customValue\"\n  }\n}"
+              "raw": "{\n  \"user_ids\": [\"user123\", \"user456\"],\n  \"title\": \"Notification Title\",\n  \"body\": \"Notification message content\",\n  \"data\": {\n    \"url\": \"/page\",\n    \"customField\": \"customValue\"\n  }\n}"
             },
             "url": {
-              "raw": "{{base_url}}/pushed-noti/send/users",
+              "raw": "{{base_url}}/push-noti/public/send/users",
               "host": ["{{base_url}}"],
-              "path": ["pushed-noti", "send", "users"]
+              "path": ["push-noti", "public", "send", "users"]
             },
-            "description": "Send a push notification to multiple users by their user IDs."
+            "description": "Send a push notification to multiple users by their user IDs. Notifications will be saved to database."
           }
         },
         {
@@ -131,14 +172,89 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"title\": \"Notification Title\",\n  \"body\": \"Notification message content\",\n  \"data\": {\n    \"customField\": \"customValue\"\n  }\n}"
+              "raw": "{\n  \"title\": \"Broadcast Notification\",\n  \"body\": \"This is a broadcast message to all users\",\n  \"data\": {\n    \"url\": \"/announcements\",\n    \"customField\": \"customValue\"\n  }\n}"
             },
             "url": {
-              "raw": "{{base_url}}/pushed-noti/send/all",
+              "raw": "{{base_url}}/push-noti/public/send/all",
               "host": ["{{base_url}}"],
-              "path": ["pushed-noti", "send", "all"]
+              "path": ["push-noti", "public", "send", "all"]
             },
-            "description": "Send a push notification to all registered users."
+            "description": "Send a push notification to all registered users. A broadcast record will be saved with user_id='broadcast', plus individual records for each user."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notification History",
+      "item": [
+        {
+          "name": "Get Notification History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "user123",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/push-noti/protected/history?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["push-noti", "protected", "history"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Items per page (default: 20)"
+                }
+              ]
+            },
+            "description": "Get paginated notification history for the user. Returns both user-specific notifications and broadcast notifications. Response includes metadata: total, currentPage, totalPages, isCanNext, isCanBack."
+          }
+        },
+        {
+          "name": "Mark Notification as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/push-noti/protected/read/:id",
+              "host": ["{{base_url}}"],
+              "path": ["push-noti", "protected", "read", ":id"],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "notification-uuid-here",
+                  "description": "Notification ID (UUID)"
+                }
+              ]
+            },
+            "description": "Mark a specific notification as read by its ID."
+          }
+        },
+        {
+          "name": "Get Unread Count",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "user123",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/push-noti/protected/unread-count",
+              "host": ["{{base_url}}"],
+              "path": ["push-noti", "protected", "unread-count"]
+            },
+            "description": "Get count of unread notifications for the user. Includes both user-specific and broadcast notifications."
           }
         }
       ]
