@@ -1,5 +1,6 @@
--- Bảng 1: insurance_partners
--- Lưu trữ thông tin về các đối tác bảo hiểm
+-- enum
+CREATE TYPE deletion_request_status AS ENUM ('pending', 'approved', 'rejected', 'cancelled', 'completed');
+
 CREATE TABLE insurance_partners (
     partner_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     legal_company_name VARCHAR(255) NOT NULL,
@@ -83,24 +84,6 @@ CREATE INDEX idx_reviews_partner_id ON partner_reviews(partner_id);
 CREATE INDEX idx_reviews_rating_stars ON partner_reviews(rating_stars);
 CREATE INDEX idx_partners_rating_score ON insurance_partners(partner_rating_score);
 
--- Trigger để tự động cập nhật updated_at
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ language 'plpgsql';
-
-CREATE TRIGGER update_insurance_partners_updated_at BEFORE UPDATE ON insurance_partners
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_products_updated_at BEFORE UPDATE ON products
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_partner_reviews_updated_at BEFORE UPDATE ON partner_reviews
-FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
 -- User profile
 CREATE TABLE user_profiles (
   -- Identity
@@ -151,6 +134,57 @@ CREATE INDEX idx_user_profile_company ON user_profiles(partner_id);
 CREATE INDEX idx_user_profile_phone ON user_profiles(primary_phone);
 CREATE INDEX idx_user_profile_email ON user_profiles(email);
 CREATE INDEX idx_user_profile_province ON user_profiles(province_code);
+
+-- Create partner_deletion_requests table
+CREATE TABLE partner_deletion_requests (
+    -- Primary key
+    request_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    
+    -- Partner reference
+    partner_id UUID NOT NULL,
+    
+    -- Requester information
+    requested_by VARCHAR(255) NOT NULL, -- User ID of partner admin
+    requested_by_name VARCHAR(255) NOT NULL,
+    
+    -- Request details
+    detailed_explanation TEXT,
+    
+    -- Status and timeline
+    status deletion_request_status NOT NULL DEFAULT 'pending',
+    requested_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    cancellable_until TIMESTAMP NOT NULL,
+    
+    -- Reviewer information (người duyệt/từ chối)
+    reviewed_by_id VARCHAR(255),          -- User ID của người duyệt
+    reviewed_by_name VARCHAR(255),        -- Tên người duyệt
+    reviewed_at TIMESTAMP,                -- Thời gian duyệt/từ chối
+    review_note TEXT,                     -- Ghi chú của người duyệt (optional)
+    
+    -- Metadata
+    updated_at TIMESTAMP DEFAULT NOW(),
+    
+    -- Foreign key constraint
+    CONSTRAINT fk_partner 
+        FOREIGN KEY (partner_id) 
+        REFERENCES insurance_partners(partner_id) 
+        ON DELETE CASCADE,
+    
+    -- Ensure cancellable_until is after requested_at
+    CONSTRAINT check_cancellable_period 
+        CHECK (cancellable_until > requested_at)
+);
+
+-- Create indexes for better query performance
+CREATE INDEX idx_deletion_requests_partner_id ON partner_deletion_requests(partner_id);
+CREATE INDEX idx_deletion_requests_status ON partner_deletion_requests(status);
+CREATE INDEX idx_deletion_requests_requested_by ON partner_deletion_requests(requested_by);
+CREATE INDEX idx_deletion_requests_requested_at ON partner_deletion_requests(requested_at);
+CREATE INDEX idx_deletion_requests_cancellable_until ON partner_deletion_requests(cancellable_until);
+
+-- Optional: Add comment to table
+COMMENT ON TABLE partner_deletion_requests IS 'Stores partner deletion requests with cancellation period';
+COMMENT ON COLUMN partner_deletion_requests.cancellable_until IS 'Deadline for cancelling the deletion request (requested_at + x days)';
 
 -- Ví dụ INSERT data mẫu
 INSERT INTO insurance_partners (
@@ -460,4 +494,22 @@ INSERT INTO user_profiles (
     '700000',
     'aae1a169-ea85-4edf-bfcb-c7c1961cb357',
     'Admin'
+);
+
+INSERT INTO partner_deletion_requests (
+    partner_id,
+    requested_by,
+    requested_by_name,
+    detailed_explanation,
+    status,
+    requested_at,
+    cancellable_until
+) VALUES (
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890'::UUID, 
+    'user_123456',                                   
+    'Nguyễn Văn A',                                 
+    'Công ty chúng tôi quyết định ngừng hoạt động kinh doanh bảo hiểm nông nghiệp và muốn xóa tài khoản đối tác.',
+    'pending',                                       
+    NOW(),                                         
+    NOW() + INTERVAL '7 days'                       
 );
