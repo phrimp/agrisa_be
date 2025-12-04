@@ -146,6 +146,7 @@ func main() {
 	basePolicyTriggerRepo := repository.NewBasePolicyTriggerRepository(db, redisClient.GetClient())
 	claimRepo := repository.NewClaimRepository(db)
 	claimRejectionRepo := repository.NewClaimRejectionRepository(db)
+	payoutRepo := repository.NewPayoutRepository(db)
 
 	// Initialize WorkerManagerV2
 	workerManager := worker.NewWorkerManagerV2(db, redisClient)
@@ -178,7 +179,7 @@ func main() {
 	}()
 
 	// Start payment event consumer
-	paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyRepo, basePolicyRepo, workerManager)
+	paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyRepo, basePolicyRepo, workerManager, claimRepo, payoutRepo)
 	paymentConsumer := event.NewPaymentConsumer(rabbitConn, paymentHandler)
 	if err := paymentConsumer.Start(ctx); err != nil {
 		log.Printf("error starting payment consumer: %v", err)
