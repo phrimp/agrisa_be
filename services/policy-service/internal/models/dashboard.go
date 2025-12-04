@@ -15,3 +15,11 @@ type MonthlyRevenueOptions struct {
 	Status             []string
 	UnderwritingStatus []string
 }
+
+type AdminRevenueOverview struct {
+	TotalActiveProviders int64          `json:"total_active_providers"`
+	TotalActivePolicies  int64          `json:"total_active_policies"`
+	CurrentMonth         MonthlyRevenue `json:"current_month"`
+	PreviousMonth        MonthlyRevenue `json:"previous_month"`
+	MonthlyGrowthRate    float64        `json:"monthly_growth_rate"`
+}

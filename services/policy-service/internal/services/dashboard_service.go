@@ -8,10 +8,10 @@ import (
 )
 
 type DashboardService struct {
-	registeredPolicyRepo repository.RegisteredPolicyRepository
+	registeredPolicyRepo *repository.RegisteredPolicyRepository
 }
 
-func NewDashboardService(registeredPolicyRepo repository.RegisteredPolicyRepository) *DashboardService {
+func NewDashboardService(registeredPolicyRepo *repository.RegisteredPolicyRepository) *DashboardService {
 	return &DashboardService{
 		registeredPolicyRepo: registeredPolicyRepo,
 	}
@@ -104,4 +104,34 @@ func (s *DashboardService) CalculateMonthlyGrowthRate(options models.MonthlyReve
 
 	growthRate := ((currentMonthRevenue.TotalRevenue - previousMonthRevenue.TotalRevenue) / previousMonthRevenue.TotalRevenue) * 100
 	return growthRate, nil
+}
+
+func (s *DashboardService) GetAdminRevenueOverview(options models.MonthlyRevenueOptions) (*models.AdminRevenueOverview, error) {
+	currentMonthRevenue, err := s.GetCurrentMonthRevenue(options)
+	if err != nil {
+		return nil, err
+	}
+	previousMonthRevenue, err := s.GetPreviousMonthRevenue(options)
+	if err != nil {
+		return nil, err
+	}
+	monthlyGrowthRate, err := s.CalculateMonthlyGrowthRate(options)
+	if err != nil {
+		return nil, err
+	}
+	totalActiveProviders, err := s.registeredPolicyRepo.GetTotalFilterStatusProviders(options.Status, options.UnderwritingStatus)
+	if err != nil {
+		return nil, err
+	}
+	totalActivePolicies, err := s.registeredPolicyRepo.GetTotalFilterStatusPolicies(options.Status, options.UnderwritingStatus)
+	if err != nil {
+		return nil, err
+	}
+	return &models.AdminRevenueOverview{
+		TotalActiveProviders: totalActiveProviders,
+		TotalActivePolicies:  totalActivePolicies,
+		CurrentMonth:         *currentMonthRevenue,
+		PreviousMonth:        *previousMonthRevenue,
+		MonthlyGrowthRate:    monthlyGrowthRate,
+	}, nil
 }

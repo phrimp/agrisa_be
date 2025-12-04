@@ -1162,11 +1162,11 @@ func (r *RegisteredPolicyRepository) GetMonthlyDataCostByProvider(
 	return costs, nil
 }
 
-func (r *RegisteredPolicyRepository) GetTotalFilterStatusProviders(status string, underwritingStatus string) (int64, error) {
+func (r *RegisteredPolicyRepository) GetTotalFilterStatusProviders(status []string, underwritingStatus []string) (int64, error) {
 	query := `
 		SELECT COUNT(DISTINCT insurance_provider_id) 
 		FROM registered_policy 
-		WHERE status = $1 AND underwriting_status = $2
+		WHERE status = any($1) AND underwriting_status = any($2)
 	`
 
 	var count int64
@@ -1178,14 +1178,14 @@ func (r *RegisteredPolicyRepository) GetTotalFilterStatusProviders(status string
 	return count, nil
 }
 
-func (r *RegisteredPolicyRepository) GetTotalFilterStatusPolicies(status string, underwritingStatus string) (int64, error) {
+func (r *RegisteredPolicyRepository) GetTotalFilterStatusPolicies(status []string, underwritingStatus []string) (int64, error) {
 	query := `
 		SELECT COUNT(*)
 		FROM registered_policy
-		WHERE status = $1 AND underwriting_status = $2
+		WHERE status = any($1) AND underwriting_status = any($2)
 	`
 	var count int64
-	err := r.db.GetContext(context.Background(), &count, query, "active", "approved")
+	err := r.db.GetContext(context.Background(), &count, query, status, underwritingStatus)
 	if err != nil {
 		slog.Error("Failed to count active approved policies", "error", err)
 		return 0, fmt.Errorf("failed to count active approved policies: %w", err)
