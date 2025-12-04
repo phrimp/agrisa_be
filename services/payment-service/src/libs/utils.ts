@@ -35,18 +35,9 @@ const checkPermissions = (
   return required.every((perm) => permissions.includes(perm));
 };
 
-const generateReferenceId = (prefix: string = 'payout'): string => {
-  const timestamp = Date.now();
-  const random = Math.floor(Math.random() * 1000)
-    .toString()
-    .padStart(3, '0');
-  return `${prefix}_${timestamp}_${random}`;
-};
-
 export {
   checkPermissions,
   generateRandomString,
-  generateReferenceId,
   toCamelCase,
   toSnakeCase,
   transformKeys,

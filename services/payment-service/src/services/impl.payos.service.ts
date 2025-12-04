@@ -1,22 +1,14 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { PayOS } from '@payos/node';
+import { payosConfig, validatePayosConfig } from '../libs/payos.config';
+import { toCamelCase, toSnakeCase, transformKeys } from '../libs/utils';
 import {
-  paymentLinkSchema,
-  PaymentLinkDto,
   CreatePaymentLinkData,
+  PaymentLinkDto,
   PaymentLinkResponse,
-  payoutSchema,
-  PayoutDto,
-  CreatePayoutData,
-  CreateBatchPayoutData,
-  payoutAccountBalanceSchema,
-  PayoutAccountBalanceDto,
-  estimateCreditSchema,
-  EstimateCreditDto,
+  paymentLinkSchema,
 } from '../types/payos.types';
 import { PayosService } from './payos.service';
-import { transformKeys, toCamelCase, toSnakeCase } from '../libs/utils';
-import { payosConfig, validatePayosConfig } from '../libs/payos.config';
 type PayOSClient = {
   paymentRequests: {
     create: (data: CreatePaymentLinkData) => Promise<unknown>;
@@ -29,18 +21,6 @@ type PayOSClient = {
   webhooks: {
     verify: (webhookData: unknown) => unknown;
     confirm: (webhookUrl: string) => Promise<void>;
-  };
-  payouts: {
-    create: (data: CreatePayoutData) => Promise<unknown>;
-    list: (options?: any) => Promise<unknown>;
-    get: (payoutId: string) => Promise<unknown>;
-    estimateCredit: (data: CreateBatchPayoutData) => Promise<unknown>;
-  };
-  batch: {
-    create: (data: CreateBatchPayoutData) => Promise<unknown>;
-  };
-  payoutsAccount: {
-    balance: () => Promise<unknown>;
   };
 };
 
@@ -207,177 +187,6 @@ export class ImplPayosService implements PayosService, OnModuleInit {
     } catch (error) {
       this.logger.error('Lỗi xác nhận webhook:', error);
       return this.errorResponse('Xác nhận webhook thất bại');
-    }
-  }
-
-  // Payout methods
-  async createPayout(
-    data: CreatePayoutData,
-  ): Promise<ServiceResponse<PayoutDto>> {
-    try {
-      const raw = await this.payOS.payouts.create(data);
-      const snakeRaw = transformKeys(raw, toSnakeCase);
-      const parsed = payoutSchema.safeParse(snakeRaw);
-
-      if (!parsed.success) {
-        this.logger.error(
-          'Phản hồi createPayout không hợp lệ',
-          parsed.error.format(),
-        );
-        return this.errorResponse(
-          'Phản hồi từ nhà cung cấp payout không hợp lệ',
-        );
-      }
-
-      return this.successResponse('Tạo lệnh chi thành công', parsed.data);
-    } catch (error) {
-      this.logger.error('Lỗi tạo lệnh chi:', error);
-      return this.errorResponse('Tạo lệnh chi thất bại');
-    }
-  }
-
-  async createBatchPayout(
-    data: CreateBatchPayoutData,
-  ): Promise<ServiceResponse<PayoutDto>> {
-    try {
-      const raw = await this.payOS.batch.create(data);
-      const snakeRaw = transformKeys(raw, toSnakeCase);
-      const parsed = payoutSchema.safeParse(snakeRaw);
-
-      if (!parsed.success) {
-        this.logger.error(
-          'Phản hồi createBatchPayout không hợp lệ',
-          parsed.error.format(),
-        );
-        return this.errorResponse(
-          'Phản hồi từ nhà cung cấp payout không hợp lệ',
-        );
-      }
-
-      return this.successResponse(
-        'Tạo lệnh chi hàng loạt thành công',
-        parsed.data,
-      );
-    } catch (error) {
-      this.logger.error('Lỗi tạo lệnh chi hàng loạt:', error);
-      return this.errorResponse('Tạo lệnh chi hàng loạt thất bại');
-    }
-  }
-
-  async getPayout(payoutId: string): Promise<ServiceResponse<PayoutDto>> {
-    try {
-      const raw = await this.payOS.payouts.get(payoutId);
-      const snakeRaw = transformKeys(raw, toSnakeCase);
-      const parsed = payoutSchema.safeParse(snakeRaw);
-
-      if (!parsed.success) {
-        this.logger.error(
-          'Phản hồi getPayout không hợp lệ',
-          parsed.error.format(),
-        );
-        return this.errorResponse(
-          'Phản hồi từ nhà cung cấp payout không hợp lệ',
-        );
-      }
-
-      return this.successResponse(
-        'Lấy thông tin lệnh chi thành công',
-        parsed.data,
-      );
-    } catch (error) {
-      this.logger.error('Lỗi lấy thông tin lệnh chi:', error);
-      return this.errorResponse('Lấy thông tin lệnh chi thất bại');
-    }
-  }
-
-  async getPayouts(options?: {
-    limit?: number;
-    offset?: number;
-    referenceId?: string;
-    approvalState?: string;
-    category?: string;
-    fromDate?: string;
-    toDate?: string;
-  }): Promise<ServiceResponse<{ payouts: PayoutDto[]; pagination: any }>> {
-    try {
-      const raw = await this.payOS.payouts.list(options);
-      const snakeRaw = transformKeys(raw, toSnakeCase);
-
-      if (!snakeRaw || typeof snakeRaw !== 'object') {
-        return this.errorResponse(
-          'Phản hồi từ nhà cung cấp payout không hợp lệ',
-        );
-      }
-
-      const payouts = Array.isArray(snakeRaw.payouts)
-        ? snakeRaw.payouts
-            .map((p: any) => {
-              const parsed = payoutSchema.safeParse(p);
-              return parsed.success ? parsed.data : null;
-            })
-            .filter(Boolean)
-        : [];
-
-      return this.successResponse('Lấy danh sách lệnh chi thành công', {
-        payouts,
-        pagination: snakeRaw.pagination || {},
-      });
-    } catch (error) {
-      this.logger.error('Lỗi lấy danh sách lệnh chi:', error);
-      return this.errorResponse('Lấy danh sách lệnh chi thất bại');
-    }
-  }
-
-  async estimatePayoutCredit(
-    data: CreateBatchPayoutData,
-  ): Promise<ServiceResponse<EstimateCreditDto>> {
-    try {
-      const raw = await this.payOS.payouts.estimateCredit(data);
-      const snakeRaw = transformKeys(raw, toSnakeCase);
-      const parsed = estimateCreditSchema.safeParse(snakeRaw);
-
-      if (!parsed.success) {
-        this.logger.error(
-          'Phản hồi estimatePayoutCredit không hợp lệ',
-          parsed.error.format(),
-        );
-        return this.errorResponse(
-          'Phản hồi từ nhà cung cấp payout không hợp lệ',
-        );
-      }
-
-      return this.successResponse('Ước tính chi phí thành công', parsed.data);
-    } catch (error) {
-      this.logger.error('Lỗi ước tính chi phí:', error);
-      return this.errorResponse('Ước tính chi phí thất bại');
-    }
-  }
-
-  async getPayoutAccountBalance(): Promise<
-    ServiceResponse<PayoutAccountBalanceDto>
-  > {
-    try {
-      const raw = await this.payOS.payoutsAccount.balance();
-      const snakeRaw = transformKeys(raw, toSnakeCase);
-      const parsed = payoutAccountBalanceSchema.safeParse(snakeRaw);
-
-      if (!parsed.success) {
-        this.logger.error(
-          'Phản hồi getPayoutAccountBalance không hợp lệ',
-          parsed.error.format(),
-        );
-        return this.errorResponse(
-          'Phản hồi từ nhà cung cấp payout không hợp lệ',
-        );
-      }
-
-      return this.successResponse(
-        'Lấy thông tin số dư thành công',
-        parsed.data,
-      );
-    } catch (error) {
-      this.logger.error('Lỗi lấy thông tin số dư:', error);
-      return this.errorResponse('Lấy thông tin số dư thất bại');
     }
   }
 
