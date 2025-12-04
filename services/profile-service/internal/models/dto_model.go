@@ -184,3 +184,7 @@ type CreateUserProfileRequest struct {
 	WardName         *string `json:"ward_name,omitempty" db:"ward_name"`
 	PostalCode       *string `json:"postal_code,omitempty" db:"postal_code"`
 }
+
+type CreatePartnerDeletionRequest struct {
+	
+}

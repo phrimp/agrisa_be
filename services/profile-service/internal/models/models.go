@@ -107,3 +107,27 @@ type UserProfile struct {
 	LastUpdatedBy     string     `json:"last_updated_by" db:"last_updated_by"`
 	LastUpdatedByName string     `json:"last_updated_by_name" db:"last_updated_by_name"`
 }
+
+type PartnerDeletionRequest struct {
+	RequestID string     `json:"request_id" db:"request_id"`
+	PartnerID *uuid.UUID `json:"partner_id" db:"partner_id"`
+
+	// Requester info
+	RequestedBy         string `json:"requested_by" db:"requested_by"`
+	RequestedByName     string `json:"requested_by_name" db:"requested_by_name"`
+	DetailedExplanation string `json:"detailed_explanation" db:"detailed_explanation"`
+
+	// Status and timeline
+	Status           DeletionRequestStatus `json:"status" db:"status"`
+	RequestedAt      time.Time             `json:"requested_at" db:"requested_at"`
+	CancellableUntil time.Time             `json:"cancellable_until" db:"cancellable_until"`
+
+	// Reviewer info
+	ReviewedByID   *string    `json:"reviewed_by_id,omitempty" db:"reviewed_by_id"`
+	ReviewedByName *string    `json:"reviewed_by_name,omitempty" db:"reviewed_by_name"`
+	ReviewedAt     *time.Time `json:"reviewed_at,omitempty" db:"reviewed_at"`
+	ReviewNote     *string    `json:"review_note,omitempty" db:"review_note"`
+
+	// Metadata
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+}

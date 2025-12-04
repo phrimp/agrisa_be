@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"profile-service/internal/models"
@@ -27,6 +28,8 @@ type IInsurancePartnerService interface {
 	UpdateInsurancePartner(updateProfileRequestBody map[string]interface{}, updateByID, updateByName string) (*models.PrivatePartnerProfile, error)
 	GetAllPartnersPublicProfiles() ([]models.PublicPartnerProfile, error)
 	GetPrivateProfileByPartnerID(partnerID string) (*models.PrivatePartnerProfile, error)
+	CreatePartnerDeletionRequest(req *models.PartnerDeletionRequest, partnerAdminID string) (result *models.PartnerDeletionRequest, err error)
+	GetDeletionRequestsByRequesterID(requesterID string) ([]models.PartnerDeletionRequest, error)
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
@@ -1014,4 +1017,27 @@ func (s *InsurancePartnerService) GetPrivateProfile(userID string) (*models.Priv
 
 func (s *InsurancePartnerService) GetPrivateProfileByPartnerID(partnerID string) (*models.PrivatePartnerProfile, error) {
 	return s.repo.GetPrivateProfile(partnerID)
+}
+
+// ======= PARTNER DELETION REQUESTS =======
+func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.PartnerDeletionRequest, partnerAdminID string) (result *models.PartnerDeletionRequest, err error) {
+	partner, err := s.GetPrivateProfile(partnerAdminID)
+	if err != nil {
+		return nil, err
+	}
+	req.PartnerID = &partner.PartnerID
+
+	userProfile, err := s.userProfileRepository.GetUserProfileByUserID(partnerAdminID)
+	if err != nil {
+		return nil, err
+	}
+	req.RequestedBy = userProfile.UserID
+	req.RequestedByName = userProfile.FullName
+	req.Status = models.DeletionRequestPending
+	req.CancellableUntil = time.Now().Add(7 * 24 * time.Hour)
+	return s.repo.CreateDeletionRequest(context.Background(), req)
+}
+
+func (s *InsurancePartnerService) GetDeletionRequestsByRequesterID(requesterID string) ([]models.PartnerDeletionRequest, error) {
+	return s.repo.GetDeletionRequestsByRequesterID(context.Background(), requesterID)
 }

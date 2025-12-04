@@ -33,6 +33,13 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	insurancePartnerProtectedGrPub.POST("/insurance-partners", h.CreateInsurancePartner) // featurea: insu
 	insurancePartnerProtectedGrPub.GET("/insurance-partners/me/profile", h.GetInsurancePartnerPrivateByID)
 	insurancePartnerProtectedGrPub.PUT("/insurance-partners/me/profile", h.UpdateInsurancePartnerProfile)
+
+	// ======= PARTNER DELETION REQUESTS =======
+	partnerGr := insurancePartnerProtectedGrPub.Group("/insurance-partners")
+	partnerGr.POST("/deletion-requests", h.CreatePartnerDeletionRequest)
+
+	// partner endpoint
+	partnerGr.GET("/:partner_admin_id/deletion-requests", h.GetPartnerDeletionRequestsByPartnerAdminID)
 }
 
 func MapErrorToHTTPStatusExtended(errorString string) (errorCode string, httpStatus int) {
@@ -189,6 +196,40 @@ func (h *InsurancePartnerHandler) UpdateInsurancePartnerProfile(c *gin.Context) 
 func (h *InsurancePartnerHandler) GetPrivateProfileByPartnerID(c *gin.Context) {
 	partnerID := c.Param("partner_id")
 	result, err := h.InsurancePartnerService.GetPrivateProfileByPartnerID(partnerID)
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	response := utils.CreateSuccessResponse(result)
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *InsurancePartnerHandler) CreatePartnerDeletionRequest(c *gin.Context) {
+	adminPartnerID := c.GetHeader("X-User-ID")
+	var req models.PartnerDeletionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("Error binding JSON for CreatePartnerDeletionRequest: %s", err.Error())
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
+		c.JSON(http.StatusBadRequest, errorResponse)
+		return
+	}
+	result, err := h.InsurancePartnerService.CreatePartnerDeletionRequest(&req, adminPartnerID)
+	if err != nil {
+		log.Printf("Error creating partner deletion request: %s", err.Error())
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	successResponse := utils.CreateSuccessResponse(result)
+	c.JSON(http.StatusCreated, successResponse)
+}
+
+func (h *InsurancePartnerHandler) GetPartnerDeletionRequestsByPartnerAdminID(c *gin.Context) {
+	partnerAdminID := c.Param("partner_admin_id")
+	result, err := h.InsurancePartnerService.GetDeletionRequestsByRequesterID(partnerAdminID)
 	if err != nil {
 		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
 		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())

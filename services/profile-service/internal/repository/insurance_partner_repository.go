@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
@@ -20,6 +21,9 @@ type IInsurancePartnerRepository interface {
 	GetPrivateProfile(partnerID string) (*models.PrivatePartnerProfile, error)
 	UpdateInsurancePartner(query string, args ...interface{}) error
 	GetAllPublicProfiles() ([]models.PublicPartnerProfile, error)
+	SearchDeletionRequestsByRequesterName(ctx context.Context, searchTerm string) ([]models.PartnerDeletionRequest, error)
+	CreateDeletionRequest(ctx context.Context, req *models.PartnerDeletionRequest) (*models.PartnerDeletionRequest, error)
+	GetDeletionRequestsByRequesterID(ctx context.Context, requesterID string) ([]models.PartnerDeletionRequest, error)
 }
 type InsurancePartnerRepository struct {
 	db *sqlx.DB
@@ -421,4 +425,135 @@ func (r *InsurancePartnerRepository) UpdateInsurancePartner(query string, args .
 		return fmt.Errorf("failed to update insurance partner: %w", err)
 	}
 	return nil
+}
+
+// ======= PARTNER DELETION REQUESTS =======
+
+func (r *InsurancePartnerRepository) CreateDeletionRequest(
+	ctx context.Context,
+	req *models.PartnerDeletionRequest,
+) (*models.PartnerDeletionRequest, error) {
+	query := `
+        INSERT INTO partner_deletion_requests (
+            partner_id,
+            requested_by,
+            requested_by_name,
+            detailed_explanation,
+            requested_at,
+            cancellable_until
+        ) VALUES (
+            :partner_id,
+            :requested_by,
+            :requested_by_name,
+            :detailed_explanation,
+            :requested_at,
+            :cancellable_until
+        )
+        RETURNING 
+            request_id,
+            partner_id,
+            requested_by,
+            requested_by_name,
+            detailed_explanation,
+            status,
+            requested_at,
+            cancellable_until,
+            reviewed_by_id,
+            reviewed_by_name,
+            reviewed_at,
+            review_note,
+            updated_at
+    `
+	rows, err := r.db.NamedQueryContext(ctx, query, req)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result models.PartnerDeletionRequest
+	if rows.Next() {
+		if err := rows.StructScan(&result); err != nil {
+			return nil, err
+		}
+	}
+
+	return &result, nil
+}
+
+func (r *InsurancePartnerRepository) GetAllDeletionRequests(
+	ctx context.Context,
+) ([]models.PartnerDeletionRequest, error) {
+	query := `
+        SELECT 
+            request_id,
+            partner_id,
+            requested_by,
+            requested_by_name,
+            detailed_explanation,
+            status,
+            requested_at,
+            cancellable_until,
+            created_at,
+            updated_at
+        FROM partner_deletion_requests
+        ORDER BY requested_at DESC
+    `
+
+	var requests []models.PartnerDeletionRequest
+	err := r.db.SelectContext(ctx, &requests, query)
+	if err != nil {
+		return nil, err
+	}
+
+	return requests, nil
+}
+
+func (r *InsurancePartnerRepository) SearchDeletionRequestsByRequesterName(
+	ctx context.Context,
+	searchTerm string,
+) ([]models.PartnerDeletionRequest, error) {
+	query := `
+        SELECT 
+            request_id,
+            partner_id,
+            requested_by,
+            requested_by_name,
+            detailed_explanation,
+            status,
+            requested_at,
+            cancellable_until,
+            created_at,
+            updated_at
+        FROM partner_deletion_requests
+        WHERE requested_by_name ILIKE $1
+        ORDER BY requested_at DESC
+    `
+
+	var requests []models.PartnerDeletionRequest
+	searchPattern := "%" + searchTerm + "%"
+	err := r.db.SelectContext(ctx, &requests, query, searchPattern)
+	if err != nil {
+		return nil, err
+	}
+
+	return requests, nil
+}
+
+func (r *InsurancePartnerRepository) GetDeletionRequestsByRequesterID(
+	ctx context.Context,
+	requesterID string,
+) ([]models.PartnerDeletionRequest, error) {
+	query := `
+		SELECT * FROM partner_deletion_requests
+		WHERE requested_by = $1
+		ORDER BY requested_at DESC
+	`
+
+	var requests []models.PartnerDeletionRequest
+	err := r.db.SelectContext(ctx, &requests, query, requesterID)
+	if err != nil {
+		return nil, err
+	}
+
+	return requests, nil
 }
