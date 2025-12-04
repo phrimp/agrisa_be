@@ -573,6 +573,9 @@ func (h *PayoutHandler) ConfirmPayout(c fiber.Ctx) error {
 			return c.Status(fiber.StatusForbidden).JSON(
 				utils.CreateErrorResponse("FORBIDDEN", err.Error()))
 		}
+		if strings.Contains(err.Error(), "no rows in result set") {
+			return c.Status(fiber.StatusNotFound).JSON(utils.CreateErrorResponse("NOT_FOUND", "payout not found"))
+		}
 		return c.Status(http.StatusInternalServerError).JSON(
 			utils.CreateErrorResponse("INTERNAL", "error confirming payout"))
 	}
