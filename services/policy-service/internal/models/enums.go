@@ -28,14 +28,15 @@ const (
 type PolicyStatus string
 
 const (
-	PolicyDraft          PolicyStatus = "draft"
-	PolicyPendingReview  PolicyStatus = "pending_review"
-	PolicyPendingPayment PolicyStatus = "pending_payment"
-	PolicyActive         PolicyStatus = "active"
-	PolicyPayout         PolicyStatus = "payout"
-	PolicyExpired        PolicyStatus = "expired"
-	PolicyCancelled      PolicyStatus = "cancelled"
-	PolicyRejected       PolicyStatus = "rejected"
+	PolicyDraft          PolicyStatus  = "draft"
+	PolicyPendingReview  PolicyStatus  = "pending_review"
+	PolicyPendingPayment PolicyStatus  = "pending_payment"
+	PolicyActive         PolicyStatus  = "active"
+	PolicyPayout         PolicyStatus  = "payout"
+	PolicyExpired        PolicyStatus  = "expired"
+	PolicyPendingCancel  PaymentStatus = "pending_cancel"
+	PolicyCancelled      PolicyStatus  = "cancelled"
+	PolicyRejected       PolicyStatus  = "rejected"
 )
 
 type UnderwritingStatus string

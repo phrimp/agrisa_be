@@ -13,7 +13,7 @@ CREATE EXTENSION IF NOT EXISTS "postgis";
 CREATE TYPE data_source_type AS ENUM ('weather', 'satellite', 'derived');
 CREATE TYPE parameter_type AS ENUM ('numeric', 'boolean', 'categorical');
 CREATE TYPE base_policy_status AS ENUM ('draft', 'active', 'closed', 'archived');
-CREATE TYPE policy_status AS ENUM ('draft', 'pending_review', 'pending_payment','payout', 'active', 'expired', 'cancelled', 'rejected');
+CREATE TYPE policy_status AS ENUM ('draft', 'pending_review', 'pending_payment','payout', 'active', 'expired','pending_cancel', 'cancelled', 'rejected');
 CREATE TYPE underwriting_status AS ENUM ('pending', 'approved', 'rejected');
 CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'overdue', 'cancelled', 'refunded');
 CREATE TYPE validation_status AS ENUM ('pending', 'passed', 'passed_ai', 'failed', 'warning');
@@ -641,7 +641,7 @@ CREATE INDEX idx_payout_status ON payout(status);
 CREATE TABLE farm_monitoring_data (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     farm_id UUID NOT NULL REFERENCES farm(id),
-    base_policy_trigger_condition_id UUID NOT NULL REFERENCES base_policy_trigger_condition(id),
+    data_source_id UUID NOT NULL REFERENCES data_source(id),
     
     parameter_name VARCHAR(100) NOT NULL,
     measured_value DECIMAL(10,4) NOT NULL,
@@ -660,7 +660,7 @@ CREATE TABLE farm_monitoring_data (
 );
 
 CREATE INDEX idx_farm_monitoring_farm_time ON farm_monitoring_data(farm_id, measurement_timestamp);
-CREATE INDEX idx_farm_monitoring_base_policy_trigger_condition ON farm_monitoring_data(base_policy_trigger_condition_id);
+CREATE INDEX idx_farm_monitoring_data_source ON farm_monitoring_data(data_source_id);
 CREATE INDEX idx_farm_monitoring_parameter ON farm_monitoring_data(parameter_name);
 
 -- ============================================================================

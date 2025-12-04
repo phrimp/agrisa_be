@@ -1474,3 +1474,35 @@ func (r *RegisteredPolicyRepository) GetByBasePolicyIDAndFarmID(basePolicyID, fa
 	}
 	return &result, nil
 }
+
+func (r *RegisteredPolicyRepository) GetSumOfTotalPremiumAmountByProviderWithStatusActive(providerID string) (int64, error) {
+	query := `
+		SELECT COALESCE(SUM(total_farmer_premium), 0) as total_premium
+		FROM public.registered_policy 
+		WHERE status = 'active' 
+  	AND insurance_provider_id = $1 ;
+	`
+	var totalAmount int64
+	err := r.db.GetContext(context.Background(), &totalAmount, query, providerID)
+	if err != nil {
+		slog.Error("falied to count total premium amount by status active", "provider", providerID, "error", err)
+		return 0, err
+	}
+	return totalAmount, nil
+}
+
+func (r *RegisteredPolicyRepository) UpdateStatusByProviderAndStatus(providerID string, updatedStatus, byStatus models.PolicyStatus) error {
+	query := `
+		UPDATE registered_policy
+		SET status = $1 
+		WHERE insurance_provider_id = $2 
+		AND status = $3;
+	`
+
+	_, err := r.db.Exec(query, updatedStatus, providerID, byStatus)
+	if err != nil {
+		return fmt.Errorf("failed to update registered policy: %w", err)
+	}
+
+	return nil
+}
