@@ -918,4 +918,11 @@ type ValidateClaimResponse struct {
 	PayoutID uuid.UUID `json:"payout_id"`
 }
 
+type ConfirmPayoutRequest struct {
+	FarmerConfirmed             bool    `json:"farmer_confirmed" db:"farmer_confirmed"`
+	FarmerConfirmationTimestamp *int64  `json:"farmer_confirmation_timestamp,omitempty" db:"farmer_confirmation_timestamp"`
+	FarmerRating                *int    `json:"farmer_rating,omitempty" db:"farmer_rating"`
+	FarmerFeedback              *string `json:"farmer_feedback,omitempty" db:"farmer_feedback"`
+}
+
 type CreateCancelRequestResponse struct{}

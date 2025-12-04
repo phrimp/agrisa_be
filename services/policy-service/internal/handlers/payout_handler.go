@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"policy-service/internal/models"
 	"policy-service/internal/services"
 	"strings"
 
@@ -42,6 +43,8 @@ func (h *PayoutHandler) Register(app *fiber.App) {
 	farmerGroup.Get("/by-claim/:claim_id", h.GetFarmerPayoutByClaim)     // GET /payouts/read-own/by-claim/:claim_id
 	farmerGroup.Get("/by-policy/:policy_id", h.GetFarmerPayoutsByPolicy) // GET /payouts/read-own/by-policy/:policy_id
 	farmerGroup.Get("/by-farm/:farm_id", h.GetFarmerPayoutsByFarm)       // GET /payouts/read-own/by-farm/:farm_id
+	farmerPutGr := payoutGroup.Group("/update")
+	farmerPutGr.Put("/confirm/:id", h.ConfirmPayout)
 
 	// Insurance Partner routes - read partner's payouts
 	partnerGroup := payoutGroup.Group("/read-partner")
@@ -536,6 +539,47 @@ func (h *PayoutHandler) GetPayoutsByFarmerAdmin(c fiber.Ctx) error {
 		"count":     len(payouts),
 		"farmer_id": farmerID,
 	}))
+}
+
+func (h *PayoutHandler) ConfirmPayout(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+
+	partnerID, err := h.getPartnerIDFromToken(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", err.Error()))
+	}
+
+	payoutIDStr := c.Params("id")
+	payoutID, err := uuid.Parse(payoutIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid payout ID format"))
+	}
+
+	var req models.ConfirmPayoutRequest
+	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body: "+err.Error()))
+	}
+
+	message, err := h.payoutService.ConfirmPayout(c.Context(), partnerID, req, payoutID)
+	if err != nil {
+		slog.Error("error confirming payout", "error", err)
+		if strings.Contains(err.Error(), "unauthorized") {
+			return c.Status(fiber.StatusForbidden).JSON(
+				utils.CreateErrorResponse("FORBIDDEN", err.Error()))
+		}
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("INTERNAL", "error confirming payout"))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(message))
 }
 
 // Helper function to extract partner ID from authorization token

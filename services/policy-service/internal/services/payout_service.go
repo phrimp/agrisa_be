@@ -3,8 +3,10 @@ package services
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -198,4 +200,33 @@ func (s *PayoutService) GetPayoutsByFarmIDForPartner(ctx context.Context, farmID
 	}
 
 	return payouts, nil
+}
+
+func (s *PayoutService) ConfirmPayout(ctx context.Context, providerID string, request models.ConfirmPayoutRequest, payoutID uuid.UUID) (string, error) {
+	payout, err := s.payoutRepo.GetByID(ctx, payoutID)
+	if err != nil {
+		slog.Error("error retriving payout", "error", err)
+		return "", err
+	}
+	policy, err := s.policyRepo.GetByID(payout.RegisteredPolicyID)
+	if err != nil {
+		slog.Error("error retriving policy", "error", err)
+		return "", err
+	}
+	if policy.InsuranceProviderID != providerID {
+		return "", fmt.Errorf("unauthorized: payouts do not belong to this partner")
+	}
+
+	now := time.Now().Unix()
+	payout.FarmerConfirmed = request.FarmerConfirmed
+	payout.FarmerConfirmationTimestamp = &now
+	payout.FarmerFeedback = request.FarmerFeedback
+	payout.FarmerRating = request.FarmerRating
+
+	err = s.payoutRepo.UpdatePayout(payout)
+	if err != nil {
+		slog.Error("error updating payout", "error", err)
+		return "", err
+	}
+	return "Payout Confirmed", nil
 }

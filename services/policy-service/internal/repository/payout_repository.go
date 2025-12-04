@@ -127,6 +127,32 @@ func (r *PayoutRepository) UpdatePayoutTx(tx *sqlx.Tx, payout *models.Payout) er
 	return nil
 }
 
+func (r *PayoutRepository) UpdatePayout(payout *models.Payout) error {
+	query := `
+		UPDATE payout SET
+			claim_id = :claim_id, 
+			registered_policy_id = :registered_policy_id, 
+			farm_id = :farm_id, 
+			farmer_id = :farmer_id, 
+			payout_amount = :payout_amount, 
+			currency = :currency, 
+			status = :status, 
+			initiated_at = :initiated_at, 
+			completed_at = :completed_at, 
+			farmer_confirmed = :farmer_confirmed, 
+			farmer_confirmation_timestamp = :farmer_confirmation_timestamp, 
+			farmer_rating = :farmer_rating, 
+			farmer_feedback = :farmer_feedback
+		WHERE id = :id`
+
+	_, err := r.db.NamedExec(query, payout)
+	if err != nil {
+		return fmt.Errorf("failed to update payout in transaction: %w", err)
+	}
+
+	return nil
+}
+
 func (r *PayoutRepository) CreateTx(tx *sqlx.Tx, payout *models.Payout) error {
 	if payout.ID == uuid.Nil {
 		payout.ID = uuid.New()
