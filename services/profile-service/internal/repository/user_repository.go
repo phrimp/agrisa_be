@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"log/slog"
@@ -8,6 +9,7 @@ import (
 	"utils"
 
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 type IUserRepository interface {
@@ -15,6 +17,7 @@ type IUserRepository interface {
 	CreateUserProfile(req *models.CreateUserProfileRequest, createdByID, createdByName string) error
 	UpdateUserProfile(query string, args ...interface{}) error
 	GetUserProfilesByPartnerID(partnerID string) ([]models.UserProfile, error)
+	GetUserBankInfoByUserIDs(userIDs []string) ([]models.UserBankInfo, error)
 }
 
 type UserRepository struct {
@@ -123,4 +126,28 @@ func (r *UserRepository) GetUserProfilesByPartnerID(partnerID string) ([]models.
 		return nil, err
 	}
 	return userProfiles, nil
+}
+
+func (r *UserRepository) GetUserBankInfoByUserIDs(userIDs []string) ([]models.UserBankInfo, error) {
+	if len(userIDs) == 0 {
+		return []models.UserBankInfo{}, nil
+	}
+
+	query := `
+        SELECT 
+            up.account_number, 
+            up.account_name, 
+            up.bank_code
+        FROM user_profiles up
+        WHERE up.user_id = ANY($1)
+    `
+
+	var bankInfos []models.UserBankInfo
+	err := r.db.SelectContext(context.Background(), &bankInfos, query, pq.Array(userIDs))
+	if err != nil {
+		slog.Error("Error getting bank info by user IDs: ", "error", err)
+		return nil, fmt.Errorf("failed to get bank info by user IDs: %w", err)
+	}
+
+	return bankInfos, nil
 }

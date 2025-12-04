@@ -102,6 +102,9 @@ type UserProfile struct {
 	WardCode          string     `json:"ward_code" db:"ward_code"`
 	WardName          string     `json:"ward_name" db:"ward_name"`
 	PostalCode        string     `json:"postal_code" db:"postal_code"`
+	AccountNumber     *string    `json:"account_number,omitempty" db:"account_number"`
+	AccountName       *string    `json:"account_name,omitempty" db:"account_name"`
+	BankCode          *string    `json:"bank_code,omitempty" db:"bank_code"`
 	CreatedAt         time.Time  `json:"created_at" db:"created_at"`
 	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
 	LastUpdatedBy     string     `json:"last_updated_by" db:"last_updated_by"`
