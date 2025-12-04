@@ -167,6 +167,7 @@ func main() {
 	claimService := services.NewClaimService(claimRepo, registeredPolicyRepo, farmRepo, payoutRepo, notificationHelper)
 	claimRejectionService := services.NewClaimRejectionService(registeredPolicyRepo, claimRepo, claimRejectionRepo)
 	dashboardService := services.NewDashboardService(registeredPolicyRepo)
+	payoutServie := services.NewPayoutService(payoutRepo, registeredPolicyRepo, farmRepo)
 
 	// Expiration Listener
 	ctx, cancel := context.WithCancel(context.Background())
@@ -242,6 +243,7 @@ func main() {
 	claimHandler := handlers.NewClaimHandler(claimService, registeredPolicyService)
 	claimRejectionHandler := handlers.NewClaimRejectionHandler(claimRejectionService, registeredPolicyService)
 	dashboardHandler := handlers.NewDashboardHandler(dashboardService)
+	payoutHandler := handlers.NewPayoutHandler(payoutServie, registeredPolicyService)
 
 	// Register routes
 	dataTierHandler.Register(app)
@@ -254,6 +256,7 @@ func main() {
 	claimHandler.Register(app)
 	claimRejectionHandler.Register(app)
 	dashboardHandler.Register(app)
+	payoutHandler.Register(app)
 
 	// Register payment consumer health check endpoint
 	app.Get("/health/payment-consumer", paymentConsumerHealthHandler)
