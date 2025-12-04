@@ -357,9 +357,6 @@ func (h *PolicyHandler) GetPartnerPolicies(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
 	}
 
-	// log the partner profile data
-	slog.Info("Partner profile data", "data", partnerProfileData)
-
 	// get partner id from profile data
 	partnerID, err := h.registeredPolicyService.GetPartnerID(partnerProfileData)
 	if err != nil {
