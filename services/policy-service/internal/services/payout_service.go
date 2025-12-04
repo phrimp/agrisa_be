@@ -206,7 +206,7 @@ func (s *PayoutService) GetByProviderID(ctx context.Context, providerID string) 
 	return s.payoutRepo.GetByInsuranceProvider(ctx, providerID)
 }
 
-func (s *PayoutService) ConfirmPayout(ctx context.Context, providerID string, request models.ConfirmPayoutRequest, payoutID uuid.UUID) (string, error) {
+func (s *PayoutService) ConfirmPayout(ctx context.Context, request models.ConfirmPayoutRequest, payoutID uuid.UUID) (string, error) {
 	payout, err := s.payoutRepo.GetByID(ctx, payoutID)
 	if err != nil {
 		slog.Error("error retriving payout", "error", err)
@@ -217,8 +217,9 @@ func (s *PayoutService) ConfirmPayout(ctx context.Context, providerID string, re
 		slog.Error("error retriving policy", "error", err)
 		return "", err
 	}
-	if policy.InsuranceProviderID != providerID {
-		return "", fmt.Errorf("unauthorized: payouts do not belong to this partner")
+
+	if policy.FarmerID != payout.FarmerID {
+		return "", fmt.Errorf("unauthorized: policy does not belong to this user")
 	}
 
 	now := time.Now().Unix()

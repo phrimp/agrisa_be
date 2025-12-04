@@ -552,12 +552,6 @@ func (h *PayoutHandler) ConfirmPayout(c fiber.Ctx) error {
 			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
 	}
 
-	partnerID, err := h.getPartnerIDFromToken(c)
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).JSON(
-			utils.CreateErrorResponse("RETRIEVAL_FAILED", err.Error()))
-	}
-
 	payoutIDStr := c.Params("id")
 	payoutID, err := uuid.Parse(payoutIDStr)
 	if err != nil {
@@ -572,7 +566,7 @@ func (h *PayoutHandler) ConfirmPayout(c fiber.Ctx) error {
 			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body: "+err.Error()))
 	}
 
-	message, err := h.payoutService.ConfirmPayout(c.Context(), partnerID, req, payoutID)
+	message, err := h.payoutService.ConfirmPayout(c.Context(), req, payoutID)
 	if err != nil {
 		slog.Error("error confirming payout", "error", err)
 		if strings.Contains(err.Error(), "unauthorized") {
