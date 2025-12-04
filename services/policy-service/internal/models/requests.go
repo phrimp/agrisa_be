@@ -919,10 +919,9 @@ type ValidateClaimResponse struct {
 }
 
 type ConfirmPayoutRequest struct {
-	FarmerConfirmed             bool    `json:"farmer_confirmed" `
-	FarmerConfirmationTimestamp *int64  `json:"farmer_confirmation_timestamp,omitempty" `
-	FarmerRating                *int    `json:"farmer_rating,omitempty" `
-	FarmerFeedback              *string `json:"farmer_feedback,omitempty"`
+	FarmerConfirmed bool    `json:"farmer_confirmed" `
+	FarmerRating    *int    `json:"farmer_rating,omitempty" `
+	FarmerFeedback  *string `json:"farmer_feedback,omitempty"`
 }
 
 type CreateCancelRequestResponse struct{}
