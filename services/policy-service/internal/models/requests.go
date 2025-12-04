@@ -891,3 +891,29 @@ type MonthlyDataCostRequest struct {
 type CreateNewClaimRejectionReponse struct {
 	ClaimRejectionID uuid.UUID `json:"claim_rejection_id"`
 }
+
+type ValidateClaimRequest struct {
+	RegisteredPolicyID uuid.UUID   `json:"registered_policy_id"`
+	Status             ClaimStatus `json:"status" db:"status"`
+	PartnerDecision    string      `json:"partner_decision"`
+	PartnerNotes       string      `json:"partner_notes"`
+	ReviewedBy         string      `json:"reviewed_by"`
+}
+
+func (v *ValidateClaimRequest) Validate() error {
+	if v.PartnerDecision == "" {
+		return fmt.Errorf("partner decision detail is required")
+	}
+	if v.Status == "" {
+		return fmt.Errorf("claim status is required")
+	}
+	if v.Status != ClaimApproved && v.Status != ClaimRejected {
+		return fmt.Errorf("claim status invalid")
+	}
+	return nil
+}
+
+type ValidateClaimResponse struct {
+	ClaimID  uuid.UUID `json:"claim_id"`
+	PayoutID uuid.UUID `json:"payout_id"`
+}

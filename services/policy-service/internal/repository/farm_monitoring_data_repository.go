@@ -39,13 +39,13 @@ func (r *FarmMonitoringDataRepository) Create(ctx context.Context, data *models.
 
 	query := `
 		INSERT INTO farm_monitoring_data (
-			id, farm_id, base_policy_trigger_condition_id,
+			id, farm_id, data_source_id,
 			parameter_name, measured_value, unit, measurement_timestamp,
 			component_data, data_quality, confidence_score,
 			measurement_source, distance_from_farm_meters, cloud_cover_percentage,
 			created_at
 		) VALUES (
-			:id, :farm_id, :base_policy_trigger_condition_id,
+			:id, :farm_id, :data_source_id,
 			:parameter_name, :measured_value, :unit, :measurement_timestamp,
 			:component_data, :data_quality, :confidence_score,
 			:measurement_source, :distance_from_farm_meters, :cloud_cover_percentage,
@@ -90,13 +90,13 @@ func (r *FarmMonitoringDataRepository) CreateBatch(ctx context.Context, dataList
 
 	query := `
 		INSERT INTO farm_monitoring_data (
-			id, farm_id, base_policy_trigger_condition_id,
+			id, farm_id, data_source_id,
 			parameter_name, measured_value, unit, measurement_timestamp,
 			component_data, data_quality, confidence_score,
 			measurement_source, distance_from_farm_meters, cloud_cover_percentage,
 			created_at
 		) VALUES (
-			:id, :farm_id, :base_policy_trigger_condition_id,
+			:id, :farm_id, :data_source_id,
 			:parameter_name, :measured_value, :unit, :measurement_timestamp,
 			:component_data, :data_quality, :confidence_score,
 			:measurement_source, :distance_from_farm_meters, :cloud_cover_percentage,
@@ -133,7 +133,7 @@ func (r *FarmMonitoringDataRepository) GetByID(ctx context.Context, id uuid.UUID
 	var data models.FarmMonitoringData
 	query := `
 		SELECT
-			id, farm_id, base_policy_trigger_condition_id,
+			id, farm_id, data_source_id,
 			parameter_name, measured_value, unit, measurement_timestamp,
 			component_data, data_quality, confidence_score,
 			measurement_source, distance_from_farm_meters, cloud_cover_percentage,
@@ -162,7 +162,7 @@ func (r *FarmMonitoringDataRepository) GetByFarmID(ctx context.Context, farmID u
 	var dataList []models.FarmMonitoringData
 	query := `
 		SELECT
-			id, farm_id, base_policy_trigger_condition_id,
+			id, farm_id, data_source_id,
 			parameter_name, measured_value, unit, measurement_timestamp,
 			component_data, data_quality, confidence_score,
 			measurement_source, distance_from_farm_meters, cloud_cover_percentage,
@@ -192,13 +192,13 @@ func (r *FarmMonitoringDataRepository) GetByConditionID(ctx context.Context, con
 	var dataList []models.FarmMonitoringData
 	query := `
 		SELECT
-			id, farm_id, base_policy_trigger_condition_id,
+			id, farm_id, data_source_id,
 			parameter_name, measured_value, unit, measurement_timestamp,
 			component_data, data_quality, confidence_score,
 			measurement_source, distance_from_farm_meters, cloud_cover_percentage,
 			created_at
 		FROM farm_monitoring_data
-		WHERE base_policy_trigger_condition_id = $1
+		WHERE data_source_id = $1
 		ORDER BY measurement_timestamp DESC`
 
 	err := r.db.SelectContext(ctx, &dataList, query, conditionID)
@@ -234,7 +234,7 @@ func (r *FarmMonitoringDataRepository) GetByTimeRange(
 	var dataList []models.FarmMonitoringData
 	query := `
 		SELECT
-			id, farm_id, base_policy_trigger_condition_id,
+			id, farm_id, data_source_id,
 			parameter_name, measured_value, unit, measurement_timestamp,
 			component_data, data_quality, confidence_score,
 			measurement_source, distance_from_farm_meters, cloud_cover_percentage,
@@ -276,7 +276,7 @@ func (r *FarmMonitoringDataRepository) GetByTimeRangeAndParameter(
 	var dataList []models.FarmMonitoringData
 	query := `
 		SELECT
-			id, farm_id, base_policy_trigger_condition_id,
+			id, farm_id, data_source_id,
 			parameter_name, measured_value, unit, measurement_timestamp,
 			component_data, data_quality, confidence_score,
 			measurement_source, distance_from_farm_meters, cloud_cover_percentage,
@@ -351,7 +351,7 @@ func (r *FarmMonitoringDataRepository) Update(ctx context.Context, data *models.
 	query := `
 		UPDATE farm_monitoring_data SET
 			farm_id = :farm_id,
-			base_policy_trigger_condition_id = :base_policy_trigger_condition_id,
+			data_source_id = :data_source_id,
 			parameter_name = :parameter_name,
 			measured_value = :measured_value,
 			unit = :unit,
@@ -567,7 +567,7 @@ func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatus(ctx context.Contex
 		SELECT DISTINCT ON (fmd.id)
 			fmd.id,
 			fmd.farm_id,
-			fmd.base_policy_trigger_condition_id,
+			fmd.data_source_id,
 			fmd.parameter_name,
 			fmd.measured_value,
 			fmd.unit,
@@ -627,7 +627,7 @@ func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatusByFarmID(ctx contex
 		SELECT DISTINCT ON (fmd.id)
 			fmd.id,
 			fmd.farm_id,
-			fmd.base_policy_trigger_condition_id,
+			fmd.data_source_id,
 			fmd.parameter_name,
 			fmd.measured_value,
 			fmd.unit,
@@ -697,7 +697,7 @@ func (r *FarmMonitoringDataRepository) GetByFarmIDAndParameterNameWithPolicyStat
 		SELECT DISTINCT ON (fmd.id)
 			fmd.id,
 			fmd.farm_id,
-			fmd.base_policy_trigger_condition_id,
+			fmd.data_source_id,
 			fmd.parameter_name,
 			fmd.measured_value,
 			fmd.unit,

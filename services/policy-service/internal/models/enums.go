@@ -34,6 +34,7 @@ const (
 	PolicyActive         PolicyStatus = "active"
 	PolicyPayout         PolicyStatus = "payout"
 	PolicyExpired        PolicyStatus = "expired"
+	PolicyPendingCancel  PolicyStatus = "pending_cancel"
 	PolicyCancelled      PolicyStatus = "cancelled"
 	PolicyRejected       PolicyStatus = "rejected"
 )
@@ -60,6 +61,7 @@ type PaymentType string
 
 const (
 	PaymentTypePolicyRegistration PaymentType = "policy_registration_payment"
+	PaymentTypePolicyPayout       PaymentType = "policy_RegistrationPaymentpayout"
 	PaymentTypePolicyRenewal      PaymentType = "policy_renewal_payment"
 )
 

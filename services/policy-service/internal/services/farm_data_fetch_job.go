@@ -104,16 +104,16 @@ func (s *RegisteredPolicyService) recoverPolicyInfrastructure(ctx context.Contex
 
 // DataRequest contains information needed to fetch monitoring data
 type DataRequest struct {
-	DataSource                   models.DataSource
-	FarmID                       uuid.UUID
-	FarmCoordinates              [][]float64 // GeoJSON polygon coordinates (first ring only)
-	AgroPolygonID                string
-	StartDate                    string // YYYY-MM-DD format
-	EndDate                      string // YYYY-MM-DD format
-	BasePolicyTriggerConditionID uuid.UUID
-	MaxCloudCover                float64
-	MaxImages                    int
-	IncludeComponents            bool
+	DataSource        models.DataSource
+	FarmID            uuid.UUID
+	FarmCoordinates   [][]float64 // GeoJSON polygon coordinates (first ring only)
+	AgroPolygonID     string
+	StartDate         string // YYYY-MM-DD format
+	EndDate           string // YYYY-MM-DD format
+	DataSourceID      uuid.UUID
+	MaxCloudCover     float64
+	MaxImages         int
+	IncludeComponents bool
 }
 
 // DataResponse contains the result of a monitoring data fetch operation
@@ -202,36 +202,57 @@ type SatelliteAPIResponse struct {
 
 // FetchFarmMonitoringDataJob is the job handler for fetching farm monitoring data
 func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]any) error {
-	slog.Info("Executing farm monitoring data fetch job", "params", params)
+	slog.Info("=== FARM MONITORING DATA FETCH JOB STARTED ===", "params", params)
 
 	// Extract parameters
 	policyIDStr, ok := params["policy_id"].(string)
 	if !ok {
+		slog.Error("Job failed: missing policy_id parameter")
 		return fmt.Errorf("missing or invalid policy_id parameter")
 	}
 
 	policyID, err := uuid.Parse(policyIDStr)
 	if err != nil {
+		slog.Error("Job failed: invalid policy_id format", "policy_id_str", policyIDStr, "error", err)
 		return fmt.Errorf("invalid policy_id format: %w", err)
 	}
+
+	slog.Info("Step 1: Retrieving policy", "policy_id", policyID)
 	policy, err := s.registeredPolicyRepo.GetByID(policyID)
 	if err != nil {
-		slog.Error("error retrieving policy by id", "id", policyID, "error", err)
+		slog.Error("Step 1 FAILED: error retrieving policy", "policy_id", policyID, "error", err)
 		return fmt.Errorf("error retrieving policy by id: %w", err)
 	}
+
+	slog.Info("Step 1 SUCCESS: Policy retrieved",
+		"policy_id", policyID,
+		"policy_number", policy.PolicyNumber,
+		"policy_status", policy.Status,
+		"farm_id", policy.FarmID,
+		"base_policy_id", policy.BasePolicyID)
+
 	blockedStatus := map[models.PolicyStatus]bool{
-		models.PolicyPayout:    true,
-		models.PolicyCancelled: true,
-		models.PolicyRejected:  true,
-		models.PolicyExpired:   true,
+		models.PolicyPayout:        true,
+		models.PolicyCancelled:     true,
+		models.PolicyRejected:      true,
+		models.PolicyExpired:       true,
+		models.PolicyPendingCancel: true,
 	}
 	if blockedStatus[policy.Status] {
+		slog.Warn("Job blocked by policy status",
+			"policy_id", policyID,
+			"policy_status", policy.Status,
+			"reason", "Policy is in non-active state")
 		return fmt.Errorf("fetch farm monitoring data job blocked by policy status: %v", policy.Status)
 	}
 
 	basePolicyID := policy.BasePolicyID
-
 	farmID := policy.FarmID
+
+	slog.Info("Step 2: Job configuration",
+		"base_policy_id", basePolicyID,
+		"farm_id", farmID,
+		"check_policy", params["check_policy"])
 
 	// Extract optional check_policy parameter (defaults to false)
 	checkPolicy, _ := params["check_policy"].(bool)
@@ -257,13 +278,27 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	}
 
 	// Get triggers and conditions for this base policy
+	slog.Info("Step 3: Retrieving triggers for base policy", "base_policy_id", basePolicyID)
 	triggers, err := s.basePolicyRepo.GetBasePolicyTriggersByPolicyID(basePolicyID)
 	if err != nil {
+		slog.Error("Step 3 FAILED: error retrieving triggers", "base_policy_id", basePolicyID, "error", err)
 		return fmt.Errorf("retrieve triggers from base policy id failed: %w", err)
 	}
 
 	if len(triggers) == 0 {
+		slog.Error("Step 3 FAILED: no triggers found", "base_policy_id", basePolicyID)
 		return fmt.Errorf("no triggers found for base policy %s", basePolicyID)
+	}
+
+	slog.Info("Step 3 SUCCESS: Triggers retrieved",
+		"base_policy_id", basePolicyID,
+		"trigger_count", len(triggers))
+	for i, trigger := range triggers {
+		slog.Info("  Trigger details",
+			"index", i+1,
+			"trigger_id", trigger.ID,
+			"logical_operator", trigger.LogicalOperator,
+			"growth_stage", trigger.GrowthStage)
 	}
 
 	riskAnalysisJob := worker.JobPayload{
@@ -277,42 +312,68 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(policyID)
 	if !ok {
-		slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist")
+		slog.Error("error get farm-imagery scheduler", "error", "scheduler doesn't exist", "policy_id", policyID)
+		return fmt.Errorf("scheduler not found for policy %s", policyID)
 	}
 
 	// Build list of conditions with their data sources
+	slog.Info("Step 4: Building conditions with data sources")
 	type conditionWithDataSource struct {
 		ConditionID uuid.UUID
 		DataSource  models.DataSource
 	}
 	var conditionsWithDataSources []conditionWithDataSource
 
-	for _, trigger := range triggers {
+	for triggerIdx, trigger := range triggers {
+		slog.Info("  Processing trigger conditions",
+			"trigger_index", triggerIdx+1,
+			"trigger_id", trigger.ID,
+			"logical_operator", trigger.LogicalOperator)
+
 		conditions, err := s.basePolicyRepo.GetBasePolicyTriggerConditionsByTriggerID(trigger.ID)
 		if err != nil {
-			slog.Warn("Failed to get conditions for trigger", "trigger_id", trigger.ID, "error", err)
+			slog.Warn("  Failed to get conditions for trigger",
+				"trigger_id", trigger.ID,
+				"error", err)
 			continue
 		}
 
-		for _, cond := range conditions {
+		slog.Info("  Retrieved conditions for trigger",
+			"trigger_id", trigger.ID,
+			"condition_count", len(conditions))
+
+		for condIdx, cond := range conditions {
 			ds, err := s.dataSourceRepo.GetDataSourceByID(cond.DataSourceID)
 			if err != nil {
-				slog.Warn("Failed to get data source for condition",
+				slog.Warn("  Failed to get data source for condition",
+					"condition_index", condIdx+1,
 					"condition_id", cond.ID,
 					"data_source_id", cond.DataSourceID,
 					"error", err)
 				continue
 			}
+
 			conditionsWithDataSources = append(conditionsWithDataSources, conditionWithDataSource{
 				ConditionID: cond.ID,
 				DataSource:  *ds,
 			})
+
+			slog.Info("  Condition with data source added",
+				"condition_index", condIdx+1,
+				"condition_id", cond.ID,
+				"data_source_id", ds.ID,
+				"data_source_type", ds.DataSource,
+				"parameter_name", ds.ParameterName)
 		}
 	}
 
 	if len(conditionsWithDataSources) == 0 {
+		slog.Error("Step 4 FAILED: no conditions with data sources found", "base_policy_id", basePolicyID)
 		return fmt.Errorf("no conditions with data sources found for base policy %s", basePolicyID)
 	}
+
+	slog.Info("Step 4 SUCCESS: Conditions with data sources built",
+		"total_conditions", len(conditionsWithDataSources))
 
 	startDateFloat, ok := params["start_date"].(float64)
 	if !ok {
@@ -503,72 +564,103 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		paramStartDateStr := unixToDateString(paramStartDate)
 
 		jobs <- DataRequest{
-			DataSource:                   cds.DataSource,
-			FarmID:                       farmID,
-			FarmCoordinates:              farmCoordinates,
-			AgroPolygonID:                farm.AgroPolygonID,
-			StartDate:                    paramStartDateStr,
-			EndDate:                      endDateStr,
-			BasePolicyTriggerConditionID: cds.ConditionID,
-			MaxCloudCover:                100.0,
-			MaxImages:                    1000,
-			IncludeComponents:            true,
+			DataSource:        cds.DataSource,
+			FarmID:            farmID,
+			FarmCoordinates:   farmCoordinates,
+			AgroPolygonID:     farm.AgroPolygonID,
+			StartDate:         paramStartDateStr,
+			EndDate:           endDateStr,
+			DataSourceID:      cds.DataSource.ID,
+			MaxCloudCover:     100.0,
+			MaxImages:         1000,
+			IncludeComponents: true,
 		}
 		jobsEnqueued++
 	}
 	close(jobs)
 
+	slog.Info("Step 5: Data fetch jobs enqueued", "jobs_count", jobsEnqueued)
+
 	// If all parameters are up to date, schedule risk analysis and return
 	if jobsEnqueued == 0 {
-		slog.Info("all parameters are up to date, skipping fetch and scheduling risk analysis",
-			"farm_id", farmID)
+		slog.Info("Step 5 COMPLETE: All parameters up to date, skipping fetch",
+			"farm_id", farmID,
+			"action", "scheduling_risk_analysis")
 		scheduler.AddJob(riskAnalysisJob)
 		return nil
 	}
 
 	// Collect results from all workers
+	slog.Info("Step 6: Collecting fetch results from workers")
 	errorSummary := make(map[models.DataSourceParameterName]error)
 	skipSummary := make(map[models.DataSourceParameterName]string)
+	successCount := 0
+	errorCount := 0
+	skipCount := 0
 
 	for i := 0; i < jobsEnqueued; i++ {
 		resp := <-results
 
 		if resp.Err != nil {
+			errorCount++
 			errorSummary[resp.DataSource.ParameterName] = resp.Err
-			slog.Error("Data source fetch failed",
+			slog.Error("  Worker result: FAILED",
+				"worker", i+1,
 				"parameter", resp.DataSource.ParameterName,
 				"data_source_id", resp.DataSource.ID,
 				"error", resp.Err)
 		} else if resp.SkipReason != "" {
+			skipCount++
 			skipSummary[resp.DataSource.ParameterName] = resp.SkipReason
-			slog.Warn("Data source skipped",
+			slog.Warn("  Worker result: SKIPPED",
+				"worker", i+1,
 				"parameter", resp.DataSource.ParameterName,
 				"reason", resp.SkipReason)
 		} else {
+			successCount++
 			allMonitoringData = append(allMonitoringData, resp.MonitoringData...)
 
 			// Capture polygon ID from weather API response (if available)
 			if resp.AgroPolygonID != "" && agroPolygonID == "" {
 				agroPolygonID = resp.AgroPolygonID
-				slog.Info("Captured Agro polygon ID from weather API",
+				slog.Info("  Captured Agro polygon ID from weather API",
 					"polygon_id", agroPolygonID,
 					"parameter", resp.DataSource.ParameterName)
 			}
 
-			slog.Info("Data source fetch succeeded",
+			slog.Info("  Worker result: SUCCESS",
+				"worker", i+1,
 				"parameter", resp.DataSource.ParameterName,
+				"data_source_id", resp.DataSource.ID,
 				"records_fetched", len(resp.MonitoringData))
 		}
 	}
 
+	slog.Info("Step 6 COMPLETE: Fetch results collected",
+		"total_jobs", jobsEnqueued,
+		"success_count", successCount,
+		"error_count", errorCount,
+		"skip_count", skipCount,
+		"total_records_fetched", len(allMonitoringData))
+
 	// Store monitoring data in database (batch insert)
 	if len(allMonitoringData) > 0 {
+		slog.Info("Step 7: Storing monitoring data in database",
+			"record_count", len(allMonitoringData))
+
 		if err := s.farmMonitoringDataRepo.CreateBatch(ctx, allMonitoringData); err != nil {
+			slog.Error("Step 7 FAILED: database storage error",
+				"farm_id", farmID,
+				"record_count", len(allMonitoringData),
+				"error", err)
 			return fmt.Errorf("failed to store monitoring data: %w", err)
 		}
-		slog.Info("Monitoring data stored successfully",
+
+		slog.Info("Step 7 SUCCESS: Monitoring data stored",
 			"farm_id", farmID,
 			"total_records", len(allMonitoringData))
+	} else {
+		slog.Info("Step 7 SKIPPED: No monitoring data to store")
 	}
 
 	// Update farm's AgroPolygonID if we received one from weather API
@@ -612,31 +704,58 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 	// Check policy trigger conditions if enabled
 	if checkPolicy && len(allMonitoringData) > 0 {
-		slog.Info("Checking policy trigger conditions",
+		slog.Info("Step 8: Evaluating policy trigger conditions",
 			"policy_id", policyID,
 			"farm_id", farmID,
+			"trigger_count", len(triggers),
 			"data_points", len(allMonitoringData))
 
 		// Evaluate trigger conditions against fetched data
 		triggeredConditions := s.evaluateTriggerConditions(ctx, triggers, allMonitoringData, farmID)
 
+		slog.Info("Step 8 COMPLETE: Trigger evaluation finished",
+			"triggered_conditions_count", len(triggeredConditions))
+
 		if len(triggeredConditions) > 0 {
-			slog.Info("Trigger conditions satisfied",
+			slog.Info("=== TRIGGER CONDITIONS SATISFIED ===",
 				"policy_id", policyID,
+				"farm_id", farmID,
 				"triggered_conditions", len(triggeredConditions))
 
+			// Log each triggered condition
+			for idx, tc := range triggeredConditions {
+				slog.Info("  Triggered condition detail",
+					"index", idx+1,
+					"condition_id", tc.ConditionID,
+					"parameter", tc.ParameterName,
+					"measured_value", tc.MeasuredValue,
+					"threshold_value", tc.ThresholdValue,
+					"operator", tc.Operator,
+					"consecutive_days", tc.ConsecutiveDays,
+					"is_early_warning", tc.IsEarlyWarning)
+			}
+
 			// Generate Claim
+			slog.Info("Step 9: Generating claim from trigger",
+				"policy_id", policyID,
+				"trigger_id", triggers[0].ID)
+
 			claim, err := s.generateClaimFromTrigger(ctx, policyID, basePolicyID, farmID, triggers[0].ID, triggeredConditions)
 			if err != nil {
-				slog.Error("Failed to generate claim from trigger",
+				slog.Error("Step 9 FAILED: Claim generation error",
 					"policy_id", policyID,
+					"farm_id", farmID,
+					"trigger_id", triggers[0].ID,
 					"error", err)
 			} else {
-				slog.Info("Claim generated successfully",
+				slog.Info("Step 9 SUCCESS: Claim generated successfully",
 					"claim_id", claim.ID,
 					"claim_number", claim.ClaimNumber,
 					"claim_amount", claim.ClaimAmount,
-					"policy_id", policyID)
+					"policy_id", policyID,
+					"farm_id", farmID,
+					"status", claim.Status,
+					"auto_generated", claim.AutoGenerated)
 
 				// ================================================================
 				// NOTIFICATION PLACEHOLDER - User will implement notifications
@@ -893,13 +1012,24 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 	monitoringData []models.FarmMonitoringData,
 	farmID uuid.UUID,
 ) []TriggeredCondition {
+	slog.Info(">>> Entering evaluateTriggerConditions",
+		"trigger_count", len(triggers),
+		"monitoring_data_count", len(monitoringData),
+		"farm_id", farmID)
+
 	var triggeredConditions []TriggeredCondition
 	currentTime := time.Now()
 
-	for _, trigger := range triggers {
+	for triggerIdx, trigger := range triggers {
+		slog.Info("  Evaluating trigger",
+			"trigger_index", triggerIdx+1,
+			"trigger_id", trigger.ID,
+			"logical_operator", trigger.LogicalOperator,
+			"growth_stage", trigger.GrowthStage)
+
 		// Check blackout periods - skip evaluation during blackout
 		if s.isInBlackoutPeriod(trigger.BlackoutPeriods, currentTime) {
-			slog.Info("Skipping trigger evaluation during blackout period",
+			slog.Info("  Trigger SKIPPED: in blackout period",
 				"trigger_id", trigger.ID,
 				"current_time", currentTime)
 			continue
@@ -907,11 +1037,15 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 
 		conditions, err := s.basePolicyRepo.GetBasePolicyTriggerConditionsByTriggerID(trigger.ID)
 		if err != nil {
-			slog.Warn("Failed to get conditions for trigger evaluation",
+			slog.Warn("  Failed to get conditions for trigger evaluation",
 				"trigger_id", trigger.ID,
 				"error", err)
 			continue
 		}
+
+		slog.Info("  Retrieved conditions for trigger",
+			"trigger_id", trigger.ID,
+			"condition_count", len(conditions))
 
 		// Sort conditions by ConditionOrder for proper evaluation sequence
 		sortConditionsByOrder(conditions)
@@ -929,11 +1063,12 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 		// Merge fetched data with historical data, avoiding duplicates
 		allData := s.mergeMonitoringData(monitoringData, historicalData)
 
-		// Group all monitoring data by condition ID
-		dataByCondition := make(map[uuid.UUID][]models.FarmMonitoringData)
+		// Group all monitoring data by data source ID
+		// This allows each condition to access data from its specific data source
+		dataByDataSource := make(map[uuid.UUID][]models.FarmMonitoringData)
 		for _, data := range allData {
-			dataByCondition[data.BasePolicyTriggerConditionID] = append(
-				dataByCondition[data.BasePolicyTriggerConditionID],
+			dataByDataSource[data.DataSourceID] = append(
+				dataByDataSource[data.DataSourceID],
 				data,
 			)
 		}
@@ -942,48 +1077,105 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 		var conditionResults []bool
 		var triggerConditionsForThisTrigger []TriggeredCondition
 
-		for _, cond := range conditions {
-			condData := dataByCondition[cond.ID]
+		for condIdx, cond := range conditions {
+			slog.Info("    Evaluating condition",
+				"condition_index", condIdx+1,
+				"condition_id", cond.ID,
+				"data_source_id", cond.DataSourceID,
+				"threshold_operator", cond.ThresholdOperator,
+				"threshold_value", cond.ThresholdValue)
+
+			// Lookup monitoring data by the condition's data source ID
+			// Multiple conditions can share the same data source
+			condData := dataByDataSource[cond.DataSourceID]
 			if len(condData) == 0 {
-				slog.Debug("No data for condition", "condition_id", cond.ID)
+				slog.Warn("    Condition FAILED: No data found",
+					"condition_id", cond.ID,
+					"data_source_id", cond.DataSourceID,
+					"reason", "No monitoring data for this data source")
 				conditionResults = append(conditionResults, false)
 				continue
 			}
+
+			slog.Info("    Found monitoring data for condition",
+				"condition_id", cond.ID,
+				"data_source_id", cond.DataSourceID,
+				"data_points", len(condData))
 
 			// Sort data by timestamp for proper chronological analysis
 			sortMonitoringDataByTimestamp(condData)
 
 			// Apply aggregation function to get the current value
 			aggregatedValue := s.applyAggregation(condData, cond.AggregationFunction, cond.AggregationWindowDays)
+			slog.Info("    Aggregation applied",
+				"condition_id", cond.ID,
+				"aggregation_function", cond.AggregationFunction,
+				"aggregation_window_days", cond.AggregationWindowDays,
+				"aggregated_value", aggregatedValue)
 
 			// Calculate baseline if required for change-based operators
 			var baselineValue *float64
 			if cond.BaselineWindowDays != nil && cond.BaselineFunction != nil {
 				baseline := s.calculateBaseline(condData, *cond.BaselineWindowDays, *cond.BaselineFunction, cond.AggregationWindowDays)
 				baselineValue = &baseline
+				slog.Info("    Baseline calculated",
+					"condition_id", cond.ID,
+					"baseline_window_days", *cond.BaselineWindowDays,
+					"baseline_function", *cond.BaselineFunction,
+					"baseline_value", baseline)
 
 				// For change operators, calculate the change from baseline
 				if cond.ThresholdOperator == models.ThresholdChangeGT || cond.ThresholdOperator == models.ThresholdChangeLT {
-					aggregatedValue = aggregatedValue - baseline
+					changeValue := aggregatedValue - baseline
+					slog.Info("    Change from baseline computed",
+						"condition_id", cond.ID,
+						"operator", cond.ThresholdOperator,
+						"aggregated_value", aggregatedValue,
+						"baseline_value", baseline,
+						"change_value", changeValue)
+					aggregatedValue = changeValue
 				}
 			}
 
 			// Check if main threshold is satisfied
 			isSatisfied := s.checkThreshold(aggregatedValue, cond.ThresholdValue, cond.ThresholdOperator)
+			slog.Info("    Threshold check result",
+				"condition_id", cond.ID,
+				"measured_value", aggregatedValue,
+				"threshold_value", cond.ThresholdValue,
+				"operator", cond.ThresholdOperator,
+				"is_satisfied", isSatisfied)
 
 			// Check early warning threshold if main threshold not satisfied
 			isEarlyWarning := false
 			if !isSatisfied && cond.EarlyWarningThreshold != nil {
 				isEarlyWarning = s.checkThreshold(aggregatedValue, *cond.EarlyWarningThreshold, cond.ThresholdOperator)
+				if isEarlyWarning {
+					slog.Warn("    EARLY WARNING threshold breached",
+						"condition_id", cond.ID,
+						"measured_value", aggregatedValue,
+						"early_warning_threshold", *cond.EarlyWarningThreshold,
+						"operator", cond.ThresholdOperator)
+				} else {
+					slog.Info("    Early warning threshold not breached",
+						"condition_id", cond.ID,
+						"measured_value", aggregatedValue,
+						"early_warning_threshold", *cond.EarlyWarningThreshold)
+				}
 			}
 
 			// Check consecutive days requirement
 			consecutiveDays := 0
 			if cond.ConsecutiveRequired && isSatisfied {
 				consecutiveDays = s.countConsecutiveDays(condData, cond.ThresholdValue, cond.ThresholdOperator, cond.AggregationFunction)
+				slog.Info("    Consecutive days check",
+					"condition_id", cond.ID,
+					"consecutive_days_found", consecutiveDays,
+					"required_days", cond.ValidationWindowDays,
+					"requirement_met", consecutiveDays >= cond.ValidationWindowDays)
 				// For consecutive requirement, we need at least ValidationWindowDays consecutive days
 				if consecutiveDays < cond.ValidationWindowDays {
-					slog.Info("Consecutive days requirement not met",
+					slog.Info("    Consecutive days requirement NOT MET",
 						"condition_id", cond.ID,
 						"consecutive_days", consecutiveDays,
 						"required_days", cond.ValidationWindowDays)
@@ -1019,6 +1211,28 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 					EarlyWarningThreshold: cond.EarlyWarningThreshold,
 				}
 				triggerConditionsForThisTrigger = append(triggerConditionsForThisTrigger, tc)
+
+				if isSatisfied {
+					slog.Info("    ✅ Condition SATISFIED",
+						"condition_id", cond.ID,
+						"parameter", tc.ParameterName,
+						"measured_value", tc.MeasuredValue,
+						"threshold_value", tc.ThresholdValue,
+						"operator", tc.Operator,
+						"consecutive_days", tc.ConsecutiveDays)
+				} else if isEarlyWarning {
+					slog.Warn("    ⚠️  Condition EARLY WARNING only",
+						"condition_id", cond.ID,
+						"parameter", tc.ParameterName,
+						"measured_value", tc.MeasuredValue,
+						"early_warning_threshold", *tc.EarlyWarningThreshold)
+				}
+			} else {
+				slog.Info("    ❌ Condition NOT satisfied",
+					"condition_id", cond.ID,
+					"measured_value", aggregatedValue,
+					"threshold_value", cond.ThresholdValue,
+					"operator", cond.ThresholdOperator)
 			}
 
 			conditionResults = append(conditionResults, isSatisfied)
@@ -1026,13 +1240,28 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 
 		// Check logical operator (AND/OR) for trigger
 		triggerSatisfied := s.evaluateLogicalOperator(trigger.LogicalOperator, conditionResults)
+
+		slog.Info("  Trigger evaluation result",
+			"trigger_id", trigger.ID,
+			"logical_operator", trigger.LogicalOperator,
+			"conditions_evaluated", len(conditionResults),
+			"conditions_satisfied", countTrueValues(conditionResults),
+			"trigger_satisfied", triggerSatisfied)
+
 		if triggerSatisfied {
+			slog.Info("  ✅ TRIGGER SATISFIED - Adding to triggered conditions",
+				"trigger_id", trigger.ID,
+				"logical_operator", trigger.LogicalOperator,
+				"triggered_conditions_count", len(triggerConditionsForThisTrigger))
 			triggeredConditions = append(triggeredConditions, triggerConditionsForThisTrigger...)
 		} else {
+			slog.Info("  ❌ Trigger NOT satisfied",
+				"trigger_id", trigger.ID,
+				"logical_operator", trigger.LogicalOperator)
 			// Log early warnings even if trigger not fully satisfied
 			for _, tc := range triggerConditionsForThisTrigger {
 				if tc.IsEarlyWarning {
-					slog.Info("Early warning threshold breached (trigger not fully satisfied)",
+					slog.Info("  Early warning threshold breached (trigger not fully satisfied)",
 						"condition_id", tc.ConditionID,
 						"parameter", tc.ParameterName,
 						"measured_value", tc.MeasuredValue,
@@ -1041,6 +1270,10 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 			}
 		}
 	}
+
+	slog.Info("<<< Exiting evaluateTriggerConditions",
+		"total_triggers_evaluated", len(triggers),
+		"total_triggered_conditions", len(triggeredConditions))
 
 	return triggeredConditions
 }
@@ -1621,18 +1854,18 @@ func fetchWeatherData(client *http.Client,
 		}
 
 		monitoringData = append(monitoringData, models.FarmMonitoringData{
-			ID:                           uuid.New(),
-			FarmID:                       req.FarmID,
-			BasePolicyTriggerConditionID: req.BasePolicyTriggerConditionID,
-			ParameterName:                req.DataSource.ParameterName,
-			MeasuredValue:                dataPoint.Data,
-			Unit:                         &dataPoint.Unit,
-			MeasurementTimestamp:         dataPoint.Dt,
-			ComponentData:                componentData,
-			DataQuality:                  dataQuality,
-			ConfidenceScore:              &confidenceScore,
-			MeasurementSource:            req.DataSource.DataProvider,
-			CreatedAt:                    time.Now(),
+			ID:                   uuid.New(),
+			FarmID:               req.FarmID,
+			DataSourceID:         req.DataSourceID,
+			ParameterName:        req.DataSource.ParameterName,
+			MeasuredValue:        dataPoint.Data,
+			Unit:                 &dataPoint.Unit,
+			MeasurementTimestamp: dataPoint.Dt,
+			ComponentData:        componentData,
+			DataQuality:          dataQuality,
+			ConfidenceScore:      &confidenceScore,
+			MeasurementSource:    req.DataSource.DataProvider,
+			CreatedAt:            time.Now(),
 		})
 	}
 
@@ -1828,19 +2061,19 @@ func convertToMonitoringData(
 		confidenceScore := math.Max(0.0, (100.0-image.CloudCover.Value)/100.0)
 
 		monitoringData = append(monitoringData, models.FarmMonitoringData{
-			ID:                           uuid.New(),
-			FarmID:                       req.FarmID,
-			BasePolicyTriggerConditionID: req.BasePolicyTriggerConditionID,
-			ParameterName:                req.DataSource.ParameterName,
-			MeasuredValue:                *meanValue,
-			Unit:                         req.DataSource.Unit,
-			MeasurementTimestamp:         acquisitionTime.Unix(),
-			ComponentData:                componentData,
-			DataQuality:                  dataQuality,
-			ConfidenceScore:              &confidenceScore,
-			MeasurementSource:            req.DataSource.DataProvider,
-			CloudCoverPercentage:         &image.CloudCover.Value,
-			CreatedAt:                    time.Now(),
+			ID:                   uuid.New(),
+			FarmID:               req.FarmID,
+			DataSourceID:         req.DataSourceID,
+			ParameterName:        req.DataSource.ParameterName,
+			MeasuredValue:        *meanValue,
+			Unit:                 req.DataSource.Unit,
+			MeasurementTimestamp: acquisitionTime.Unix(),
+			ComponentData:        componentData,
+			DataQuality:          dataQuality,
+			ConfidenceScore:      &confidenceScore,
+			MeasurementSource:    req.DataSource.DataProvider,
+			CloudCoverPercentage: &image.CloudCover.Value,
+			CreatedAt:            time.Now(),
 		})
 	}
 
@@ -1880,10 +2113,10 @@ func parseFarmMonitoringDataFromMap(dataMap map[string]interface{}, farmID uuid.
 		FarmID: farmID,
 	}
 
-	// Parse BasePolicyTriggerConditionID
-	if condIDStr, ok := dataMap["base_policy_trigger_condition_id"].(string); ok {
+	// Parse DataSourceID
+	if condIDStr, ok := dataMap["data_source_id"].(string); ok {
 		if condID, err := uuid.Parse(condIDStr); err == nil {
-			data.BasePolicyTriggerConditionID = condID
+			data.DataSourceID = condID
 		}
 	}
 
@@ -1936,4 +2169,15 @@ func parseFarmMonitoringDataFromMap(dataMap map[string]interface{}, farmID uuid.
 	data.CreatedAt = time.Now()
 
 	return data
+}
+
+// countTrueValues counts the number of true values in a boolean slice
+func countTrueValues(values []bool) int {
+	count := 0
+	for _, v := range values {
+		if v {
+			count++
+		}
+	}
+	return count
 }

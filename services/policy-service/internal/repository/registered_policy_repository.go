@@ -1017,7 +1017,7 @@ func (r *RegisteredPolicyRepository) CreateClaim(claim *models.Claim) error {
 	claim.UpdatedAt = time.Now()
 
 	query := `
-		INSERT INTO claims (
+		INSERT INTO claim (
 			id, claim_number, registered_policy_id, base_policy_id, farm_id,
 			base_policy_trigger_id, trigger_timestamp, over_threshold_value,
 			calculated_fix_payout, calculated_threshold_payout, claim_amount,
@@ -1049,7 +1049,7 @@ func (r *RegisteredPolicyRepository) GetClaimsByPolicyID(policyID uuid.UUID) ([]
 
 	var claims []models.Claim
 	query := `
-		SELECT * FROM claims
+		SELECT * FROM claim
 		WHERE registered_policy_id = $1
 		ORDER BY created_at DESC`
 
@@ -1069,7 +1069,7 @@ func (r *RegisteredPolicyRepository) GetClaimByID(claimID uuid.UUID) (*models.Cl
 	slog.Debug("Retrieving claim by ID", "claim_id", claimID)
 
 	var claim models.Claim
-	query := `SELECT * FROM claims WHERE id = $1`
+	query := `SELECT * FROM claim WHERE id = $1`
 
 	err := r.db.Get(&claim, query, claimID)
 	if err != nil {
@@ -1095,7 +1095,7 @@ func (r *RegisteredPolicyRepository) GetRecentClaimByPolicyAndTrigger(
 	cutoffTime := time.Now().Unix() - withinSeconds
 
 	query := `
-		SELECT * FROM claims
+		SELECT * FROM claim
 		WHERE registered_policy_id = $1
 		AND base_policy_trigger_id = $2
 		AND trigger_timestamp > $3
@@ -1478,4 +1478,36 @@ func (r *RegisteredPolicyRepository) GetByBasePolicyIDAndFarmID(basePolicyID, fa
 		return nil, fmt.Errorf("error getting registered_policy by base_policy_id and farm_id: %w", err)
 	}
 	return &result, nil
+}
+
+func (r *RegisteredPolicyRepository) GetSumOfTotalPremiumAmountByProviderWithStatusActive(providerID string) (int64, error) {
+	query := `
+		SELECT COALESCE(SUM(total_farmer_premium), 0) as total_premium
+		FROM public.registered_policy 
+		WHERE status = 'active' 
+  	AND insurance_provider_id = $1 ;
+	`
+	var totalAmount int64
+	err := r.db.GetContext(context.Background(), &totalAmount, query, providerID)
+	if err != nil {
+		slog.Error("falied to count total premium amount by status active", "provider", providerID, "error", err)
+		return 0, err
+	}
+	return totalAmount, nil
+}
+
+func (r *RegisteredPolicyRepository) UpdateStatusByProviderAndStatus(providerID string, updatedStatus, byStatus models.PolicyStatus) error {
+	query := `
+		UPDATE registered_policy
+		SET status = $1 
+		WHERE insurance_provider_id = $2 
+		AND status = $3;
+	`
+
+	_, err := r.db.Exec(query, updatedStatus, providerID, byStatus)
+	if err != nil {
+		return fmt.Errorf("failed to update registered policy: %w", err)
+	}
+
+	return nil
 }
