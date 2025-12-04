@@ -198,15 +198,11 @@ export class ImplPushNotificationService implements IPushNotificationService {
       },
     };
 
+    // Format đúng cho Service Worker
     const payload = {
-      aps: {
-        alert: {
-          title: notification.title,
-          body: notification.body,
-        },
-        sound: 'default',
-      },
-      url: notification.data?.url || '/',
+      title: notification.title,
+      body: notification.body,
+      data: notification.data || {},
     };
 
     try {
