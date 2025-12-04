@@ -18,20 +18,87 @@ func NewPayoutRepository(db *sqlx.DB) *PayoutRepository {
 	return &PayoutRepository{db: db}
 }
 
+func (p *PayoutRepository) GetByID(ctx context.Context, payoutID uuid.UUID) (*models.Payout, error) {
+	var payout models.Payout
+	query := `
+		SELECT id, claim_id, registered_policy_id, farm_id, farmer_id, payout_amount, currency, status, initiated_at,
+		completed_at, farmer_confirmed, farmer_confirmation_timestamp, farmer_rating, farmer_feedback, created_at
+		FROM payout
+		WHERE id = $1
+	`
+	err := p.db.GetContext(ctx, &payout, query, payoutID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get payout by id: %w", err)
+	}
+
+	return &payout, nil
+}
+
 func (p *PayoutRepository) GetByClaimID(ctx context.Context, claimID uuid.UUID) (*models.Payout, error) {
 	var payout models.Payout
 	query := `
 		SELECT id, claim_id, registered_policy_id, farm_id, farmer_id, payout_amount, currency, status, initiated_at,
 		completed_at, farmer_confirmed, farmer_confirmation_timestamp, farmer_rating, farmer_feedback, created_at
-		FROM payout;
+		FROM payout
 		WHERE claim_id = $1
 	`
 	err := p.db.GetContext(ctx, &payout, query, claimID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get claim by id: %w", err)
+		return nil, fmt.Errorf("failed to get payout by claim id: %w", err)
 	}
 
 	return &payout, nil
+}
+
+func (p *PayoutRepository) GetByRegisteredPolicyID(ctx context.Context, policyID uuid.UUID) ([]models.Payout, error) {
+	var payouts []models.Payout
+	query := `
+		SELECT id, claim_id, registered_policy_id, farm_id, farmer_id, payout_amount, currency, status, initiated_at,
+		completed_at, farmer_confirmed, farmer_confirmation_timestamp, farmer_rating, farmer_feedback, created_at
+		FROM payout
+		WHERE registered_policy_id = $1
+		ORDER BY created_at DESC
+	`
+	err := p.db.SelectContext(ctx, &payouts, query, policyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get payouts by registered policy id: %w", err)
+	}
+
+	return payouts, nil
+}
+
+func (p *PayoutRepository) GetByFarmID(ctx context.Context, farmID uuid.UUID) ([]models.Payout, error) {
+	var payouts []models.Payout
+	query := `
+		SELECT id, claim_id, registered_policy_id, farm_id, farmer_id, payout_amount, currency, status, initiated_at,
+		completed_at, farmer_confirmed, farmer_confirmation_timestamp, farmer_rating, farmer_feedback, created_at
+		FROM payout
+		WHERE farm_id = $1
+		ORDER BY created_at DESC
+	`
+	err := p.db.SelectContext(ctx, &payouts, query, farmID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get payouts by farm id: %w", err)
+	}
+
+	return payouts, nil
+}
+
+func (p *PayoutRepository) GetByFarmerID(ctx context.Context, farmerID string) ([]models.Payout, error) {
+	var payouts []models.Payout
+	query := `
+		SELECT id, claim_id, registered_policy_id, farm_id, farmer_id, payout_amount, currency, status, initiated_at,
+		completed_at, farmer_confirmed, farmer_confirmation_timestamp, farmer_rating, farmer_feedback, created_at
+		FROM payout
+		WHERE farmer_id = $1
+		ORDER BY created_at DESC
+	`
+	err := p.db.SelectContext(ctx, &payouts, query, farmerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get payouts by farmer id: %w", err)
+	}
+
+	return payouts, nil
 }
 
 func (r *PayoutRepository) UpdatePayoutTx(tx *sqlx.Tx, payout *models.Payout) error {
