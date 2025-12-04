@@ -587,7 +587,7 @@ func (h *DefaultPaymentEventHandler) processPolicyPayoutPayment(
 		return err
 	}
 
-	slog.Info("policy activated successfully",
+	slog.Info("policy payout successfully",
 		"policy_id", registeredPolicyID,
 		"payment_id", event.ID,
 		"coverage_start_date", registeredPolicy.CoverageStartDate,
