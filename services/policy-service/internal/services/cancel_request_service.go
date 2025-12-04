@@ -1,6 +1,10 @@
 package services
 
-import "policy-service/internal/repository"
+import (
+	"context"
+	"policy-service/internal/models"
+	"policy-service/internal/repository"
+)
 
 type CancelRequestService struct {
 	policyRepo        *repository.RegisteredPolicyRepository
@@ -15,4 +19,8 @@ func NewCancelRequestService(
 		cancelRequestRepo: cancelRequestRepo,
 		policyRepo:        policyRepo,
 	}
+}
+
+func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, payout models.Payout) (*models.CreateCancelRequestResponse, error) {
+	return nil, nil
 }

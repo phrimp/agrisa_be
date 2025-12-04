@@ -917,3 +917,5 @@ type ValidateClaimResponse struct {
 	ClaimID  uuid.UUID `json:"claim_id"`
 	PayoutID uuid.UUID `json:"payout_id"`
 }
+
+type CreateCancelRequestResponse struct{}
