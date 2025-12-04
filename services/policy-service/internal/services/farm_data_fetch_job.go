@@ -104,16 +104,16 @@ func (s *RegisteredPolicyService) recoverPolicyInfrastructure(ctx context.Contex
 
 // DataRequest contains information needed to fetch monitoring data
 type DataRequest struct {
-	DataSource                   models.DataSource
-	FarmID                       uuid.UUID
-	FarmCoordinates              [][]float64 // GeoJSON polygon coordinates (first ring only)
-	AgroPolygonID                string
-	StartDate                    string // YYYY-MM-DD format
-	EndDate                      string // YYYY-MM-DD format
-	DataSourceID uuid.UUID
-	MaxCloudCover                float64
-	MaxImages                    int
-	IncludeComponents            bool
+	DataSource        models.DataSource
+	FarmID            uuid.UUID
+	FarmCoordinates   [][]float64 // GeoJSON polygon coordinates (first ring only)
+	AgroPolygonID     string
+	StartDate         string // YYYY-MM-DD format
+	EndDate           string // YYYY-MM-DD format
+	DataSourceID      uuid.UUID
+	MaxCloudCover     float64
+	MaxImages         int
+	IncludeComponents bool
 }
 
 // DataResponse contains the result of a monitoring data fetch operation
@@ -232,10 +232,11 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		"base_policy_id", policy.BasePolicyID)
 
 	blockedStatus := map[models.PolicyStatus]bool{
-		models.PolicyPayout:    true,
-		models.PolicyCancelled: true,
-		models.PolicyRejected:  true,
-		models.PolicyExpired:   true,
+		models.PolicyPayout:        true,
+		models.PolicyCancelled:     true,
+		models.PolicyRejected:      true,
+		models.PolicyExpired:       true,
+		models.PolicyPendingCancel: true,
 	}
 	if blockedStatus[policy.Status] {
 		slog.Warn("Job blocked by policy status",
@@ -563,15 +564,15 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		paramStartDateStr := unixToDateString(paramStartDate)
 
 		jobs <- DataRequest{
-			DataSource:      cds.DataSource,
-			FarmID:          farmID,
-			FarmCoordinates: farmCoordinates,
-			AgroPolygonID:   farm.AgroPolygonID,
-			StartDate:       paramStartDateStr,
-			EndDate:         endDateStr,
-			DataSourceID:    cds.DataSource.ID,
-			MaxCloudCover:   100.0,
-			MaxImages:       1000,
+			DataSource:        cds.DataSource,
+			FarmID:            farmID,
+			FarmCoordinates:   farmCoordinates,
+			AgroPolygonID:     farm.AgroPolygonID,
+			StartDate:         paramStartDateStr,
+			EndDate:           endDateStr,
+			DataSourceID:      cds.DataSource.ID,
+			MaxCloudCover:     100.0,
+			MaxImages:         1000,
 			IncludeComponents: true,
 		}
 		jobsEnqueued++
@@ -1853,18 +1854,18 @@ func fetchWeatherData(client *http.Client,
 		}
 
 		monitoringData = append(monitoringData, models.FarmMonitoringData{
-			ID:                           uuid.New(),
-			FarmID:                       req.FarmID,
-			DataSourceID: req.DataSourceID,
-			ParameterName:                req.DataSource.ParameterName,
-			MeasuredValue:                dataPoint.Data,
-			Unit:                         &dataPoint.Unit,
-			MeasurementTimestamp:         dataPoint.Dt,
-			ComponentData:                componentData,
-			DataQuality:                  dataQuality,
-			ConfidenceScore:              &confidenceScore,
-			MeasurementSource:            req.DataSource.DataProvider,
-			CreatedAt:                    time.Now(),
+			ID:                   uuid.New(),
+			FarmID:               req.FarmID,
+			DataSourceID:         req.DataSourceID,
+			ParameterName:        req.DataSource.ParameterName,
+			MeasuredValue:        dataPoint.Data,
+			Unit:                 &dataPoint.Unit,
+			MeasurementTimestamp: dataPoint.Dt,
+			ComponentData:        componentData,
+			DataQuality:          dataQuality,
+			ConfidenceScore:      &confidenceScore,
+			MeasurementSource:    req.DataSource.DataProvider,
+			CreatedAt:            time.Now(),
 		})
 	}
 
@@ -2060,19 +2061,19 @@ func convertToMonitoringData(
 		confidenceScore := math.Max(0.0, (100.0-image.CloudCover.Value)/100.0)
 
 		monitoringData = append(monitoringData, models.FarmMonitoringData{
-			ID:                           uuid.New(),
-			FarmID:                       req.FarmID,
-			DataSourceID: req.DataSourceID,
-			ParameterName:                req.DataSource.ParameterName,
-			MeasuredValue:                *meanValue,
-			Unit:                         req.DataSource.Unit,
-			MeasurementTimestamp:         acquisitionTime.Unix(),
-			ComponentData:                componentData,
-			DataQuality:                  dataQuality,
-			ConfidenceScore:              &confidenceScore,
-			MeasurementSource:            req.DataSource.DataProvider,
-			CloudCoverPercentage:         &image.CloudCover.Value,
-			CreatedAt:                    time.Now(),
+			ID:                   uuid.New(),
+			FarmID:               req.FarmID,
+			DataSourceID:         req.DataSourceID,
+			ParameterName:        req.DataSource.ParameterName,
+			MeasuredValue:        *meanValue,
+			Unit:                 req.DataSource.Unit,
+			MeasurementTimestamp: acquisitionTime.Unix(),
+			ComponentData:        componentData,
+			DataQuality:          dataQuality,
+			ConfidenceScore:      &confidenceScore,
+			MeasurementSource:    req.DataSource.DataProvider,
+			CloudCoverPercentage: &image.CloudCover.Value,
+			CreatedAt:            time.Now(),
 		})
 	}
 

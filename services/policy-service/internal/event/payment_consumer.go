@@ -238,6 +238,8 @@ type DefaultPaymentEventHandler struct {
 	registeredPolicyRepo *repository.RegisteredPolicyRepository
 	basePolicyRepo       *repository.BasePolicyRepository
 	workerManager        *worker.WorkerManagerV2
+	claimRepo            *repository.ClaimRepository
+	payoutRepo           *repository.PayoutRepository
 }
 
 // NewDefaultPaymentEventHandler creates a new default payment event handler
@@ -245,11 +247,15 @@ func NewDefaultPaymentEventHandler(
 	registeredPolicyRepo *repository.RegisteredPolicyRepository,
 	basePolicyRepo *repository.BasePolicyRepository,
 	workerManager *worker.WorkerManagerV2,
+	claimRepo *repository.ClaimRepository,
+	payoutRepo *repository.PayoutRepository,
 ) *DefaultPaymentEventHandler {
 	return &DefaultPaymentEventHandler{
 		registeredPolicyRepo: registeredPolicyRepo,
 		basePolicyRepo:       basePolicyRepo,
 		workerManager:        workerManager,
+		claimRepo:            claimRepo,
+		payoutRepo:           payoutRepo,
 	}
 }
 
@@ -284,6 +290,8 @@ func (h *DefaultPaymentEventHandler) HandlePaymentCompleted(ctx context.Context,
 	switch models.PaymentType(*event.Type) {
 	case models.PaymentTypePolicyRegistration:
 		return h.handlePolicyRegistrationPayment(ctx, event)
+	case models.PaymentTypePolicyPayout:
+		return h.handlePolicyPayoutPayment(ctx, event)
 
 	// ============================================================================
 	// TODO: ADD NEW PAYMENT TYPE HANDLERS HERE
@@ -419,6 +427,176 @@ func (h *DefaultPaymentEventHandler) handlePolicyRegistrationPayment(
 	}
 
 	slog.Info("payment event processed successfully", "payment_id", event.ID)
+	return nil
+}
+
+func (h *DefaultPaymentEventHandler) handlePolicyPayoutPayment(
+	ctx context.Context,
+	event PaymentEvent,
+) error {
+	paidAt := event.PaidAt.Unix()
+	slog.Info("processing policy payout payment",
+		"payment_id", event.ID,
+		"order_items_count", len(event.OrderItems),
+		"amount", event.Amount)
+
+	// Process each order item (policy)
+	for _, orderItem := range event.OrderItems {
+		if err := h.processPolicyPayoutPayment(ctx, event, orderItem, paidAt); err != nil {
+			slog.Error("failed to process policy payout payment",
+				"payment_id", event.ID,
+				"order_item_id", orderItem.ID,
+				"error", err)
+			return err
+		}
+	}
+
+	slog.Info("payment event processed successfully", "payment_id", event.ID)
+
+	return nil
+}
+
+func (h *DefaultPaymentEventHandler) processPolicyPayoutPayment(
+	ctx context.Context,
+	event PaymentEvent,
+	orderItem OrderItem,
+	paidAt int64,
+) error {
+	registeredPolicyID, err := uuid.Parse(orderItem.ItemID)
+	if err != nil {
+		slog.Error("invalid policy id in order item",
+			"order_item_id", orderItem.ID,
+			"item_id", orderItem.ItemID,
+			"error", err)
+		return &PaymentValidationError{
+			PaymentID: event.ID,
+			Reason:    "invalid policy id format",
+		}
+	}
+
+	claims, err := h.claimRepo.GetByRegisteredPolicyID(ctx, registeredPolicyID)
+	if err != nil {
+		slog.Error("failed to retrieve claim", "error", err)
+		return err
+	}
+	if len(claims) == 0 {
+		slog.Error("there are no claims for this policy", "error", err)
+		return err
+	}
+	claim := claims[0]
+
+	if claim.Status != models.ClaimApproved {
+		slog.Warn("only approved claim is allowed to be processed", "actual status", claim.Status)
+		return fmt.Errorf("invalid claim status=%v", claim.Status)
+	}
+
+	payout, err := h.payoutRepo.GetByClaimID(ctx, claim.ID)
+	if err != nil {
+		slog.Error("failed to retrieve payout", "error", err)
+		return err
+	}
+	if payout.Status != models.PayoutProcessing {
+		slog.Warn("only processing payout is allowed to be processed", "actual status", payout.Status)
+		return fmt.Errorf("invalid payout status=%v", payout.Status)
+	}
+
+	tx, err := h.registeredPolicyRepo.BeginTransaction()
+	if err != nil {
+		slog.Error("failed to begin transaction", "error", err)
+		return err
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			tx.Rollback()
+			panic(p) // Re-panic after rollback
+		}
+	}()
+
+	// Retrieve policy
+	registeredPolicy, err := h.registeredPolicyRepo.GetByID(registeredPolicyID)
+	if err != nil {
+		tx.Rollback()
+		slog.Error("failed to retrieve registered policy",
+			"policy_id", registeredPolicyID,
+			"error", err)
+		return err
+	}
+
+	if registeredPolicy.Status != models.PolicyActive {
+		tx.Rollback()
+		slog.Warn("only active policy is allowed to be processed", "actual status", registeredPolicy.Status)
+		return fmt.Errorf("invalid policy status=%v", registeredPolicy.Status)
+	}
+
+	// Verify payment amount matches premium
+	expectedAmount := payout.PayoutAmount
+	if math.Abs(orderItem.Price-expectedAmount) > 0.01 {
+		tx.Rollback()
+		return &PaymentValidationError{
+			PaymentID: event.ID,
+			Reason:    "payment amount mismatch",
+			Details: map[string]any{
+				"expected":  expectedAmount,
+				"received":  orderItem.Price,
+				"policy_id": registeredPolicyID,
+			},
+		}
+	}
+
+	// Update policy with payment information
+	now := time.Now().Unix()
+	payout.Status = models.PayoutCompleted
+	payout.CompletedAt = &now
+
+	registeredPolicy.Status = models.PolicyPayout
+
+	// Update policy in transaction
+	err = h.registeredPolicyRepo.UpdateTx(tx, registeredPolicy)
+	if err != nil {
+		tx.Rollback()
+		slog.Error("failed to update registered policy",
+			"policy_id", registeredPolicyID,
+			"error", err)
+		return err
+	}
+
+	err = h.claimRepo.UpdateStatusTX(tx, ctx, claim.ID, models.ClaimPaid)
+	if err != nil {
+		tx.Rollback()
+		slog.Error("failed to update claim",
+			"claim id", claim.ID,
+			"error", err)
+		return err
+	}
+
+	err = h.payoutRepo.UpdatePayoutTx(tx, payout)
+	if err != nil {
+		tx.Rollback()
+		slog.Error("failed to update payout",
+			"payout id", claim.ID,
+			"error", err)
+		return err
+
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		slog.Error("failed to commit transaction",
+			"policy_id", registeredPolicyID,
+			"error", err)
+		return err
+	}
+
+	slog.Info("policy activated successfully",
+		"policy_id", registeredPolicyID,
+		"payment_id", event.ID,
+		"coverage_start_date", registeredPolicy.CoverageStartDate,
+		"coverage_end_date", registeredPolicy.CoverageEndDate)
+
+	if err := h.workerManager.CleanupWorkerInfrastructure(ctx, registeredPolicyID); err != nil {
+		slog.Error("error cleanup worker infrastructure for policy", "policy_id", registeredPolicyID, "error", err)
+	}
+
 	return nil
 }
 
