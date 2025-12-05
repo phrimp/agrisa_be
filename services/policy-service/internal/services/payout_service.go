@@ -212,9 +212,9 @@ func (s *PayoutService) ConfirmPayout(ctx context.Context, request models.Confir
 		slog.Error("error retriving payout", "error", err)
 		return "", err
 	}
-	//if payout.Status != models.PayoutCompleted {
-	//	return "", fmt.Errorf("current status invalid")
-	//}
+	if payout.Status != models.PayoutCompleted {
+		return "", fmt.Errorf("current status invalid")
+	}
 	policy, err := s.policyRepo.GetByID(payout.RegisteredPolicyID)
 	if err != nil {
 		slog.Error("error retriving policy", "error", err)
