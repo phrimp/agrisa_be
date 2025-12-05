@@ -1204,6 +1204,7 @@ func (r *RegisteredPolicyRepository) GetByBasePolicyID(ctx context.Context, base
 
 	err := r.db.SelectContext(ctx, &policies, query, basePolicyID)
 	if err != nil {
+		slog.Error("error retriving policies by base policy id", "error", err)
 		return nil, fmt.Errorf("failed to get registered policies by base_policy_id: %w", err)
 	}
 

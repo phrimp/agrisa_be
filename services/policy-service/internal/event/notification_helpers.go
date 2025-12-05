@@ -52,6 +52,20 @@ func (h *NotificationHelper) NotifyPolicyExpiring(ctx context.Context, userID, p
 	return h.publisher.PublishNotification(ctx, event)
 }
 
+func (h *NotificationHelper) NotifyPolicyPendingCancelPartnerSide(ctx context.Context, policyNumber map[string]string) error {
+	events := []NotificationEventPushModel{}
+	for userID, policyNumber := range policyNumber {
+		events = append(events, NotificationEventPushModel{
+			Notification: Notification{
+				Title: "Huỷ hợp đồng",
+				Body:  fmt.Sprintf("Hợp đồng %s chuẩn bị huỷ. Hợp đồng sẽ huỷ sau khi bạn nhận tiền hoàn", policyNumber),
+			},
+			UserIDs: []string{userID},
+		})
+	}
+	return h.publisher.PublishNotificationBatch(ctx, events)
+}
+
 // NotifyPolicyExpired sends a notification when a policy has expired
 func (h *NotificationHelper) NotifyPolicyExpired(ctx context.Context, userID, policyNumber string) error {
 	event := NotificationEventPushModel{

@@ -62,6 +62,7 @@ type PaymentType string
 const (
 	PaymentTypePolicyRegistration PaymentType = "policy_registration_payment"
 	PaymentTypePolicyPayout       PaymentType = "policy_payout_payment"
+	PaymentTypePolicyCompensation PaymentType = "policy_compensation_payment"
 	PaymentTypePolicyRenewal      PaymentType = "policy_renewal_payment"
 )
 

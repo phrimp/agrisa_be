@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"policy-service/internal/ai/gemini"
 	"policy-service/internal/database/minio"
+	"policy-service/internal/event"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"strings"
@@ -19,20 +20,24 @@ import (
 )
 
 type BasePolicyService struct {
-	basePolicyRepo *repository.BasePolicyRepository
-	dataSourceRepo *repository.DataSourceRepository
-	dataTierRepo   *repository.DataTierRepository
-	minioClient    *minio.MinioClient
-	geminiSelector *gemini.GeminiClientSelector
+	basePolicyRepo     *repository.BasePolicyRepository
+	dataSourceRepo     *repository.DataSourceRepository
+	dataTierRepo       *repository.DataTierRepository
+	minioClient        *minio.MinioClient
+	geminiSelector     *gemini.GeminiClientSelector
+	registerPolicyRepo *repository.RegisteredPolicyRepository
+	notievent          *event.NotificationHelper
 }
 
-func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient, geminiClients []gemini.GeminiClient) *BasePolicyService {
+func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient, geminiClients []gemini.GeminiClient, registerPolicyRepo *repository.RegisteredPolicyRepository, notievent *event.NotificationHelper) *BasePolicyService {
 	return &BasePolicyService{
-		basePolicyRepo: basePolicyRepo,
-		dataSourceRepo: dataSourceRepo,
-		dataTierRepo:   dataTierRepo,
-		minioClient:    minioClient,
-		geminiSelector: gemini.NewGeminiClientSelector(geminiClients),
+		basePolicyRepo:     basePolicyRepo,
+		dataSourceRepo:     dataSourceRepo,
+		dataTierRepo:       dataTierRepo,
+		minioClient:        minioClient,
+		geminiSelector:     gemini.NewGeminiClientSelector(geminiClients),
+		registerPolicyRepo: registerPolicyRepo,
+		notievent:          notievent,
 	}
 }
 
@@ -1395,4 +1400,82 @@ func (s *BasePolicyService) GetByID(id uuid.UUID) (*models.BasePolicy, error) {
 
 func (s *BasePolicyService) GetByProvider(providerID string) ([]models.BasePolicy, error) {
 	return s.basePolicyRepo.GetBasePoliciesByProvider(providerID)
+}
+
+func (s *BasePolicyService) CancelBasePolicy(ctx context.Context, basePolicyID uuid.UUID, providerID string, isKeep bool) (string, error) {
+	basePolicy, err := s.basePolicyRepo.GetBasePolicyByID(basePolicyID)
+	if err != nil {
+		return "", err
+	}
+
+	if basePolicy.InsuranceProviderID != providerID {
+		return "", fmt.Errorf("unauthorized: base policy does not belong to this provider")
+	}
+
+	if basePolicy.Status != models.BasePolicyActive {
+		return "", fmt.Errorf("status invalid")
+	}
+
+	tx, err := s.basePolicyRepo.BeginTransaction()
+	if err != nil {
+		slog.Error("error beginning transaction", "error", err)
+		return "", err
+	}
+
+	policyNumbers := map[string]string{}
+	if !isKeep {
+		policies, err := s.registerPolicyRepo.GetByBasePolicyID(ctx, basePolicyID)
+		if err != nil {
+			slog.Error("error retrieving registered Policy by base policy id", "error", err)
+			return "", err
+		}
+		affectedStatus := map[models.PolicyStatus]bool{
+			models.PolicyActive:         true,
+			models.PolicyPendingPayment: true,
+			models.PolicyPendingReview:  true,
+		}
+		for _, policy := range policies {
+			if affectedStatus[policy.Status] {
+				policy.Status = models.PolicyPendingCancel
+				err := s.registerPolicyRepo.UpdateTx(tx, &policy)
+				if err != nil {
+					tx.Rollback()
+					slog.Error("error updating policy status", "current status", policy.Status, "error", err)
+					return "", err
+				}
+				policyNumbers[policy.FarmerID] = policy.PolicyNumber
+			}
+		}
+
+	}
+
+	basePolicy.Status = models.BasePolicyArchived
+	err = s.basePolicyRepo.UpdateBasePolicyTx(tx, basePolicy)
+	if err != nil {
+		tx.Rollback()
+		slog.Error("error updating base policy", "error", err)
+		return "", err
+	}
+
+	if err := tx.Commit(); err != nil {
+		tx.Rollback()
+		slog.Error("error committing", "error", err)
+		return "", err
+	}
+
+	if !isKeep {
+		go func() {
+			for {
+				err := s.notievent.NotifyPolicyPendingCancelPartnerSide(context.Background(), policyNumbers)
+				if err == nil {
+					slog.Info("policy pending cancel notification sent", "policyNumbers", policyNumbers)
+					return
+				}
+				slog.Error("error sending policy pending cancel notification", "error", err)
+				time.Sleep(10 * time.Second)
+			}
+		}()
+	}
+
+	return "Base Policy Cancelled", nil
 }

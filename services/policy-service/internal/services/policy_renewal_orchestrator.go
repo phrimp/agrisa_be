@@ -178,7 +178,7 @@ func (o *PolicyRenewalOrchestrator) PrepareRenewal(
 
 			go func() {
 				for {
-					err := o.notievent.NotifyClaimGenerated(ctx, policy.FarmerID, policy.PolicyNumber)
+					err := o.notievent.NotifyClaimGenerated(context.Background(), policy.FarmerID, policy.PolicyNumber)
 					if err == nil {
 						slog.Info("policy underwriting notification sent", "policy id", policy.ID)
 						return
