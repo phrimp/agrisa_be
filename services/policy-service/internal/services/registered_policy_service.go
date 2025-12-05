@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"policy-service/internal/ai/gemini"
 	"policy-service/internal/database/minio"
-	"policy-service/internal/event/publisher"
+	"policy-service/internal/event"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
@@ -30,7 +30,7 @@ type RegisteredPolicyService struct {
 	dataSourceRepo         *repository.DataSourceRepository
 	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository
 	minioClient            *minio.MinioClient
-	notiPublisher          *publisher.NotificationHelper
+	notievent              *event.NotificationHelper
 	geminiSelector         *gemini.GeminiClientSelector
 }
 
@@ -45,7 +45,7 @@ func NewRegisteredPolicyService(
 	dataSourceRepo *repository.DataSourceRepository,
 	farmMonitoringDataRepo *repository.FarmMonitoringDataRepository,
 	minioClient *minio.MinioClient,
-	notiPublisher *publisher.NotificationHelper,
+	notievent *event.NotificationHelper,
 	geminiSelector *gemini.GeminiClientSelector,
 ) *RegisteredPolicyService {
 	return &RegisteredPolicyService{
@@ -58,7 +58,7 @@ func NewRegisteredPolicyService(
 		dataSourceRepo:         dataSourceRepo,
 		farmMonitoringDataRepo: farmMonitoringDataRepo,
 		minioClient:            minioClient,
-		notiPublisher:          notiPublisher,
+		notievent:              notievent,
 		geminiSelector:         geminiSelector,
 	}
 }
@@ -418,7 +418,7 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 
 	go func() {
 		for {
-			err := s.notiPublisher.NotifyPolicyRegistered(ctx, request.RegisteredPolicy.FarmerID, request.RegisteredPolicy.PolicyNumber)
+			err := s.notievent.NotifyPolicyRegistered(ctx, request.RegisteredPolicy.FarmerID, request.RegisteredPolicy.PolicyNumber)
 			if err == nil {
 				slog.Info("policy registeration notification sent", "policy id", request.RegisteredPolicy.ID)
 				return
@@ -430,7 +430,7 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 
 	go func() {
 		for {
-			err := s.notiPublisher.NotifyPolicyRegisteredPartner(ctx, partnerUserIDs, request.RegisteredPolicy.PolicyNumber)
+			err := s.notievent.NotifyPolicyRegisteredPartner(ctx, partnerUserIDs, request.RegisteredPolicy.PolicyNumber)
 			if err == nil {
 				slog.Info("policy registeration partner notification sent", "policy id", request.RegisteredPolicy.ID)
 				return
@@ -845,7 +845,7 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 
 	go func() {
 		for {
-			err := s.notiPublisher.NotifyUnderwritingCompleted(ctx, policy.FarmerID, policy.PolicyNumber)
+			err := s.notievent.NotifyUnderwritingCompleted(ctx, policy.FarmerID, policy.PolicyNumber)
 			if err == nil {
 				slog.Info("policy underwriting notification sent", "policy id", policy.ID)
 				return
@@ -891,7 +891,7 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 
 			go func() {
 				for {
-					err := s.notiPublisher.NotifyPolicyCancel(ctx, policy.FarmerID, policy.PolicyNumber, "Quá hạn thanh toán")
+					err := s.notievent.NotifyPolicyCancel(ctx, policy.FarmerID, policy.PolicyNumber, "Quá hạn thanh toán")
 					if err == nil {
 						slog.Info("policy cancel notification sent", "policy id", policy.ID)
 						return

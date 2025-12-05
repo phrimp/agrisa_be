@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
-	"policy-service/internal/event/publisher"
+	"policy-service/internal/event"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"time"
@@ -13,11 +13,11 @@ import (
 )
 
 type ClaimService struct {
-	claimRepo     *repository.ClaimRepository
-	policyRepo    *repository.RegisteredPolicyRepository
-	farmRepo      *repository.FarmRepository
-	payoutRepo    *repository.PayoutRepository
-	notiPublisher *publisher.NotificationHelper
+	claimRepo  *repository.ClaimRepository
+	policyRepo *repository.RegisteredPolicyRepository
+	farmRepo   *repository.FarmRepository
+	payoutRepo *repository.PayoutRepository
+	notievent  *event.NotificationHelper
 }
 
 func NewClaimService(
@@ -25,14 +25,14 @@ func NewClaimService(
 	policyRepo *repository.RegisteredPolicyRepository,
 	farmRepo *repository.FarmRepository,
 	payoutRepo *repository.PayoutRepository,
-	notiPublisher *publisher.NotificationHelper,
+	notievent *event.NotificationHelper,
 ) *ClaimService {
 	return &ClaimService{
-		claimRepo:     claimRepo,
-		policyRepo:    policyRepo,
-		farmRepo:      farmRepo,
-		payoutRepo:    payoutRepo,
-		notiPublisher: notiPublisher,
+		claimRepo:  claimRepo,
+		policyRepo: policyRepo,
+		farmRepo:   farmRepo,
+		payoutRepo: payoutRepo,
+		notievent:  notievent,
 	}
 }
 
@@ -310,7 +310,7 @@ func (s *ClaimService) ValidateClaim(ctx context.Context, claimID uuid.UUID, req
 	if claim.Status == models.ClaimApproved {
 		go func() {
 			for {
-				err := s.notiPublisher.NotifyClaimApproved(ctx, policy.FarmerID, policy.PolicyNumber, payout.PayoutAmount)
+				err := s.notievent.NotifyClaimApproved(ctx, policy.FarmerID, policy.PolicyNumber, payout.PayoutAmount)
 				if err == nil {
 					slog.Info("claim approved notification sent", "claim_id", claimID)
 					return
@@ -322,7 +322,7 @@ func (s *ClaimService) ValidateClaim(ctx context.Context, claimID uuid.UUID, req
 	} else {
 		go func() {
 			for {
-				err := s.notiPublisher.NotifyClaimRejected(ctx, policy.FarmerID, policy.PolicyNumber, *claim.PartnerDecision)
+				err := s.notievent.NotifyClaimRejected(ctx, policy.FarmerID, policy.PolicyNumber, *claim.PartnerDecision)
 				if err == nil {
 					slog.Info("claim rejected notification sent", "policy id", policy.ID)
 					return

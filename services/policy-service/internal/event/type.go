@@ -1,4 +1,4 @@
-package publisher
+package event
 
 type NotificationEventPushModel struct {
 	Notification Notification `json:"notification"`

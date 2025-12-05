@@ -765,7 +765,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 				go func() {
 					for {
-						err := s.notiPublisher.NotifyClaimGenerated(ctx, policy.FarmerID, policy.PolicyNumber)
+						err := s.notievent.NotifyClaimGenerated(ctx, policy.FarmerID, policy.PolicyNumber)
 						if err == nil {
 							slog.Info("claim generated notification sent", "policy id", policy.ID)
 							return
