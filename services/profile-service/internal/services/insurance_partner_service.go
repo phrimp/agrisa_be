@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"log/slog"
 	"profile-service/internal/models"
 	"profile-service/internal/repository"
 	"regexp"
@@ -30,6 +31,7 @@ type IInsurancePartnerService interface {
 	GetPrivateProfileByPartnerID(partnerID string) (*models.PrivatePartnerProfile, error)
 	CreatePartnerDeletionRequest(req *models.PartnerDeletionRequest, partnerAdminID string) (result *models.PartnerDeletionRequest, err error)
 	GetDeletionRequestsByRequesterID(requesterID string) ([]models.PartnerDeletionRequest, error)
+	ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) error
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
@@ -1034,10 +1036,55 @@ func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.Partn
 	req.RequestedBy = userProfile.UserID
 	req.RequestedByName = userProfile.FullName
 	req.Status = models.DeletionRequestPending
-	req.CancellableUntil = time.Now().Add(7 * 24 * time.Hour)
 	return s.repo.CreateDeletionRequest(context.Background(), req)
 }
 
 func (s *InsurancePartnerService) GetDeletionRequestsByRequesterID(requesterID string) ([]models.PartnerDeletionRequest, error) {
 	return s.repo.GetDeletionRequestsByRequesterID(context.Background(), requesterID)
+}
+
+func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO) error {
+	adminID := request.ReviewedByID
+	adminProfile, err := s.userProfileRepository.GetUserProfileByUserID(adminID)
+	if err != nil {
+		return err
+	}
+
+	request.ReviewedByID = adminProfile.UserID
+	request.ReviewedByName = adminProfile.FullName
+	return s.repo.ProcessRequestReview(request)
+}
+
+func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) error {
+
+	// Validate Request ID
+	if strings.TrimSpace(request.RequestID.String()) == "" {
+		slog.Error("RequestID is required")
+		return fmt.Errorf("invalid: RequestID là bắt buộc")
+	}
+
+	// check if deletion request exists
+	deletionRequest, err := s.repo.GetDeletionRequestsByRequestID(request.RequestID)
+	if err != nil {
+		return err
+	}
+
+	// Validate Status
+	if deletionRequest.Status != models.DeletionRequestPending {
+		slog.Error("Only pending requests can be processed")
+		return fmt.Errorf("invalid: Chỉ các yêu cầu đang chờ xử lý mới có thể được xử lý")
+	}
+
+	now := time.Now()
+	if now.Before(deletionRequest.CancellableUntil) {
+		// loging time.now value
+		slog.Info("Current time: ", now)
+		// loging cancellable until time value
+		slog.Info("Cancellable until time: ", deletionRequest.CancellableUntil)
+		slog.Error("Cannot process request before cancellable until time")
+		return fmt.Errorf("invalid: Không thể xử lý yêu cầu trước thời gian có thể hủy")
+	}
+
+	return nil
+
 }

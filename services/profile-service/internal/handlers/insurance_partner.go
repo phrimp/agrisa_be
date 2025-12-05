@@ -36,10 +36,13 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 
 	// ======= PARTNER DELETION REQUESTS =======
 	partnerGr := insurancePartnerProtectedGrPub.Group("/insurance-partners")
-	partnerGr.POST("/deletion-requests", h.CreatePartnerDeletionRequest)
-
 	// partner endpoint
+	partnerGr.POST("/deletion-requests", h.CreatePartnerDeletionRequest)
 	partnerGr.GET("/:partner_admin_id/deletion-requests", h.GetPartnerDeletionRequestsByPartnerAdminID)
+
+	//admin endpoint
+	partnerAdminGr := insurancePartnerProtectedGrPub.Group("/insurance-partners/admin")
+	partnerAdminGr.POST("/process-request", h.ProcessPartnerDeletionRequestReview)
 }
 
 func MapErrorToHTTPStatusExtended(errorString string) (errorCode string, httpStatus int) {
@@ -238,4 +241,22 @@ func (h *InsurancePartnerHandler) GetPartnerDeletionRequestsByPartnerAdminID(c *
 	}
 	response := utils.CreateSuccessResponse(result)
 	c.JSON(http.StatusOK, response)
+}
+
+func (h *InsurancePartnerHandler) ProcessPartnerDeletionRequestReview(c *gin.Context) {
+	var req models.ProcessRequestReviewDTO
+	if err := c.ShouldBindJSON(&req); err != nil {
+		log.Printf("Error binding JSON for ProcessPartnerDeletionRequestReview: %s", err.Error())
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
+		c.JSON(http.StatusBadRequest, errorResponse)
+		return
+	}
+	err := h.InsurancePartnerService.ValidateDeletionRequestProcess(req)
+	if err != nil {
+		log.Printf("Error validating deletion request process: %s", err.Error())
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
 }

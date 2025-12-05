@@ -90,22 +90,22 @@ CREATE TABLE user_profiles (
   profile_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id VARCHAR(255) NOT NULL UNIQUE, -- From Auth Service
   role_id VARCHAR(255) NOT NULL, -- From Auth Service (farmer/staff/admin)
-  
+
   -- Company Association (NULL for farmers, populated for insurance staff)
   partner_id UUID, -- FK to insurance_partners
-  
+
   -- Basic Personal Information
   full_name VARCHAR(255) NOT NULL,
   display_name VARCHAR(100),
   date_of_birth DATE,
   gender VARCHAR(20),
   nationality VARCHAR(10) DEFAULT 'VN',
-  
+
   -- Contact Information
   primary_phone VARCHAR(20) NOT NULL,
   alternate_phone VARCHAR(20),
   email VARCHAR(255),
-  
+
   -- Address Information (Vietnamese Format)
   permanent_address TEXT,
   current_address TEXT,
@@ -118,17 +118,17 @@ CREATE TABLE user_profiles (
   postal_code VARCHAR(10),
 
   -- Bank info
-  account_number VARCHAR,
-  account_name VARCHAR,
-  bank_code VARCHAR;
-  
+  account_number VARCHAR(50),
+  account_name VARCHAR(255),
+  bank_code VARCHAR(20),
+
   -- Metadata
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW(),
   last_updated_by VARCHAR(255), -- user_id from Auth Service
   last_updated_by_name VARCHAR(255),
   CONSTRAINT unique_user_id UNIQUE(user_id),
-  CONSTRAINT fk_company FOREIGN KEY (partner_id) 
+  CONSTRAINT fk_company FOREIGN KEY (partner_id)
     REFERENCES insurance_partners(partner_id) ON DELETE SET NULL
 );
 
@@ -144,40 +144,36 @@ CREATE INDEX idx_user_profile_province ON user_profiles(province_code);
 CREATE TABLE partner_deletion_requests (
     -- Primary key
     request_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    
+
     -- Partner reference
     partner_id UUID NOT NULL,
-    
+
     -- Requester information
     requested_by VARCHAR(255) NOT NULL, -- User ID of partner admin
     requested_by_name VARCHAR(255) NOT NULL,
-    
+
     -- Request details
     detailed_explanation TEXT,
-    
+
     -- Status and timeline
     status deletion_request_status NOT NULL DEFAULT 'pending',
     requested_at TIMESTAMP NOT NULL DEFAULT NOW(),
     cancellable_until TIMESTAMP NOT NULL,
-    
+
     -- Reviewer information (người duyệt/từ chối)
     reviewed_by_id VARCHAR(255),          -- User ID của người duyệt
     reviewed_by_name VARCHAR(255),        -- Tên người duyệt
     reviewed_at TIMESTAMP,                -- Thời gian duyệt/từ chối
     review_note TEXT,                     -- Ghi chú của người duyệt (optional)
-    
+
     -- Metadata
     updated_at TIMESTAMP DEFAULT NOW(),
-    
+
     -- Foreign key constraint
-    CONSTRAINT fk_partner 
-        FOREIGN KEY (partner_id) 
-        REFERENCES insurance_partners(partner_id) 
-        ON DELETE CASCADE,
-    
-    -- Ensure cancellable_until is after requested_at
-    CONSTRAINT check_cancellable_period 
-        CHECK (cancellable_until > requested_at)
+    CONSTRAINT fk_partner
+        FOREIGN KEY (partner_id)
+        REFERENCES insurance_partners(partner_id)
+        ON DELETE CASCADE
 );
 
 -- Create indexes for better query performance
