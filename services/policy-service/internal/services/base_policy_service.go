@@ -1408,10 +1408,6 @@ func (s *BasePolicyService) CancelBasePolicy(ctx context.Context, basePolicyID u
 		return "", err
 	}
 
-	if basePolicy.InsuranceProviderID != providerID {
-		return "", fmt.Errorf("unauthorized: base policy does not belong to this provider")
-	}
-
 	if basePolicy.Status != models.BasePolicyActive {
 		return "", fmt.Errorf("status invalid")
 	}
