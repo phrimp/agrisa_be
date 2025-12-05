@@ -18,6 +18,7 @@ export class PayoutRepository {
   async findById(id: string): Promise<Payout | null> {
     return await this.payoutRepo.findOne({
       where: { id },
+      relations: ['payment', 'payment.items'],
     });
   }
 
@@ -40,6 +41,7 @@ export class PayoutRepository {
       skip,
       take: limit_num,
       order: { created_at: 'DESC' },
+      relations: ['payment', 'payment.items'],
     });
     return { items, total };
   }
@@ -47,6 +49,7 @@ export class PayoutRepository {
   async findByIdAndUserId(id: string, user_id: string): Promise<Payout | null> {
     return await this.payoutRepo.findOne({
       where: { id, user_id },
+      relations: ['payment', 'payment.items'],
     });
   }
 }

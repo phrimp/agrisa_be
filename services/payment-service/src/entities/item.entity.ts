@@ -8,8 +8,8 @@ import {
 } from 'typeorm';
 import { Payment } from './payment.entity';
 
-@Entity('order_items')
-export class OrderItem {
+@Entity('items')
+export class Item {
   @PrimaryColumn('varchar')
   id: string;
 
@@ -46,4 +46,7 @@ export class OrderItem {
 
   @DeleteDateColumn()
   deleted_at: Date | null;
+
+  @Column('varchar', { nullable: true })
+  payout_id: string | null;
 }

@@ -23,7 +23,7 @@ CREATE TABLE payments (
     deleted_at TIMESTAMP
 );
 
-CREATE TABLE order_items (
+CREATE TABLE items (
     id VARCHAR PRIMARY KEY,
     payment_id VARCHAR NOT NULL,
     item_id VARCHAR,

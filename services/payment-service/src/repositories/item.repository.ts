@@ -1,21 +1,21 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { OrderItem } from '../entities/order-item.entity';
 import { Repository } from 'typeorm';
+import { Item } from '../entities/item.entity';
 
 @Injectable()
-export class OrderItemRepository {
+export class ItemRepository {
   constructor(
-    @InjectRepository(OrderItem)
-    private readonly orderItemRepository: Repository<OrderItem>,
+    @InjectRepository(Item)
+    private readonly orderItemRepository: Repository<Item>,
   ) {}
 
-  async create(orderItem: Partial<OrderItem>): Promise<OrderItem> {
+  async create(orderItem: Partial<Item>): Promise<Item> {
     const newOrderItem = this.orderItemRepository.create(orderItem);
     return await this.orderItemRepository.save(newOrderItem);
   }
 
-  async findByPaymentId(payment_id: string): Promise<OrderItem[]> {
+  async findByPaymentId(payment_id: string): Promise<Item[]> {
     return await this.orderItemRepository.find({ where: { payment_id } });
   }
 
@@ -29,14 +29,11 @@ export class OrderItemRepository {
     return typeof result.affected === 'number' && result.affected > 0;
   }
 
-  async findById(id: string): Promise<OrderItem | null> {
+  async findById(id: string): Promise<Item | null> {
     return await this.orderItemRepository.findOne({ where: { id } });
   }
 
-  async update(
-    id: string,
-    updates: Partial<OrderItem>,
-  ): Promise<OrderItem | null> {
+  async update(id: string, updates: Partial<Item>): Promise<Item | null> {
     await this.orderItemRepository.update(id, updates);
     return await this.findById(id);
   }
