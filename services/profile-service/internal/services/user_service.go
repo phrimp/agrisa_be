@@ -49,6 +49,9 @@ var allowedUpdateUserProfileFields = map[string]bool{
 	"ward_code":         true,
 	"ward_name":         true,
 	"postal_code":       true,
+	"account_number":    true,
+	"account_name":      true,
+	"bank_code":         true,
 }
 
 var arrayUserProfileFields = map[string]bool{}
