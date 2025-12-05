@@ -34,7 +34,7 @@ type PaymentEvent struct {
 	DeletedAt   *time.Time  `json:"deleted_at"`
 	PaidAt      *time.Time  `json:"paid_at"`
 	ExpiredAt   *time.Time  `json:"expired_at"`
-	OrderItems  []OrderItem `json:"orderItems"`
+	OrderItems  []OrderItem `json:"items"`
 }
 
 // OrderItem represents an order item in the payment event
