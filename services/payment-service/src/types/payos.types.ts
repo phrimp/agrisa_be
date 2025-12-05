@@ -51,6 +51,7 @@ export const createPayoutSchema = z.object({
   bank_code: z.string().optional(),
   account_number: z.string().optional(),
   user_id: z.string(),
+  type: z.string().nullable().optional(),
   items: z
     .array(
       z.object({
