@@ -2,6 +2,7 @@ import {
   Column,
   DeleteDateColumn,
   Entity,
+  JoinColumn,
   ManyToOne,
   PrimaryColumn,
 } from 'typeorm';
@@ -38,6 +39,7 @@ export class Payout {
   payment_id: string | null;
 
   @ManyToOne(() => Payment, (payment) => payment.id)
+  @JoinColumn({ name: 'payment_id' })
   payment: Payment;
 
   @Column({

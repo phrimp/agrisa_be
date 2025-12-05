@@ -14,7 +14,7 @@ CREATE TABLE payments (
     status payment_status NOT NULL DEFAULT 'pending',
     user_id VARCHAR NOT NULL,
     checkout_url VARCHAR(255),
-    type VARCHAR(50),
+    type VARCHAR(100),
     order_code VARCHAR(255),
     created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'),
     updated_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'),
@@ -30,6 +30,7 @@ CREATE TABLE items (
     name VARCHAR NOT NULL,
     price DECIMAL(12,2) NOT NULL,
     quantity INT NOT NULL DEFAULT 1,
+    payout_id VARCHAR,
     created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'),
     updated_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'),
     deleted_at TIMESTAMP,
@@ -44,8 +45,10 @@ CREATE TABLE payouts (
     user_id VARCHAR NOT NULL,
     bank_code VARCHAR(255),
     account_number VARCHAR(255),
+    payment_id VARCHAR,
     created_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'),
     updated_at TIMESTAMP NOT NULL DEFAULT (CURRENT_TIMESTAMP AT TIME ZONE 'Asia/Ho_Chi_Minh'),
     deleted_at TIMESTAMP,
-    completed_at TIMESTAMP
+    completed_at TIMESTAMP,
+    FOREIGN KEY (payment_id) REFERENCES payments(id)
 );
