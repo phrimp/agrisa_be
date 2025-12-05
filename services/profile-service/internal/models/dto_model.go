@@ -194,3 +194,17 @@ type UserBankInfo struct {
 	AccountName   string `json:"account_name" db:"account_name"`
 	BankCode      string `json:"bank_code" db:"bank_code"`
 }
+
+type ReviewDeletionRequest struct {
+	RequestID  uuid.UUID             `db:"request_id" json:"request_id"`
+	Status     DeletionRequestStatus `db:"status" json:"status"`
+	ReviewNote string                `db:"review_note" json:"review_note"`
+}
+
+type ProcessRequestReviewDTO struct {
+	RequestID      uuid.UUID             `json:"request_id"`
+	ReviewedByID   string                `json:"reviewed_by_id"`
+	Status         DeletionRequestStatus `json:"status"`
+	ReviewedByName string                `json:"reviewed_by_name"`
+	ReviewNote     string                `json:"review_note"`
+}

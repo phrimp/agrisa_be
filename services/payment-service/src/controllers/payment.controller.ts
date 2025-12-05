@@ -325,8 +325,15 @@ export class PaymentController {
     @Body()
     body: CreatePayoutData,
   ) {
-    const { amount, bank_code, account_number, user_id, description, items } =
-      body;
+    const {
+      amount,
+      bank_code,
+      account_number,
+      user_id,
+      description,
+      items,
+      type,
+    } = body;
 
     const payout_id = generateRandomString();
 
@@ -338,7 +345,7 @@ export class PaymentController {
       description: description || 'Chi trả bảo hiểm',
       status: 'pending',
       user_id,
-      type: 'policy_payout_payment',
+      type,
     });
 
     if (items && items.length > 0) {

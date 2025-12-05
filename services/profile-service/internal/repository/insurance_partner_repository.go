@@ -9,6 +9,7 @@ import (
 	"strings"
 	"utils"
 
+	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"github.com/lib/pq"
 )
@@ -24,6 +25,8 @@ type IInsurancePartnerRepository interface {
 	SearchDeletionRequestsByRequesterName(ctx context.Context, searchTerm string) ([]models.PartnerDeletionRequest, error)
 	CreateDeletionRequest(ctx context.Context, req *models.PartnerDeletionRequest) (*models.PartnerDeletionRequest, error)
 	GetDeletionRequestsByRequesterID(ctx context.Context, requesterID string) ([]models.PartnerDeletionRequest, error)
+	ProcessRequestReview(request models.ProcessRequestReviewDTO) error
+	GetDeletionRequestsByRequestID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error)
 }
 type InsurancePartnerRepository struct {
 	db *sqlx.DB
@@ -480,6 +483,26 @@ func (r *InsurancePartnerRepository) CreateDeletionRequest(
 	return &result, nil
 }
 
+func (r *InsurancePartnerRepository) GetDeletionRequestsByRequestID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error) {
+	query := `
+		SELECT * FROM partner_deletion_requests
+		WHERE request_id = $1
+	`
+
+	var request models.PartnerDeletionRequest
+	err := r.db.Get(&request, query, requestID)
+	if err != nil {
+		if err.Error() == "sql: no rows in result set" {
+			slog.Error("not_found: deletion request not found", "request_id", requestID)
+			return nil, fmt.Errorf("not_found: deletion request not found")
+		}
+		slog.Error("Error retrieving deletion request", "error", err, "request_id", requestID)
+		return nil, fmt.Errorf("Error retrieving deletion request")
+	}
+
+	return &request, nil
+}
+
 func (r *InsurancePartnerRepository) GetAllDeletionRequests(
 	ctx context.Context,
 ) ([]models.PartnerDeletionRequest, error) {
@@ -556,4 +579,29 @@ func (r *InsurancePartnerRepository) GetDeletionRequestsByRequesterID(
 	}
 
 	return requests, nil
+}
+
+func (r *InsurancePartnerRepository) ProcessRequestReview(request models.ProcessRequestReviewDTO) error {
+	query := `
+		UPDATE partner_deletion_requests 
+		SET 
+			status = $1,
+			reviewed_by_id = $2,
+			reviewed_by_name = $3,
+			reviewed_at = NOW(),
+			review_note = $4,
+			updated_at = NOW()
+		WHERE request_id = $5
+	`
+
+	return utils.ExecWithCheck(
+		r.db,
+		query,
+		utils.ExecUpdate,
+		request.Status,
+		request.ReviewedByID,
+		request.ReviewedByName,
+		request.ReviewNote,
+		request.RequestID,
+	)
 }
