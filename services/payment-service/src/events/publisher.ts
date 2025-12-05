@@ -25,7 +25,7 @@ export const publisher = async (data) => {
     const payload = {
       ...data,
       amount: parseFloat(data.amount),
-      orderItems: data.orderItems?.map((item) => ({
+      items: data.items?.map((item) => ({
         ...item,
         price: parseFloat(item.price),
       })),

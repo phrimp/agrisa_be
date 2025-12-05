@@ -28,7 +28,7 @@ export class PaymentRepository {
       skip,
       take: limit_num,
       order: { created_at: 'DESC' },
-      relations: ['orderItems'],
+      relations: ['items'],
     };
 
     if (status && status.length > 0) {
@@ -43,7 +43,7 @@ export class PaymentRepository {
   async findById(id: string): Promise<Payment | null> {
     return await this.paymentRepo.findOne({
       where: { id },
-      relations: ['orderItems'],
+      relations: ['items'],
     });
   }
 
@@ -53,14 +53,14 @@ export class PaymentRepository {
   ): Promise<Payment | null> {
     return await this.paymentRepo.findOne({
       where: { id, user_id },
-      relations: ['orderItems'],
+      relations: ['items'],
     });
   }
 
   async findByOrderCode(order_code: string): Promise<Payment | null> {
     return await this.paymentRepo.findOne({
       where: { order_code },
-      relations: ['orderItems'],
+      relations: ['items'],
     });
   }
 
@@ -89,7 +89,7 @@ export class PaymentRepository {
       skip,
       take: limit_num,
       order: { created_at: 'DESC' },
-      relations: ['orderItems'],
+      relations: ['items'],
     };
 
     if (status && status.length > 0) {

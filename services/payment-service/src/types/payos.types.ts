@@ -45,6 +45,26 @@ export type CreatePaymentLinkData = z.infer<typeof createPaymentLinkSchema> & {
   expired_at: Date;
 };
 
+export const createPayoutSchema = z.object({
+  amount: z.coerce.number(),
+  description: z.string(),
+  bank_code: z.string().optional(),
+  account_number: z.string().optional(),
+  user_id: z.string(),
+  items: z
+    .array(
+      z.object({
+        item_id: z.string().optional(),
+        name: z.string().optional(),
+        price: z.coerce.number().positive().optional(),
+        quantity: z.coerce.number().int().positive().default(1),
+      }),
+    )
+    .optional(),
+});
+
+export type CreatePayoutData = z.infer<typeof createPayoutSchema>;
+
 export const paymentLinkResponseSchema = z.object({
   bin: z.string().nullable().optional(),
   checkout_url: z.string().url().nullable().optional(),

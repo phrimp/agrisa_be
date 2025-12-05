@@ -17,14 +17,17 @@ import type { Response } from 'express';
 import { publisher } from 'src/events/publisher';
 import { payosConfig } from 'src/libs/payos.config';
 import { checkPermissions, generateRandomString } from 'src/libs/utils';
-import type { OrderItemService } from 'src/services/order-item.service';
+import type { ItemService } from 'src/services/item.service';
 import { paymentViewSchema } from 'src/types/payment.types';
 import { payoutViewSchema } from 'src/types/payout.types';
 import z from 'zod';
 import type { PaymentService } from '../services/payment.service';
 import type { PayosService } from '../services/payos.service';
 import type { PayoutService } from '../services/payout.service';
-import type { CreatePaymentLinkData } from '../types/payos.types';
+import type {
+  CreatePaymentLinkData,
+  CreatePayoutData,
+} from '../types/payos.types';
 import {
   createPaymentLinkSchema,
   webhookPayloadSchema,
@@ -37,8 +40,8 @@ export class PaymentController {
   constructor(
     @Inject('PayosService') private readonly payosService: PayosService,
     @Inject('PaymentService') private readonly paymentService: PaymentService,
-    @Inject('OrderItemService')
-    private readonly orderItemService: OrderItemService,
+    @Inject('ItemService')
+    private readonly itemService: ItemService,
     @Inject('PayoutService') private readonly payoutService: PayoutService,
   ) {}
 
@@ -91,7 +94,7 @@ export class PaymentController {
 
       if (parsed.data.items && parsed.data.items.length > 0) {
         for (const item of parsed.data.items) {
-          await this.orderItemService.create({
+          await this.itemService.create({
             id: generateRandomString(),
             payment_id: payment_id,
             item_id: item.item_id,
@@ -213,7 +216,7 @@ export class PaymentController {
                   orderCode: parsed.data.data.orderCode,
                   type: publisher_payment.type,
                   amount: publisher_payment.amount,
-                  orderItemsCount: publisher_payment.orderItems?.length || 0,
+                  orderItemsCount: publisher_payment.items?.length || 0,
                 });
                 await publisher(publisher_payment);
                 this.logger.log('Payment event published to queue', {
@@ -320,17 +323,38 @@ export class PaymentController {
   @Post('public/payout')
   async createPayout(
     @Body()
-    body: {
-      amount: number;
-      bank_code: string;
-      account_number: string;
-      user_id: string;
-      description?: string;
-    },
+    body: CreatePayoutData,
   ) {
-    const { amount, bank_code, account_number, user_id, description } = body;
+    const { amount, bank_code, account_number, user_id, description, items } =
+      body;
 
     const payout_id = generateRandomString();
+
+    const payment_id = generateRandomString();
+
+    await this.paymentService.create({
+      id: payment_id,
+      amount,
+      description: description || 'Chi trả bảo hiểm',
+      status: 'pending',
+      user_id,
+      type: 'policy_payout_payment',
+    });
+
+    if (items && items.length > 0) {
+      for (const item of items) {
+        await this.itemService.create({
+          id: generateRandomString(),
+          payment_id: payment_id,
+          item_id: item.item_id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity ?? 1,
+          created_at: new Date(),
+          updated_at: new Date(),
+        });
+      }
+    }
 
     await this.payoutService.create({
       id: payout_id,
@@ -340,6 +364,7 @@ export class PaymentController {
       bank_code,
       account_number,
       status: 'pending',
+      payment_id,
     });
 
     const url = new URL(
@@ -350,12 +375,9 @@ export class PaymentController {
     url.searchParams.set('addInfo', 'ChiTraBaoHiem');
 
     return {
-      success: true,
-      data: {
-        payout_id,
-        qr: url.toString(),
-        verify_hook: `https://agrisa-api.phrimp.io.vn/payment/public/payout/verify?payout_id=${payout_id}`,
-      },
+      payout_id,
+      qr: url.toString(),
+      verify_hook: `https://agrisa-api.phrimp.io.vn/payment/public/payout/verify?payout_id=${payout_id}`,
     };
   }
 
@@ -375,32 +397,30 @@ export class PaymentController {
       completed_at: new Date(),
     });
 
-    const payment_id = generateRandomString();
-    await this.paymentService.create({
-      id: payment_id,
-      amount: payout.amount,
-      description: payout.description,
-      status: 'completed',
-      user_id: payout.user_id,
-      type: 'policy_payout_payment',
-      paid_at: new Date(),
-    });
+    if (payout.payment_id) {
+      await this.paymentService.update(payout.payment_id, {
+        status: 'completed',
+        paid_at: new Date(),
+      });
 
-    const publisher_payment = await this.paymentService.findById(payment_id);
-    if (publisher_payment) {
-      this.logger.log('Publishing payout payment to queue', {
-        payment_id,
-        type: publisher_payment.type,
-        amount: publisher_payment.amount,
-      });
-      await publisher(publisher_payment);
-      this.logger.log('Payout payment event published to queue', {
-        payment_id,
-      });
-    } else {
-      this.logger.error('Failed to fetch created payment for publishing', {
-        payment_id,
-      });
+      const publisher_payment = await this.paymentService.findById(
+        payout.payment_id,
+      );
+      if (publisher_payment) {
+        this.logger.log('Publishing payout payment to queue', {
+          payment_id: payout.payment_id,
+          type: publisher_payment.type,
+          amount: publisher_payment.amount,
+        });
+        await publisher(publisher_payment);
+        this.logger.log('Payout payment event published to queue', {
+          payment_id: payout.payment_id,
+        });
+      } else {
+        this.logger.error('Failed to fetch created payment for publishing', {
+          payment_id: payout.payment_id,
+        });
+      }
     }
 
     return { success: true };

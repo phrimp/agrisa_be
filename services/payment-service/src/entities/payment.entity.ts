@@ -5,7 +5,8 @@ import {
   OneToMany,
   PrimaryColumn,
 } from 'typeorm';
-import { OrderItem } from './order-item.entity';
+import { Item } from './item.entity';
+import { Payout } from './payout.entity';
 
 @Entity('payments')
 export class Payment {
@@ -66,8 +67,11 @@ export class Payment {
   @Column({ type: 'timestamp', nullable: true })
   expired_at: Date | null;
 
-  @OneToMany(() => OrderItem, (orderItem) => orderItem.payment_id, {
+  @OneToMany(() => Item, (item) => item.payment_id, {
     cascade: true,
   })
-  orderItems: OrderItem[];
+  items: Item[];
+
+  @OneToMany(() => Payout, (payout) => payout.payment_id)
+  payouts: Payout[];
 }

@@ -1,4 +1,12 @@
-import { Column, DeleteDateColumn, Entity, PrimaryColumn } from 'typeorm';
+import {
+  Column,
+  DeleteDateColumn,
+  Entity,
+  JoinColumn,
+  ManyToOne,
+  PrimaryColumn,
+} from 'typeorm';
+import { Payment } from './payment.entity';
 
 @Entity('payouts')
 export class Payout {
@@ -26,6 +34,13 @@ export class Payout {
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   account_number: string | null;
+
+  @Column({ type: 'varchar', length: 255, nullable: true })
+  payment_id: string | null;
+
+  @ManyToOne(() => Payment, (payment) => payment.id)
+  @JoinColumn({ name: 'payment_id' })
+  payment: Payment;
 
   @Column({
     type: 'timestamp',
