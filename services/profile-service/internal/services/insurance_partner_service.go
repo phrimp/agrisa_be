@@ -1057,7 +1057,8 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 	if request.Status == models.DeletionRequestApproved {
 		// update status of partner profile
 		_, err = s.UpdateInsurancePartner(map[string]interface{}{
-			"status": "terminated",
+			"partner_id": adminProfile.PartnerID.String(),
+			"status":     "terminated",
 		}, request.ReviewedByID, adminProfile.FullName)
 	}
 	return s.repo.ProcessRequestReview(request)
