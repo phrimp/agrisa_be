@@ -240,7 +240,7 @@ type DefaultPaymentEventHandler struct {
 	workerManager        *worker.WorkerManagerV2
 	claimRepo            *repository.ClaimRepository
 	payoutRepo           *repository.PayoutRepository
-	notiPublisher        *NotificationHelper
+	notievent            *NotificationHelper
 }
 
 // NewDefaultPaymentEventHandler creates a new default payment event handler
@@ -250,6 +250,7 @@ func NewDefaultPaymentEventHandler(
 	workerManager *worker.WorkerManagerV2,
 	claimRepo *repository.ClaimRepository,
 	payoutRepo *repository.PayoutRepository,
+	notievent *NotificationHelper,
 ) *DefaultPaymentEventHandler {
 	return &DefaultPaymentEventHandler{
 		registeredPolicyRepo: registeredPolicyRepo,
@@ -257,6 +258,7 @@ func NewDefaultPaymentEventHandler(
 		workerManager:        workerManager,
 		claimRepo:            claimRepo,
 		payoutRepo:           payoutRepo,
+		notievent:            notievent,
 	}
 }
 
@@ -442,12 +444,14 @@ func (h *DefaultPaymentEventHandler) handlePolicyPayoutPayment(
 		"amount", event.Amount)
 
 	// Process each order item (policy)
-	if err := h.processPolicyPayoutPayment(ctx, event, event.Amount, event.ID, paidAt); err != nil {
-		slog.Error("failed to process policy payout payment",
-			"payment_id", event.ID,
-			"policy_id", event.ID,
-			"error", err)
-		return err
+	for _, orderItem := range event.OrderItems {
+		if err := h.processPolicyPayoutPayment(ctx, event, orderItem, paidAt); err != nil {
+			slog.Error("failed to process policy payout payment",
+				"payment_id", event.ID,
+				"order_item_id", orderItem.ID,
+				"error", err)
+			return err
+		}
 	}
 
 	slog.Info("payment event processed successfully", "payment_id", event.ID)
@@ -458,14 +462,14 @@ func (h *DefaultPaymentEventHandler) handlePolicyPayoutPayment(
 func (h *DefaultPaymentEventHandler) processPolicyPayoutPayment(
 	ctx context.Context,
 	event PaymentEvent,
-	price float64,
-	policyIDStr string,
+	orderItem OrderItem,
 	paidAt int64,
 ) error {
-	registeredPolicyID, err := uuid.Parse(policyIDStr)
+	registeredPolicyID, err := uuid.Parse(orderItem.ItemID)
 	if err != nil {
 		slog.Error("invalid policy id in order item",
-			"policy_id", policyIDStr,
+			"order_item_id", orderItem.ID,
+			"item_id", orderItem.ItemID,
 			"error", err)
 		return &PaymentValidationError{
 			PaymentID: event.ID,
@@ -529,14 +533,14 @@ func (h *DefaultPaymentEventHandler) processPolicyPayoutPayment(
 
 	// Verify payment amount matches premium
 	expectedAmount := payout.PayoutAmount
-	if math.Abs(price-expectedAmount) > 0.01 {
+	if math.Abs(orderItem.Price-expectedAmount) > 0.01 {
 		tx.Rollback()
 		return &PaymentValidationError{
 			PaymentID: event.ID,
 			Reason:    "payment amount mismatch",
 			Details: map[string]any{
 				"expected":  expectedAmount,
-				"received":  price,
+				"received":  orderItem.Price,
 				"policy_id": registeredPolicyID,
 			},
 		}
@@ -585,7 +589,7 @@ func (h *DefaultPaymentEventHandler) processPolicyPayoutPayment(
 		return err
 	}
 
-	slog.Info("policy payout successfully",
+	slog.Info("payout processed successfully",
 		"policy_id", registeredPolicyID,
 		"payment_id", event.ID,
 		"coverage_start_date", registeredPolicy.CoverageStartDate,
@@ -597,16 +601,15 @@ func (h *DefaultPaymentEventHandler) processPolicyPayoutPayment(
 
 	go func() {
 		for {
-			err := h.notiPublisher.NotifyPayoutCompleted(ctx, registeredPolicy.FarmerID, registeredPolicy.PolicyNumber, payout.PayoutAmount)
+			err := h.notievent.NotifyPayoutCompleted(ctx, registeredPolicy.FarmerID, registeredPolicy.PolicyNumber, payout.PayoutAmount)
 			if err == nil {
-				slog.Info("payout completed notification sent", "policy id", registeredPolicy.ID)
+				slog.Info("payout completed notification sent", "policy id", registeredPolicy.PolicyNumber)
 				return
 			}
 			slog.Error("error sending payout completed notification", "error", err)
 			time.Sleep(10 * time.Second)
 		}
 	}()
-
 	return nil
 }
 
