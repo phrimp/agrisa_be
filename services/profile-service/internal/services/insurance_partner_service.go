@@ -1053,6 +1053,11 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 
 	request.ReviewedByID = adminProfile.UserID
 	request.ReviewedByName = adminProfile.FullName
+
+	// update status of partner profile
+	_, err = s.UpdateInsurancePartner(map[string]interface{}{
+		"status": "terminated",
+	}, request.ReviewedByID, adminProfile.FullName)
 	return s.repo.ProcessRequestReview(request)
 }
 
