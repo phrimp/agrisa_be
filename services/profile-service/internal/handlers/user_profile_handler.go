@@ -28,6 +28,9 @@ func (h *UserProfileHandler) RegisterRoutes(router *gin.Engine) {
 	userProfileProGr.PUT("/users", h.UpdateUserProfile)
 	userProfileProGr.GET("/me", h.GetUserProfileByUserID)
 	userProfileProGr.POST("/users", h.CreateUserProfile)
+
+	// admin endpoint
+	userProfileProGr.POST("/users/bank-info", h.GetUserBankInfoByUserIDs)
 }
 
 func (h *UserProfileHandler) GetUserProfileByUserID(c *gin.Context) {
@@ -114,5 +117,25 @@ func (h *UserProfileHandler) GetUserProfilesByPartnerID(c *gin.Context) {
 		return
 	}
 	successResponse := utils.CreateSuccessResponse(userProfiles)
+	c.JSON(200, successResponse)
+}
+
+func (h *UserProfileHandler) GetUserBankInfoByUserIDs(c *gin.Context) {
+	var req struct {
+		UserIDs []string `json:"user_ids"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
+		c.JSON(400, errorResponse)
+		return
+	}
+	bankInfos, err := h.UserService.GetUserBankInfoByUserIDs(req.UserIDs)
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	successResponse := utils.CreateSuccessResponse(bankInfos)
 	c.JSON(200, successResponse)
 }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"policy-service/internal/database/minio"
-	"policy-service/internal/event/publisher"
+	"policy-service/internal/event"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
@@ -27,7 +27,7 @@ type PolicyExpirationService struct {
 	stats                     *ExpirationStats
 	policyRenewalOrchestrator *PolicyRenewalOrchestrator
 	basePolicyRepo            *repository.BasePolicyRepository
-	notiPublisher             *publisher.NotificationHelper
+	notievent                 *event.NotificationHelper
 }
 
 // ExpirationStats tracks processing statistics
@@ -40,9 +40,9 @@ type ExpirationStats struct {
 }
 
 // NewPolicyExpirationService creates a new expiration service instance
-func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePolicyService, minioClient *minio.MinioClient, policyRepo *repository.RegisteredPolicyRepository, basePolicyRepo *repository.BasePolicyRepository, notiPublisher *publisher.NotificationHelper, workerManager *worker.WorkerManagerV2) *PolicyExpirationService {
+func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePolicyService, minioClient *minio.MinioClient, policyRepo *repository.RegisteredPolicyRepository, basePolicyRepo *repository.BasePolicyRepository, notievent *event.NotificationHelper, workerManager *worker.WorkerManagerV2) *PolicyExpirationService {
 	validityCalculator := NewBasePolicyValidityCalculator()
-	policyRenewalOrchestrator := NewPolicyRenewalOrchestrator(basePolicyRepo, policyRepo, validityCalculator, workerManager, notiPublisher)
+	policyRenewalOrchestrator := NewPolicyRenewalOrchestrator(basePolicyRepo, policyRepo, validityCalculator, workerManager, notievent)
 	return &PolicyExpirationService{
 		minioClient:   minioClient,
 		redisClient:   redisClient,
@@ -53,7 +53,7 @@ func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePo
 		},
 		policyRenewalOrchestrator: policyRenewalOrchestrator,
 		basePolicyRepo:            basePolicyRepo,
-		notiPublisher:             notiPublisher,
+		notievent:                 notievent,
 	}
 }
 
@@ -168,7 +168,7 @@ func (s *PolicyExpirationService) processExpiredPolicy(ctx context.Context, expi
 	if result.IsExpired {
 		go func() {
 			for {
-				err := s.notiPublisher.NotifyPolicyExpiredBatch(ctx, result.FarmerIDs, result.PolicyCode)
+				err := s.notievent.NotifyPolicyExpiredBatch(ctx, result.FarmerIDs, result.PolicyCode)
 				if err == nil {
 					slog.Info("policy expiration notification sent", "policy id", result.PolicyCode)
 					return
@@ -180,7 +180,7 @@ func (s *PolicyExpirationService) processExpiredPolicy(ctx context.Context, expi
 	} else {
 		go func() {
 			for {
-				err := s.notiPublisher.NotifyPolicyRenewedBatch(ctx, result.FarmerIDs, result.PolicyCode)
+				err := s.notievent.NotifyPolicyRenewedBatch(ctx, result.FarmerIDs, result.PolicyCode)
 				if err == nil {
 					slog.Info("policy renewed notification sent", "policy id", result.PolicyCode)
 					return

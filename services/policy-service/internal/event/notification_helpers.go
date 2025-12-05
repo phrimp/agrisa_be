@@ -1,4 +1,4 @@
-package publisher
+package event
 
 import (
 	"context"
@@ -115,6 +115,17 @@ func (h *NotificationHelper) NotifyClaimApproved(ctx context.Context, userID, po
 		Notification: Notification{
 			Title: "Sự Kiện Bảo Hiểm Đã Được Chấp Thuận",
 			Body:  fmt.Sprintf("Sự kiện bảo hiểm cho hợp đồng %s đã được chấp thuận. Số tiền nhận được %v.", policyNumber, payoutAmount),
+		},
+		UserIDs: []string{userID},
+	}
+	return h.publisher.PublishNotification(ctx, event)
+}
+
+func (h *NotificationHelper) NotifyPayoutCompleted(ctx context.Context, userID, policyNumber string, payoutAmount float64) error {
+	event := NotificationEventPushModel{
+		Notification: Notification{
+			Title: "Chi Trả Bảo Hiểm",
+			Body:  fmt.Sprintf("Số tiền chi trả cho hợp đồng %s đã được thanh toán. Số tiền nhận được %v.", policyNumber, payoutAmount),
 		},
 		UserIDs: []string{userID},
 	}

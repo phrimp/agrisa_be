@@ -50,6 +50,39 @@ func (p *PayoutRepository) GetByClaimID(ctx context.Context, claimID uuid.UUID) 
 	return &payout, nil
 }
 
+func (p *PayoutRepository) GetByInsuranceProvider(ctx context.Context, providerID string) ([]models.Payout, error) {
+	var payouts []models.Payout
+
+	query := `
+		SELECT 
+			payout.id, 
+			payout.claim_id, 
+			payout.registered_policy_id, 
+			payout.farm_id, 
+			payout.farmer_id, 
+			payout.payout_amount, 
+			payout.currency, 
+			payout.status, 
+			payout.initiated_at, 
+			payout.completed_at, 
+			payout.farmer_confirmed, 
+			payout.farmer_confirmation_timestamp, 
+			payout.farmer_rating, 
+			payout.farmer_feedback, 
+			payout.created_at
+		FROM payout 
+		JOIN registered_policy ON payout.registered_policy_id = registered_policy.id
+		WHERE registered_policy.insurance_provider_id = $1
+	`
+
+	err := p.db.SelectContext(ctx, &payouts, query, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list payouts: %w", err)
+	}
+
+	return payouts, nil
+}
+
 func (p *PayoutRepository) GetByRegisteredPolicyID(ctx context.Context, policyID uuid.UUID) ([]models.Payout, error) {
 	var payouts []models.Payout
 	query := `

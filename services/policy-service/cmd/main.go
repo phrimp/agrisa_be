@@ -14,7 +14,6 @@ import (
 	"policy-service/internal/database/postgres"
 	"policy-service/internal/database/redis"
 	"policy-service/internal/event"
-	"policy-service/internal/event/publisher"
 	"policy-service/internal/handlers"
 	"policy-service/internal/repository"
 	"policy-service/internal/services"
@@ -129,10 +128,10 @@ func main() {
 		minioClient = nil // Continue without MinIO
 	}
 
-	// Initialize notification publisher
-	notificationPublisher := publisher.NewNotificationPublisher(rabbitConn)
-	notificationHelper := publisher.NewNotificationHelper(notificationPublisher)
-	log.Println("Notification publisher initialized successfully")
+	// Initialize notification event
+	notificationPublisher := event.NewNotificationPublisher(rabbitConn)
+	notificationHelper := event.NewNotificationHelper(notificationPublisher)
+	log.Println("Notification event initialized successfully")
 
 	_ = notificationHelper // Available for future integration
 
@@ -180,7 +179,7 @@ func main() {
 	}()
 
 	// Start payment event consumer
-	paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyRepo, basePolicyRepo, workerManager, claimRepo, payoutRepo)
+	paymentHandler := event.NewDefaultPaymentEventHandler(registeredPolicyRepo, basePolicyRepo, workerManager, claimRepo, payoutRepo, notificationHelper)
 	paymentConsumer := event.NewPaymentConsumer(rabbitConn, paymentHandler)
 	if err := paymentConsumer.Start(ctx); err != nil {
 		log.Printf("error starting payment consumer: %v", err)

@@ -240,6 +240,7 @@ type DefaultPaymentEventHandler struct {
 	workerManager        *worker.WorkerManagerV2
 	claimRepo            *repository.ClaimRepository
 	payoutRepo           *repository.PayoutRepository
+	notievent            *NotificationHelper
 }
 
 // NewDefaultPaymentEventHandler creates a new default payment event handler
@@ -249,6 +250,7 @@ func NewDefaultPaymentEventHandler(
 	workerManager *worker.WorkerManagerV2,
 	claimRepo *repository.ClaimRepository,
 	payoutRepo *repository.PayoutRepository,
+	notievent *NotificationHelper,
 ) *DefaultPaymentEventHandler {
 	return &DefaultPaymentEventHandler{
 		registeredPolicyRepo: registeredPolicyRepo,
@@ -256,6 +258,7 @@ func NewDefaultPaymentEventHandler(
 		workerManager:        workerManager,
 		claimRepo:            claimRepo,
 		payoutRepo:           payoutRepo,
+		notievent:            notievent,
 	}
 }
 
@@ -544,9 +547,8 @@ func (h *DefaultPaymentEventHandler) processPolicyPayoutPayment(
 	}
 
 	// Update policy with payment information
-	now := time.Now().Unix()
 	payout.Status = models.PayoutCompleted
-	payout.CompletedAt = &now
+	payout.CompletedAt = &paidAt
 
 	registeredPolicy.Status = models.PolicyPayout
 
@@ -587,7 +589,7 @@ func (h *DefaultPaymentEventHandler) processPolicyPayoutPayment(
 		return err
 	}
 
-	slog.Info("policy payout successfully",
+	slog.Info("payout processed successfully",
 		"policy_id", registeredPolicyID,
 		"payment_id", event.ID,
 		"coverage_start_date", registeredPolicy.CoverageStartDate,
@@ -597,6 +599,17 @@ func (h *DefaultPaymentEventHandler) processPolicyPayoutPayment(
 		slog.Error("error cleanup worker infrastructure for policy", "policy_id", registeredPolicyID, "error", err)
 	}
 
+	go func() {
+		for {
+			err := h.notievent.NotifyPayoutCompleted(ctx, registeredPolicy.FarmerID, registeredPolicy.PolicyNumber, payout.PayoutAmount)
+			if err == nil {
+				slog.Info("payout completed notification sent", "policy id", registeredPolicy.PolicyNumber)
+				return
+			}
+			slog.Error("error sending payout completed notification", "error", err)
+			time.Sleep(10 * time.Second)
+		}
+	}()
 	return nil
 }
 

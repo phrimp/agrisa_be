@@ -116,6 +116,11 @@ CREATE TABLE user_profiles (
   ward_code VARCHAR(10),
   ward_name VARCHAR(100),
   postal_code VARCHAR(10),
+
+  -- Bank info
+  account_number VARCHAR,
+  account_name VARCHAR,
+  bank_code VARCHAR;
   
   -- Metadata
   created_at TIMESTAMP DEFAULT NOW(),

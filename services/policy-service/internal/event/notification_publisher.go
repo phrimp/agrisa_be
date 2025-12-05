@@ -1,11 +1,10 @@
-package publisher
+package event
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"policy-service/internal/event"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -13,14 +12,14 @@ import (
 
 // NotificationPublisher publishes notification events to RabbitMQ
 type NotificationPublisher struct {
-	conn              *event.RabbitMQConnection
+	conn              *RabbitMQConnection
 	messagesPublished int64
 	messagesFailed    int64
 	lastPublishTime   time.Time
 }
 
 // NewNotificationPublisher creates a new notification event publisher
-func NewNotificationPublisher(conn *event.RabbitMQConnection) *NotificationPublisher {
+func NewNotificationPublisher(conn *RabbitMQConnection) *NotificationPublisher {
 	return &NotificationPublisher{
 		conn:            conn,
 		lastPublishTime: time.Now(),
