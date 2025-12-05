@@ -32,6 +32,7 @@ type IInsurancePartnerService interface {
 	CreatePartnerDeletionRequest(req *models.PartnerDeletionRequest, partnerAdminID string) (result *models.PartnerDeletionRequest, err error)
 	GetDeletionRequestsByRequesterID(requesterID string) ([]models.PartnerDeletionRequest, error)
 	ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) error
+	ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO) error
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
