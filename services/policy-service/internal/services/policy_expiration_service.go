@@ -168,7 +168,7 @@ func (s *PolicyExpirationService) processExpiredPolicy(ctx context.Context, expi
 	if result.IsExpired {
 		go func() {
 			for {
-				err := s.notievent.NotifyPolicyExpiredBatch(ctx, result.FarmerIDs, result.PolicyCode)
+				err := s.notievent.NotifyPolicyExpiredBatch(context.Background(), result.FarmerIDs, result.PolicyCode)
 				if err == nil {
 					slog.Info("policy expiration notification sent", "policy id", result.PolicyCode)
 					return
@@ -180,7 +180,7 @@ func (s *PolicyExpirationService) processExpiredPolicy(ctx context.Context, expi
 	} else {
 		go func() {
 			for {
-				err := s.notievent.NotifyPolicyRenewedBatch(ctx, result.FarmerIDs, result.PolicyCode)
+				err := s.notievent.NotifyPolicyRenewedBatch(context.Background(), result.FarmerIDs, result.PolicyCode)
 				if err == nil {
 					slog.Info("policy renewed notification sent", "policy id", result.PolicyCode)
 					return

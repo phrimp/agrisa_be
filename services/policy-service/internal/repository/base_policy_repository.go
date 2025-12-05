@@ -362,6 +362,96 @@ func (r *BasePolicyRepository) UpdateBasePolicy(policy *models.BasePolicy) error
 	return nil
 }
 
+func (r *BasePolicyRepository) UpdateBasePolicyTx(tx *sqlx.Tx, policy *models.BasePolicy) error {
+	slog.Info("Updating base policy",
+		"policy_id", policy.ID,
+		"provider_id", policy.InsuranceProviderID,
+		"product_name", policy.ProductName)
+	start := time.Now()
+
+	policy.UpdatedAt = time.Now()
+
+	// Serialize JSONB field to []byte before database update
+	var documentTagsBytes []byte
+	var err error
+
+	if policy.DocumentTags != nil {
+		documentTagsBytes, err = utils.SerializeMapToBytes(policy.DocumentTags)
+		if err != nil {
+			return fmt.Errorf("failed to serialize document_tags: %w", err)
+		}
+	}
+
+	query := `
+		UPDATE base_policy SET
+			insurance_provider_id = $1,
+			product_name = $2,
+			product_code = $3,
+			product_description = $4,
+			crop_type = $5,
+			coverage_currency = $6,
+			coverage_duration_days = $7,
+			fix_premium_amount = $8,
+			is_per_hectare = $9,
+			premium_base_rate = $10,
+			max_premium_payment_prolong = $11,
+			fix_payout_amount = $12,
+			is_payout_per_hectare = $13,
+			over_threshold_multiplier = $14,
+			payout_base_rate = $15,
+			payout_cap = $16,
+			enrollment_start_day = $17,
+			enrollment_end_day = $18,
+			auto_renewal = $19,
+			renewal_discount_rate = $20,
+			base_policy_invalid_date = $21,
+			insurance_valid_from_day = $22,
+			insurance_valid_to_day = $23,
+			status = $24,
+			template_document_url = $25,
+			document_validation_status = $26,
+			document_validation_score = $27,
+			document_tags = $28,
+			important_additional_information = $29,
+			updated_at = $30
+		WHERE id = $31`
+
+	result, err := tx.Exec(query,
+		policy.InsuranceProviderID, policy.ProductName, policy.ProductCode, policy.ProductDescription,
+		policy.CropType, policy.CoverageCurrency, policy.CoverageDurationDays, policy.FixPremiumAmount,
+		policy.IsPerHectare, policy.PremiumBaseRate, policy.MaxPremiumPaymentProlong, policy.FixPayoutAmount,
+		policy.IsPayoutPerHectare, policy.OverThresholdMultiplier, policy.PayoutBaseRate, policy.PayoutCap,
+		policy.EnrollmentStartDay, policy.EnrollmentEndDay, policy.AutoRenewal, policy.RenewalDiscountRate,
+		policy.BasePolicyInvalidDate, policy.InsuranceValidFromDay, policy.InsuranceValidToDay, policy.Status,
+		policy.TemplateDocumentURL, policy.DocumentValidationStatus, policy.DocumentValidationScore,
+		documentTagsBytes, policy.ImportantAdditionalInformation, policy.UpdatedAt, policy.ID)
+	if err != nil {
+		slog.Error("Failed to update base policy",
+			"policy_id", policy.ID,
+			"error", err)
+		return fmt.Errorf("failed to update base policy: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		slog.Error("Failed to get rows affected for update",
+			"policy_id", policy.ID,
+			"error", err)
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		slog.Warn("Base policy not found for update", "policy_id", policy.ID)
+		return fmt.Errorf("base policy not found")
+	}
+
+	slog.Info("Successfully updated base policy",
+		"policy_id", policy.ID,
+		"rows_affected", rowsAffected,
+		"duration", time.Since(start))
+	return nil
+}
+
 func (r *BasePolicyRepository) DeleteBasePolicy(id uuid.UUID) error {
 	query := `DELETE FROM base_policy WHERE id = $1`
 

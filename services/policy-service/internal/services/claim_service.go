@@ -310,7 +310,7 @@ func (s *ClaimService) ValidateClaim(ctx context.Context, claimID uuid.UUID, req
 	if claim.Status == models.ClaimApproved {
 		go func() {
 			for {
-				err := s.notievent.NotifyClaimApproved(ctx, policy.FarmerID, policy.PolicyNumber, payout.PayoutAmount)
+				err := s.notievent.NotifyClaimApproved(context.Background(), policy.FarmerID, policy.PolicyNumber, payout.PayoutAmount)
 				if err == nil {
 					slog.Info("claim approved notification sent", "claim_id", claimID)
 					return
@@ -322,7 +322,7 @@ func (s *ClaimService) ValidateClaim(ctx context.Context, claimID uuid.UUID, req
 	} else {
 		go func() {
 			for {
-				err := s.notievent.NotifyClaimRejected(ctx, policy.FarmerID, policy.PolicyNumber, *claim.PartnerDecision)
+				err := s.notievent.NotifyClaimRejected(context.Background(), policy.FarmerID, policy.PolicyNumber, *claim.PartnerDecision)
 				if err == nil {
 					slog.Info("claim rejected notification sent", "policy id", policy.ID)
 					return

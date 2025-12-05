@@ -9,6 +9,7 @@ import (
 	"policy-service/internal/models"
 	"policy-service/internal/services"
 	"policy-service/internal/worker"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +50,7 @@ func (bph *BasePolicyHandler) Register(app *fiber.App) {
 	policyGroup.Get("/active", bph.GetAllActivePolicy)
 	policyGroup.Get("/detail", bph.GetCompletePolicyDetail) // GET  /base-policies/detail - Get complete policy details with PDF
 	policyGroup.Get("/by-provider", bph.GetByProvider)
+	policyGroup.Put("/cancel/:id", bph.CancelBasePolicy)
 
 	// Utility routes
 	policyGroup.Get("/count", bph.GetBasePolicyCount)                                 // GET  /base-policies/count - Total policy count
@@ -419,4 +421,66 @@ func (bph *BasePolicyHandler) GetByProvider(c fiber.Ctx) error {
 		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "error get all base policies by provider partner"))
 	}
 	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(policies))
+}
+
+func (bph *BasePolicyHandler) CancelBasePolicy(c fiber.Ctx) error {
+	basePolicyIDStr := c.Params("id")
+	if basePolicyIDStr == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "id is required"))
+	}
+	basePolicyID, err := uuid.Parse(basePolicyIDStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "Invalid id format"))
+	}
+	keepRegisterPolicyStr := c.Query("keep_registered_policy")
+	keepRegisterPolicy, err := strconv.ParseBool(keepRegisterPolicyStr)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "keep_registered_policy value"))
+	}
+
+	tokenString := c.Get("Authorization")
+	if tokenString == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "Authorization token is required"))
+	}
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	slog.Info("Fetching partner policies token: ", "token", token)
+	// calling api to get profile by token
+	partnerProfileData, err := bph.registeredPolicyService.GetInsurancePartnerProfile(token)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+	}
+
+	// get partner id from profile data
+	partnerID, err := bph.registeredPolicyService.GetPartnerID(partnerProfileData)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
+	}
+
+	profileData, ok := partnerProfileData["data"].(map[string]any)
+	if ok {
+		partnerIDProfile, ok := profileData["partner_id"].(string)
+		if ok {
+			if partnerID != partnerIDProfile {
+				return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "Cannot underwrite others policies"))
+			}
+		} else {
+			return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "partner id not found"))
+		}
+	} else {
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "profile data not fould"))
+	}
+
+	providerID := partnerID
+	res, err := bph.basePolicyService.CancelBasePolicy(c.Context(), basePolicyID, providerID, keepRegisterPolicy)
+	if err != nil {
+		slog.Error("Failed to cancel base policy", "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("CANCEL_FAILED", "Failed to cancel base policy"))
+	}
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(res))
 }

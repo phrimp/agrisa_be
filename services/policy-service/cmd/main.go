@@ -156,7 +156,7 @@ func main() {
 	// Initialize services
 	dataTierService := services.NewDataTierService(dataTierRepo)
 	dataSourceService := services.NewDataSourceService(dataSourceRepo, cfg)
-	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, gemini.GeminiClients)
+	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, gemini.GeminiClients, registeredPolicyRepo, notificationHelper)
 	farmService := services.NewFarmService(farmRepo, cfg, minioClient, workerManager)
 	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, notificationHelper, geminiSelector)
