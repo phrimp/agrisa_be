@@ -375,12 +375,9 @@ export class PaymentController {
     url.searchParams.set('addInfo', 'ChiTraBaoHiem');
 
     return {
-      success: true,
-      data: {
-        payout_id,
-        qr: url.toString(),
-        verify_hook: `https://agrisa-api.phrimp.io.vn/payment/public/payout/verify?payout_id=${payout_id}`,
-      },
+      payout_id,
+      qr: url.toString(),
+      verify_hook: `https://agrisa-api.phrimp.io.vn/payment/public/payout/verify?payout_id=${payout_id}`,
     };
   }
 
