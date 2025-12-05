@@ -245,12 +245,14 @@ func (h *InsurancePartnerHandler) GetPartnerDeletionRequestsByPartnerAdminID(c *
 
 func (h *InsurancePartnerHandler) ProcessPartnerDeletionRequestReview(c *gin.Context) {
 	var req models.ProcessRequestReviewDTO
+	reviewByID := c.GetHeader("X-User-ID")
 	if err := c.ShouldBindJSON(&req); err != nil {
 		log.Printf("Error binding JSON for ProcessPartnerDeletionRequestReview: %s", err.Error())
 		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
 		c.JSON(http.StatusBadRequest, errorResponse)
 		return
 	}
+	req.ReviewedByID = reviewByID
 	err := h.InsurancePartnerService.ValidateDeletionRequestProcess(req)
 	if err != nil {
 		log.Printf("Error validating deletion request process: %s", err.Error())
