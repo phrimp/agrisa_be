@@ -449,7 +449,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 				"data_points", len(allMonitoringData))
 
 			// Evaluate trigger conditions against test data
-			triggeredConditions := s.evaluateTriggerConditions(ctx, triggers, allMonitoringData, farmID)
+			triggeredConditions := s.evaluateTriggerConditions(ctx, triggers, allMonitoringData, farmID, policy)
 
 			if len(triggeredConditions) > 0 {
 				slog.Info("Trigger conditions satisfied with test data",
@@ -711,7 +711,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 			"data_points", len(allMonitoringData))
 
 		// Evaluate trigger conditions against fetched data
-		triggeredConditions := s.evaluateTriggerConditions(ctx, triggers, allMonitoringData, farmID)
+		triggeredConditions := s.evaluateTriggerConditions(ctx, triggers, allMonitoringData, farmID, policy)
 
 		slog.Info("Step 8 COMPLETE: Trigger evaluation finished",
 			"triggered_conditions_count", len(triggeredConditions))
@@ -1023,6 +1023,7 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 	triggers []models.BasePolicyTrigger,
 	monitoringData []models.FarmMonitoringData,
 	farmID uuid.UUID,
+	policy *models.RegisteredPolicy,
 ) []TriggeredCondition {
 	slog.Info(">>> Entering evaluateTriggerConditions",
 		"trigger_count", len(triggers),
@@ -1118,7 +1119,7 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 			sortMonitoringDataByTimestamp(condData)
 
 			// Apply aggregation function to get the current value
-			aggregatedValue := s.applyAggregation(condData, cond.AggregationFunction, cond.AggregationWindowDays)
+			aggregatedValue := s.applyAggregation(condData, cond.AggregationFunction, cond.AggregationWindowDays, policy.CoverageStartDate)
 			slog.Info("    Aggregation applied",
 				"condition_id", cond.ID,
 				"aggregation_function", cond.AggregationFunction,
@@ -1541,6 +1542,7 @@ func (s *RegisteredPolicyService) applyAggregation(
 	data []models.FarmMonitoringData,
 	aggFunc models.AggregationFunction,
 	windowDays int,
+	coverageStartDate int64,
 ) float64 {
 	if len(data) == 0 {
 		return 0
@@ -1548,6 +1550,11 @@ func (s *RegisteredPolicyService) applyAggregation(
 
 	// Filter data within aggregation window
 	cutoffTime := time.Now().AddDate(0, 0, -windowDays).Unix()
+
+	if cutoffTime < coverageStartDate {
+		cutoffTime = coverageStartDate
+	}
+
 	var windowData []float64
 	for _, d := range data {
 		if d.MeasurementTimestamp >= cutoffTime {
