@@ -118,6 +118,7 @@ export class PaymentRepository {
       .select('SUM(payment.amount)', 'sum')
       .where('payment.user_id = :user_id', { user_id })
       .andWhere('payment.type = :type', { type })
+      .andWhere('payment.status = :status', { status: 'completed' })
       .getRawOne();
     return parseFloat(result.sum) || 0;
   }
@@ -127,6 +128,7 @@ export class PaymentRepository {
       .createQueryBuilder('payment')
       .select('SUM(payment.amount)', 'sum')
       .where('payment.type = :type', { type })
+      .andWhere('payment.status = :status', { status: 'completed' })
       .getRawOne();
     return parseFloat(result.sum) || 0;
   }
