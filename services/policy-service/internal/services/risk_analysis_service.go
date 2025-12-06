@@ -58,6 +58,15 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 		"farm_id", policy.FarmID,
 		"base_policy_id", policy.BasePolicyID)
 
+	if policy.Status != models.PolicyPendingReview && policy.UnderwritingStatus != models.UnderwritingPending {
+		slog.Info("policy status && underwriting status invalid skipping",
+			"policy_id", policyIDStr,
+			"policy status", policy.Status,
+			"underwriting status", policy.UnderwritingStatus,
+		)
+		return nil
+	}
+
 	// 3. Check for existing analysis (skip if exists and not forced)
 	if !forceReanalysis {
 		existing, _ := s.registeredPolicyRepo.GetRiskAnalysesByPolicyID(policyID)

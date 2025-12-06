@@ -27,9 +27,10 @@ type BasePolicyService struct {
 	geminiSelector     *gemini.GeminiClientSelector
 	registerPolicyRepo *repository.RegisteredPolicyRepository
 	notievent          *event.NotificationHelper
+	cancelRequestRepo  *repository.CancelRequestRepository
 }
 
-func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient, geminiClients []gemini.GeminiClient, registerPolicyRepo *repository.RegisteredPolicyRepository, notievent *event.NotificationHelper) *BasePolicyService {
+func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient, geminiClients []gemini.GeminiClient, registerPolicyRepo *repository.RegisteredPolicyRepository, notievent *event.NotificationHelper, cancelRequestRepo *repository.CancelRequestRepository) *BasePolicyService {
 	return &BasePolicyService{
 		basePolicyRepo:     basePolicyRepo,
 		dataSourceRepo:     dataSourceRepo,
@@ -38,6 +39,7 @@ func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataS
 		geminiSelector:     gemini.NewGeminiClientSelector(geminiClients),
 		registerPolicyRepo: registerPolicyRepo,
 		notievent:          notievent,
+		cancelRequestRepo:  cancelRequestRepo,
 	}
 }
 
@@ -1439,10 +1441,23 @@ func (s *BasePolicyService) CancelBasePolicy(ctx context.Context, basePolicyID u
 					slog.Error("error updating policy status", "current status", policy.Status, "error", err)
 					return "", err
 				}
+				cancelRequest := models.CancelRequest{
+					RegisteredPolicyID: policy.ID,
+					CancelRequestType:  models.CancelRequestTypePolicyholderRequest,
+					Reason:             "Nhà cung cấp bảo hiểm huỷ hợp đồng gốc",
+					RequestedBy:        providerID,
+					RequestedAt:        time.Now(),
+					CompensateAmount:   int(policy.TotalFarmerPremium),
+				}
+				err = s.cancelRequestRepo.CreateNewCancelRequestTx(tx, cancelRequest)
+				if err != nil {
+					tx.Rollback()
+					slog.Error("error creating request cancel for policy", "policy", policy.ID, "error", err)
+					return "", fmt.Errorf("error creating request cancel for policy=%s error=%w", policy.ID, err)
+				}
 				policyNumbers[policy.FarmerID] = policy.PolicyNumber
 			}
 		}
-
 	}
 
 	basePolicy.Status = models.BasePolicyArchived

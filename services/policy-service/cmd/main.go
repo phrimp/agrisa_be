@@ -146,6 +146,7 @@ func main() {
 	claimRepo := repository.NewClaimRepository(db)
 	claimRejectionRepo := repository.NewClaimRejectionRepository(db)
 	payoutRepo := repository.NewPayoutRepository(db)
+	cancelRepo := repository.NewCancelRequestRepository(db)
 
 	// Initialize WorkerManagerV2
 	workerManager := worker.NewWorkerManagerV2(db, redisClient)
@@ -156,7 +157,7 @@ func main() {
 	// Initialize services
 	dataTierService := services.NewDataTierService(dataTierRepo)
 	dataSourceService := services.NewDataSourceService(dataSourceRepo, cfg)
-	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, gemini.GeminiClients, registeredPolicyRepo, notificationHelper)
+	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, gemini.GeminiClients, registeredPolicyRepo, notificationHelper, cancelRepo)
 	farmService := services.NewFarmService(farmRepo, cfg, minioClient, workerManager)
 	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, notificationHelper, geminiSelector)
