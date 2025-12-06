@@ -108,4 +108,26 @@ export class PaymentRepository {
       },
     });
   }
+
+  async getTotalAmountByUserAndType(
+    user_id: string,
+    type: string,
+  ): Promise<number> {
+    const result = await this.paymentRepo
+      .createQueryBuilder('payment')
+      .select('SUM(payment.amount)', 'sum')
+      .where('payment.user_id = :user_id', { user_id })
+      .andWhere('payment.type = :type', { type })
+      .getRawOne();
+    return parseFloat(result.sum) || 0;
+  }
+
+  async getTotalAmountByType(type: string): Promise<number> {
+    const result = await this.paymentRepo
+      .createQueryBuilder('payment')
+      .select('SUM(payment.amount)', 'sum')
+      .where('payment.type = :type', { type })
+      .getRawOne();
+    return parseFloat(result.sum) || 0;
+  }
 }

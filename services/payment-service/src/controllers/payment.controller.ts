@@ -475,4 +475,17 @@ export class PaymentController {
   ) {
     return this.payoutService.findByIdAndUserId(id, user_id);
   }
+
+  @Get('protected/total')
+  getTotalPayments(
+    @Headers('x-user-id') user_id: string,
+    @Param('type') type: string,
+  ) {
+    return this.paymentService.getTotalAmountByUserAndType(user_id, type);
+  }
+
+  @Get('protected/total/admin')
+  getTotalPaymentsAdmin(@Param('type') type: string) {
+    return this.paymentService.getTotalAmountByType(type);
+  }
 }
