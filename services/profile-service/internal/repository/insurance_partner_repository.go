@@ -27,6 +27,7 @@ type IInsurancePartnerRepository interface {
 	GetDeletionRequestsByRequesterID(ctx context.Context, requesterID string) ([]models.PartnerDeletionRequest, error)
 	ProcessRequestReview(request models.ProcessRequestReviewDTO) error
 	GetDeletionRequestsByRequestID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error)
+	UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string) error
 }
 type InsurancePartnerRepository struct {
 	db *sqlx.DB
@@ -428,6 +429,23 @@ func (r *InsurancePartnerRepository) UpdateInsurancePartner(query string, args .
 		return fmt.Errorf("failed to update insurance partner: %w", err)
 	}
 	return nil
+}
+
+func (r *InsurancePartnerRepository) UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string) error {
+	query := `
+	update insurance_partners
+		set status = $1, updated_at = NOW(), last_updated_by_id = $2, last_updated_by_name = $3
+		where partner_id = $4
+	`
+	return utils.ExecWithCheck(
+		r.db,
+		query,
+		utils.ExecUpdate,
+		status,
+		updatedByID,
+		updatedByName,
+		partnerID,
+	)
 }
 
 // ======= PARTNER DELETION REQUESTS =======

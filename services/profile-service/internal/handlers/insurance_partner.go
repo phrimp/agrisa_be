@@ -253,15 +253,7 @@ func (h *InsurancePartnerHandler) ProcessPartnerDeletionRequestReview(c *gin.Con
 		return
 	}
 	req.ReviewedByID = reviewByID
-	err := h.InsurancePartnerService.ValidateDeletionRequestProcess(req)
-	if err != nil {
-		log.Printf("Error validating deletion request process: %s", err.Error())
-		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
-		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
-		c.JSON(httpStatus, errorResponse)
-		return
-	}
-	err = h.InsurancePartnerService.ProcessRequestReviewByAdmin(req)
+	err := h.InsurancePartnerService.ProcessRequestReviewByAdmin(req)
 	if err != nil {
 		log.Printf("Error processing deletion request review: %s", err.Error())
 		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
