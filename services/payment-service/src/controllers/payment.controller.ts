@@ -320,8 +320,9 @@ export class PaymentController {
     return this.paymentService.findByIdAndUserId(id, user_id);
   }
 
-  @Post('public/payout')
+  @Post('protected/payout')
   async createPayout(
+    @Headers('x-user-id') created_by: string,
     @Body()
     body: CreatePayoutData,
   ) {
@@ -344,7 +345,7 @@ export class PaymentController {
       amount,
       description: description || 'Chi trả bảo hiểm',
       status: 'pending',
-      user_id,
+      user_id: created_by,
       type,
     });
 
