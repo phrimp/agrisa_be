@@ -469,6 +469,18 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 						"claim_amount", claim.ClaimAmount,
 						"policy_id", policyID)
 
+					go func() {
+						for {
+							err := s.notievent.NotifyClaimGenerated(context.Background(), policy.FarmerID, policy.PolicyNumber)
+							if err == nil {
+								slog.Info("claim generated notification sent", "policy id", policy.ID)
+								return
+							}
+							slog.Error("error sending claim generated notification", "error", err)
+							time.Sleep(10 * time.Second)
+						}
+					}()
+
 					for _, tc := range triggeredConditions {
 						slog.Info("Triggered condition details",
 							"claim_id", claim.ID,
@@ -587,7 +599,6 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 			"farm_id", farmID,
 			"action", "scheduling_risk_analysis")
 		scheduler.AddJob(riskAnalysisJob)
-		return nil
 	}
 
 	// Collect results from all workers
