@@ -59,4 +59,15 @@ export class ImplPaymentService implements PaymentService {
   async findExpired(): Promise<Payment[]> {
     return this.paymentRepository.findExpired();
   }
+
+  async getTotalAmountByUserAndType(
+    user_id: string,
+    type: string,
+  ): Promise<number> {
+    return this.paymentRepository.getTotalAmountByUserAndType(user_id, type);
+  }
+
+  async getTotalAmountByType(type: string): Promise<number> {
+    return this.paymentRepository.getTotalAmountByType(type);
+  }
 }

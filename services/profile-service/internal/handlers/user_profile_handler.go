@@ -31,6 +31,7 @@ func (h *UserProfileHandler) RegisterRoutes(router *gin.Engine) {
 
 	// admin endpoint
 	userProfileProGr.POST("/users/bank-info", h.GetUserBankInfoByUserIDs)
+	userProfileProGr.PUT("/users/admin/:user_id", h.UpdateUserProfileByAdmin)
 }
 
 func (h *UserProfileHandler) GetUserProfileByUserID(c *gin.Context) {
@@ -137,5 +138,34 @@ func (h *UserProfileHandler) GetUserBankInfoByUserIDs(c *gin.Context) {
 		return
 	}
 	successResponse := utils.CreateSuccessResponse(bankInfos)
+	c.JSON(200, successResponse)
+}
+
+func (h *UserProfileHandler) UpdateUserProfileByAdmin(c *gin.Context) {
+	adminID := c.GetHeader("X-User-ID")
+	if adminID == "" {
+		errorResponse := utils.CreateErrorResponse("UNAUTHORIZED", "Admin ID is required")
+		c.JSON(401, errorResponse)
+		return
+	}
+
+	var updateProfileRequestBody map[string]interface{}
+	if err := c.ShouldBindJSON(&updateProfileRequestBody); err != nil {
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
+		c.JSON(400, errorResponse)
+		return
+	}
+
+	userID := c.Param("user_id")
+
+	updatedProfile, err := h.UserService.UpdateUserProfile(updateProfileRequestBody, userID, "Admin")
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+
+	successResponse := utils.CreateSuccessResponse(updatedProfile)
 	c.JSON(200, successResponse)
 }
