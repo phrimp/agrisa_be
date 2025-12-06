@@ -1037,6 +1037,7 @@ func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.Partn
 	req.RequestedBy = userProfile.UserID
 	req.RequestedByName = userProfile.FullName
 	req.Status = models.DeletionRequestPending
+	req.RequestedAt = time.Now()
 	return s.repo.CreateDeletionRequest(context.Background(), req)
 }
 
