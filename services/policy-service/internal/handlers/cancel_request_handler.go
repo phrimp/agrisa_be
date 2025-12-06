@@ -28,7 +28,7 @@ func (h *CancelRequestHandler) Register(app *fiber.App) {
 	protectedGr := app.Group("policy/protected/api/v2")
 
 	// Claim routes
-	cancelRequestGr := protectedGr.Group("/cancel_request")
+	cancelRequestGr := protectedGr.Group("/cancel_request", h.CreateNewRequest)
 	cancelRequestGr.Post("/", h.CreateNewRequest)
 	farmerGr := cancelRequestGr.Group("/read-own")
 	farmerGr.Get("/me", h.GetAllMyRequests)
@@ -65,7 +65,7 @@ func (h *CancelRequestHandler) CreateNewRequest(c fiber.Ctx) error {
 			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body: "+err.Error()))
 	}
 
-	policyIDStr := c.Params("id")
+	policyIDStr := c.Query("policy_id")
 	policyID, err := uuid.Parse(policyIDStr)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(
