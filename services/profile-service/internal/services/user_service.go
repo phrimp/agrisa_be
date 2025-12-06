@@ -52,6 +52,7 @@ var allowedUpdateUserProfileFields = map[string]bool{
 	"account_number":    true,
 	"account_name":      true,
 	"bank_code":         true,
+	"partner_id":        true,
 }
 
 var arrayUserProfileFields = map[string]bool{}
