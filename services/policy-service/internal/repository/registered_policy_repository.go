@@ -185,6 +185,46 @@ func (r *RegisteredPolicyRepository) GetAllPoliciesAndStatus() (map[uuid.UUID]mo
 	return queryResult, nil
 }
 
+func (r *RegisteredPolicyRepository) GetCompensationAmount(id uuid.UUID, farmerID, providerID string, compensationType models.CancelRequestType) (float64, error) {
+	now := time.Now().Unix()
+	compensationAmount := 0.0
+	coveragePercentage := 0.0
+
+	policy, err := r.GetByID(id)
+	if err != nil {
+		return 0, err
+	}
+
+	if now < policy.CoverageStartDate {
+		return 0, fmt.Errorf("policy haven't started")
+	}
+
+	coveragePercentage = float64((now - policy.CoverageStartDate) * 100 / (policy.CoverageEndDate - policy.CoverageStartDate))
+
+	if farmerID != "" {
+		if policy.FarmerID != farmerID {
+			return 0, fmt.Errorf("the current farmer is not the owner of this policy")
+		}
+		if compensationType == models.CancelRequestTypeContractViolation {
+			compensationAmount = policy.TotalFarmerPremium
+		} else {
+			compensationAmount = policy.TotalFarmerPremium * coveragePercentage / 100
+		}
+	}
+	if providerID != "" {
+		if policy.InsuranceProviderID != providerID {
+			return 0, fmt.Errorf("the current provider is not the owner of this policy")
+		}
+		if compensationType == models.CancelRequestTypeContractViolation {
+			compensationAmount = 0
+		} else {
+			compensationAmount = policy.TotalFarmerPremium * coveragePercentage / 100
+		}
+	}
+
+	return compensationAmount, nil
+}
+
 // GetByIDWithFarm retrieves a registered policy with farm details using FastAssembleWithPrefix
 func (r *RegisteredPolicyRepository) GetByIDWithFarm(id uuid.UUID) (*models.RegisteredPolicyWFarm, error) {
 	query := `

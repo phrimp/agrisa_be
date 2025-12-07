@@ -925,3 +925,17 @@ type ConfirmPayoutRequest struct {
 }
 
 type CreateCancelRequestResponse struct{}
+
+type ReviewCancelRequestReq struct {
+	ReviewNote string `json:"review_notes"`
+	Approved   bool   `json:"approved"`
+	ReviewedBy string
+	RequestID  uuid.UUID
+}
+
+type ResolveConflictCancelRequestReq struct {
+	ReviewNote    string `json:"review_notes"`
+	FinalDecision CancelRequestStatus
+	ReviewedBy    string
+	RequestID     uuid.UUID
+}

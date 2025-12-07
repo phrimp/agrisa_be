@@ -328,7 +328,7 @@ CREATE TABLE base_policy_trigger_condition (
     base_cost BIGINT NOT NULL DEFAULT 0.0,
     category_multiplier DECIMAL(4,2) NOT NULL DEFAULT 1.0,
     tier_multiplier DECIMAL(4,2) NOT NULL DEFAULT 1.0,
-    calculated_cost DECIMAL(10,4) NOT NULL DEFAULT 0.0,
+    calculated_cost DECIMAL(14,4) NOT NULL DEFAULT 0.0,
     
     -- Metadata
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
