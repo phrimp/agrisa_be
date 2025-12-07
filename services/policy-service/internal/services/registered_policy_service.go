@@ -1080,4 +1080,5 @@ func (s *RegisteredPolicyService) GetByBasePolicy(ctx context.Context, basePolic
 	return s.registeredPolicyRepo.GetByBasePolicyID(ctx, basePolicyID)
 }
 
-func (s *RegisteredPolicyService) GetCompensationAmount(id uuid.UUID, farmerID, providerID string, compensationType models.CancelRequestType)
+func (s *RegisteredPolicyService) GetCompensationAmount(id uuid.UUID, farmerID, providerID string, compensationType models.CancelRequestType) {
+}
