@@ -1,3 +1,4 @@
+import { Notification } from '@/entities/notification.entity';
 import { Subscriber } from '@/entities/subcriber.entity';
 import { ePlatform } from '@/libs/enum';
 import { SendPayloadDto } from '@/libs/types/send-payload.dto';
@@ -9,7 +10,6 @@ import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { In, Repository } from 'typeorm';
 import * as webpush from 'web-push';
 import WebSocket from 'ws';
-import { Notification } from '@/entities/notification.entity';
 
 @Injectable()
 export class PushNotiService {
