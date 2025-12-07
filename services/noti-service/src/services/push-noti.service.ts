@@ -3,18 +3,23 @@ import { ePlatform } from '@/libs/enum';
 import { SendPayloadDto } from '@/libs/types/send-payload.dto';
 import { SubscribeDto } from '@/libs/types/subscribe.dto';
 import { setupWebPush } from '@/libs/web-push.config';
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { In, Repository } from 'typeorm';
 import * as webpush from 'web-push';
 import WebSocket from 'ws';
 import { Notification } from '@/entities/notification.entity';
 
+@Injectable()
 export class PushNotiService {
   private webpush: typeof webpush;
   private expo: Expo;
 
   constructor(
+    @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
+    @InjectRepository(Subscriber)
     private readonly subscriberRepository: Repository<Subscriber>,
   ) {
     this.webpush = setupWebPush();
