@@ -145,6 +145,10 @@ export class PushNotiService {
         auth: data.auth,
       });
       await this.subscriberRepository.save(newSub);
+      return {
+        message: 'Đăng ký nhận thông báo thành công',
+        data: newSub,
+      };
     }
   }
 
@@ -160,6 +164,10 @@ export class PushNotiService {
         expo_token: data.expoToken,
       });
       await this.subscriberRepository.save(newSub);
+      return {
+        message: 'Đăng ký nhận thông báo thành công',
+        data: newSub,
+      };
     }
   }
 
@@ -175,6 +183,10 @@ export class PushNotiService {
         endpoint: data.endpoint,
       });
       await this.subscriberRepository.save(newSub);
+      return {
+        message: 'Đăng ký nhận thông báo thành công',
+        data: newSub,
+      };
     }
   }
 
@@ -183,6 +195,7 @@ export class PushNotiService {
       user_id: userId,
       platform: ePlatform.web,
     });
+    return { message: 'Hủy đăng ký nhận thông báo thành công' };
   }
 
   async unsubscribeAndroid(userId: string) {
@@ -190,6 +203,7 @@ export class PushNotiService {
       user_id: userId,
       platform: ePlatform.android,
     });
+    return { message: 'Hủy đăng ký nhận thông báo thành công' };
   }
 
   async unsubscribeIOS(userId: string) {
@@ -197,12 +211,15 @@ export class PushNotiService {
       user_id: userId,
       platform: ePlatform.ios,
     });
+    return { message: 'Hủy đăng ký nhận thông báo thành công' };
   }
 
-  async isSubcribed(userId: string, platform: string): Promise<boolean> {
+  async isSubcribed(userId: string, platform: string) {
     const existing = await this.subscriberRepository.findOne({
       where: { user_id: userId, platform },
     });
-    return !!existing;
+    return {
+      value: !!existing,
+    };
   }
 }

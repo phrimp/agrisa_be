@@ -59,6 +59,6 @@ export class PushNotiController {
 
   @Get('protected/validate')
   async me(@Headers('x-user-id') userId: string, @Query('platform') platform: string) {
-    return this.pushNotiService.isSubcribed(userId, platform);
+    return await this.pushNotiService.isSubcribed(userId, platform);
   }
 }
