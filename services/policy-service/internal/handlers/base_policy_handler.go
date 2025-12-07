@@ -379,10 +379,6 @@ func (bph *BasePolicyHandler) GetCompletePolicyDetail(c fiber.Ctx) error {
 
 func (bph *BasePolicyHandler) GetByProvider(c fiber.Ctx) error {
 	tokenString := c.Get("Authorization")
-	if tokenString == "" {
-		return c.Status(http.StatusUnauthorized).JSON(
-			utils.CreateErrorResponse("UNAUTHORIZED", "Authorization token is required"))
-	}
 
 	token := strings.TrimPrefix(tokenString, "Bearer ")
 

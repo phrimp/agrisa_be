@@ -1,9 +1,4 @@
-import {
-  Column,
-  CreateDateColumn,
-  Entity,
-  PrimaryGeneratedColumn,
-} from 'typeorm';
+import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
 
 @Entity('notifications')
 export class Notification {
@@ -23,7 +18,7 @@ export class Notification {
   data: any;
 
   @Column({ type: 'varchar', length: 50 })
-  type: string;
+  platform: string;
 
   @Column({ type: 'varchar', length: 50, default: 'sent' })
   status: string;

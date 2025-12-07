@@ -913,7 +913,7 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 }
 
 func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]any, error) {
-	url := "https://agrisa-api.phrimp.io.vn/profile/protected/api/v1/insurance-partners/me/profile"
+	url := "http://profile-service:8087/profile/protected/api/v1/insurance-partners/me/profile"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		slog.Error("Error creating request for insurance partner profile", "error", err)
@@ -934,6 +934,11 @@ func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[
 	if err != nil {
 		slog.Error("Error reading response body for insurance partner profile", "error", err)
 		return nil, fmt.Errorf("error reading response: %v", err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		slog.Error("insurance partner profile not found", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("insurance partner profile not found %d, body: %s", resp.StatusCode, string(body))
 	}
 
 	if resp.StatusCode != http.StatusOK {

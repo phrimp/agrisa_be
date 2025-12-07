@@ -102,10 +102,10 @@ type CancelRequest struct {
 
 	// Request status and processing
 	Status      CancelRequestStatus `json:"status" db:"status"`
-	RequestedBy string              `json:"requested_by" db:"requested_by"`
+	RequestedBy string              `json:"requested_by,omitempty" db:"requested_by"`
 	RequestedAt time.Time           `json:"requested_at" db:"requested_at"`
 
-	CompensateAmount int `json:"compensate_amount" db:"compensate_amount"`
+	CompensateAmount int `json:"compensate_amount,omitempty" db:"compensate_amount"`
 
 	// Processing details
 	ReviewedBy  *string    `json:"reviewed_by,omitempty" db:"reviewed_by"`

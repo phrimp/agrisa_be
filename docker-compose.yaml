@@ -1,559 +1,601 @@
 services:
-  # Traefik API Gateway
-  traefik:
-    image: traefik:latest
-    container_name: agrisa-traefik
-    restart: unless-stopped
-    ports:
-      - "${TRAEFIK_HTTP_PORT:-80}:80"
-      - "${TRAEFIK_HTTPS_PORT:-443}:443"
-      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    command:
-      - --api.dashboard=true
-      - --api.insecure=true
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --providers.docker.network=agrisa_traefik-net
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
-    networks:
-      - traefik-net
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.middlewares.api-limit.buffering.maxRequestBodyBytes=209715200"
-      # Define global CORS middleware that can be referenced by all services
-      - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
-      - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=*"
-      - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=*"
-      - "traefik.http.middlewares.cors.headers.accesscontrolmaxage=86400"
-      - "traefik.http.middlewares.cors.headers.addvaryheader=true"
+    # Traefik API Gateway
+    traefik:
+        image: traefik:latest
+        container_name: agrisa-traefik
+        restart: unless-stopped
+        ports:
+            - "${TRAEFIK_HTTP_PORT:-80}:80"
+            - "${TRAEFIK_HTTPS_PORT:-443}:443"
+            - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+        volumes:
+            - /var/run/docker.sock:/var/run/docker.sock:ro
+        command:
+            - --api.dashboard=true
+            - --api.insecure=true
+            - --providers.docker=true
+            - --providers.docker.exposedbydefault=false
+            - --providers.docker.network=agrisa_traefik-net
+            - --entrypoints.web.address=:80
+            - --entrypoints.websecure.address=:443
+            - --log.level=${TRAEFIK_LOG_LEVEL:-INFO}
+        networks:
+            - traefik-net
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.middlewares.api-limit.buffering.maxRequestBodyBytes=209715200"
+            # Define global CORS middleware that can be referenced by all services
+            - "traefik.http.middlewares.cors.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,PATCH,OPTIONS"
+            - "traefik.http.middlewares.cors.headers.accesscontrolallowheaders=*"
+            - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=*"
+            - "traefik.http.middlewares.cors.headers.accesscontrolmaxage=86400"
+            - "traefik.http.middlewares.cors.headers.addvaryheader=true"
 
-  # RabbitMQ Message Broker
-  rabbitmq:
-    image: rabbitmq:3-management
-    container_name: agrisa-rabbitmq
-    restart: unless-stopped
-    ports:
-      - ":5672"
-      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
-    environment:
-      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin}
-    volumes:
-      - rabbitmq_data:/var/lib/rabbitmq
-      - ./logs/rabbitmq:/var/log/rabbitmq
-    networks:
-      - traefik-net
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    labels:
-      - "traefik.enable=false"
+    # RabbitMQ Message Broker
+    rabbitmq:
+        image: rabbitmq:3-management
+        container_name: agrisa-rabbitmq
+        restart: unless-stopped
+        ports:
+            - ":5672"
+            - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+        environment:
+            RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-admin}
+            RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-admin}
+        volumes:
+            - rabbitmq_data:/var/lib/rabbitmq
+            - ./logs/rabbitmq:/var/log/rabbitmq
+        networks:
+            - traefik-net
+        healthcheck:
+            test: ["CMD", "rabbitmq-diagnostics", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 3
+        labels:
+            - "traefik.enable=false"
 
-  # MongoDB Service
-  mongodb:
-    image: mongo:latest
-    container_name: agrisa-mongodb
-    restart: unless-stopped
-    ports:
-      - ":27017"
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME:-root}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-example}
-    volumes:
-      - mongodb_data:/data/db
-      - ./logs/mongodb:/var/log/mongodb
-    command: mongod --logpath /var/log/mongodb/mongodb.log --logRotate reopen --logappend
-    networks:
-      - traefik-net
-    healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    labels:
-      - "traefik.enable=false"
+    # MongoDB Service
+    mongodb:
+        image: mongo:latest
+        container_name: agrisa-mongodb
+        restart: unless-stopped
+        ports:
+            - ":27017"
+        environment:
+            MONGO_INITDB_ROOT_USERNAME: ${MONGODB_USERNAME:-root}
+            MONGO_INITDB_ROOT_PASSWORD: ${MONGODB_PASSWORD:-example}
+        volumes:
+            - mongodb_data:/data/db
+            - ./logs/mongodb:/var/log/mongodb
+        command: mongod --logpath /var/log/mongodb/mongodb.log --logRotate reopen --logappend
+        networks:
+            - traefik-net
+        healthcheck:
+            test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+            interval: 10s
+            timeout: 5s
+            retries: 3
+        labels:
+            - "traefik.enable=false"
 
-  # MongoDB Express - Web-based MongoDB admin interface
-  mongo-express:
-    image: mongo-express:latest
-    container_name: agrisa-mongo-express
-    restart: unless-stopped
-    ports:
-      - ":8081"
-    environment:
-      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USERNAME:-root}
-      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PASSWORD:-example}
-      ME_CONFIG_MONGODB_URL: mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-example}@mongodb:27017/
-      ME_CONFIG_MONGODB_SERVER: mongodb
-      ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USERNAME:-admin}
-      ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD:-pass}
-      ME_CONFIG_SITE_BASEURL: ${MONGO_EXPRESS_BASEURL:-/}
-    networks:
-      - traefik-net
-    depends_on:
-      mongodb:
-        condition: service_healthy
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "wget",
-          "--no-verbose",
-          "--tries=1",
-          "--spider",
-          "http://localhost:8081",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.mongo-express.rule=Host(`mongo-express.${DOMAIN:-localhost}`)"
-      - "traefik.http.routers.mongo-express.entrypoints=web"
-      - "traefik.http.services.mongo-express.loadbalancer.server.port=8081"
+    # MongoDB Express - Web-based MongoDB admin interface
+    mongo-express:
+        image: mongo-express:latest
+        container_name: agrisa-mongo-express
+        restart: unless-stopped
+        ports:
+            - ":8081"
+        environment:
+            ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGODB_USERNAME:-root}
+            ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGODB_PASSWORD:-example}
+            ME_CONFIG_MONGODB_URL: mongodb://${MONGODB_USERNAME:-root}:${MONGODB_PASSWORD:-example}@mongodb:27017/
+            ME_CONFIG_MONGODB_SERVER: mongodb
+            ME_CONFIG_BASICAUTH_USERNAME: ${MONGO_EXPRESS_USERNAME:-admin}
+            ME_CONFIG_BASICAUTH_PASSWORD: ${MONGO_EXPRESS_PASSWORD:-pass}
+            ME_CONFIG_SITE_BASEURL: ${MONGO_EXPRESS_BASEURL:-/}
+        networks:
+            - traefik-net
+        depends_on:
+            mongodb:
+                condition: service_healthy
+        healthcheck:
+            test:
+                [
+                    "CMD",
+                    "wget",
+                    "--no-verbose",
+                    "--tries=1",
+                    "--spider",
+                    "http://localhost:8081",
+                ]
+            interval: 30s
+            timeout: 10s
+            retries: 3
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.routers.mongo-express.rule=Host(`mongo-express.${DOMAIN:-localhost}`)"
+            - "traefik.http.routers.mongo-express.entrypoints=web"
+            - "traefik.http.services.mongo-express.loadbalancer.server.port=8081"
 
-  # Redis Service
-  redis:
-    image: redis:latest
-    container_name: agrisa-redis
-    restart: unless-stopped
-    ports:
-      - ":6379"
-    volumes:
-      - ./data/redis:/data
-      - ./logs/redis:/var/log/redis
-    environment:
-      - REDIS_LOG_LEVEL=${REDIS_LOG_LEVEL:-notice}
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-example}
-    networks:
-      - traefik-net
-    command: >
-      redis-server 
-      --requirepass ${REDIS_PASSWORD:-example} 
-      --loglevel ${REDIS_LOG_LEVEL:-notice} 
-      --logfile /var/log/redis/redis.log
-      --notify-keyspace-events Ex
-    healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-example}", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    labels:
-      - "traefik.enable=false"
+    # Redis Service
+    redis:
+        image: redis:latest
+        container_name: agrisa-redis
+        restart: unless-stopped
+        ports:
+            - ":6379"
+        volumes:
+            - ./data/redis:/data
+            - ./logs/redis:/var/log/redis
+        environment:
+            - REDIS_LOG_LEVEL=${REDIS_LOG_LEVEL:-notice}
+            - REDIS_PASSWORD=${REDIS_PASSWORD:-example}
+        networks:
+            - traefik-net
+        command: >
+            redis-server 
+            --requirepass ${REDIS_PASSWORD:-example} 
+            --loglevel ${REDIS_LOG_LEVEL:-notice} 
+            --logfile /var/log/redis/redis.log
+            --notify-keyspace-events Ex
+        healthcheck:
+            test:
+                ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-example}", "ping"]
+            interval: 10s
+            timeout: 5s
+            retries: 3
+        labels:
+            - "traefik.enable=false"
 
-  # PostgreSQL with PostGIS extension
-  postgres:
-    image: postgis/postgis:17-master
-    container_name: agrisa-postgres
-    restart: unless-stopped
-    ports:
-      - "9406:9406"
-    environment:
-      POSTGRES_DB: ${POSTGRES_DEFAULT_DB:-agrisa}
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_HOST: ${POSTGRES_HOST:-localhost}
-      POSTGRES_PORT: ${POSTGRES_PORT:-9406}
-      PGDATA: /var/lib/postgresql/data/pgdata
-    command: ["postgres", "-c", "port=9406"]
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./logs/postgres:/var/log/postgresql
-    networks:
-      - traefik-net
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DEFAULT_DB:-agrisa} -p 9406",
-        ]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-    labels:
-      - "traefik.enable=false"
+    # PostgreSQL with PostGIS extension
+    postgres:
+        image: postgis/postgis:17-master
+        container_name: agrisa-postgres
+        restart: unless-stopped
+        ports:
+            - "9406:9406"
+        environment:
+            POSTGRES_DB: ${POSTGRES_DEFAULT_DB:-agrisa}
+            POSTGRES_USER: ${POSTGRES_USER:-postgres}
+            POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+            POSTGRES_HOST: ${POSTGRES_HOST:-localhost}
+            POSTGRES_PORT: ${POSTGRES_PORT:-9406}
+            PGDATA: /var/lib/postgresql/data/pgdata
+        command: ["postgres", "-c", "port=9406"]
+        volumes:
+            - postgres_data:/var/lib/postgresql/data
+            - ./logs/postgres:/var/log/postgresql
+        networks:
+            - traefik-net
+        healthcheck:
+            test:
+                [
+                    "CMD-SHELL",
+                    "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DEFAULT_DB:-agrisa} -p 9406",
+                ]
+            interval: 10s
+            timeout: 5s
+            retries: 3
+        labels:
+            - "traefik.enable=false"
 
-  # Auth Service
-  auth-service:
-    build:
-      context: ./
-      dockerfile: services/auth-service/Dockerfile
-    container_name: agrisa-auth-service
-    restart: unless-stopped
-    ports:
-      - "${AUTH_SERVICE_PORT:-8083}:8083"
-    environment:
-      - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
-      - POSTGRES_PORT=${POSTGRES_PORT:-9406}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${AUTH_SERVICE_DB_NAME:-agrisa}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-example}
-      - SERVER_PORT=8083
-      - MINIO_ENDPOINT=${MINIO_URL}
-      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
-      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
-      - MINIO_LOCATION=${MINIO_LOCATION}
-      - MINIO_SECURE=${MINIO_SECURE}
-      - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
-      - FPT_EKYC_API_KEY=${FPT_EKYC_API_KEY}
-      - FPT_OCR_URL=${FPT_OCR_URL}
-      - FPT_FACE_LIVENESS_URL=${FPT_FACE_LIVENESS_URL}
-      - JWT_SECRET=${JWT_SECRET}
-      - ADMIN_PWD=${ADMIN_PWD}
-      - API_KEY=${API_KEY}
-      - CREATE_USER_PROFILE_URL=${CREATE_USER_PROFILE_URL}
-      - CREATE_USER_PROFILE_HOST_API=${CREATE_USER_PROFILE_HOST_API}
+    # Auth Service
+    auth-service:
+        build:
+            context: ./
+            dockerfile: services/auth-service/Dockerfile
+        container_name: agrisa-auth-service
+        restart: unless-stopped
+        ports:
+            - "${AUTH_SERVICE_PORT:-8083}:8083"
+        environment:
+            - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
+            - POSTGRES_PORT=${POSTGRES_PORT:-9406}
+            - POSTGRES_USER=${POSTGRES_USER:-postgres}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+            - POSTGRES_DB=${AUTH_SERVICE_DB_NAME:-agrisa}
+            - REDIS_HOST=redis
+            - REDIS_PORT=6379
+            - REDIS_PASSWORD=${REDIS_PASSWORD:-example}
+            - SERVER_PORT=8083
+            - MINIO_ENDPOINT=${MINIO_URL}
+            - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+            - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+            - MINIO_LOCATION=${MINIO_LOCATION}
+            - MINIO_SECURE=${MINIO_SECURE}
+            - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
+            - FPT_EKYC_API_KEY=${FPT_EKYC_API_KEY}
+            - FPT_OCR_URL=${FPT_OCR_URL}
+            - FPT_FACE_LIVENESS_URL=${FPT_FACE_LIVENESS_URL}
+            - JWT_SECRET=${JWT_SECRET}
+            - ADMIN_PWD=${ADMIN_PWD}
+            - API_KEY=${API_KEY}
+            - CREATE_USER_PROFILE_URL=${CREATE_USER_PROFILE_URL}
+            - CREATE_USER_PROFILE_HOST_API=${CREATE_USER_PROFILE_HOST_API}
 
-    volumes:
-      - ./logs/auth-service:/agrisa/log/auth_service
-      - ./services/auth-service/schema.sql:/app/schema.sql:ro
-    networks:
-      - traefik-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.auth-service.loadbalancer.server.port=8083"
+        volumes:
+            - ./logs/auth-service:/agrisa/log/auth_service
+            - ./services/auth-service/schema.sql:/app/schema.sql:ro
+        networks:
+            - traefik-net
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.services.auth-service.loadbalancer.server.port=8083"
 
-      - "traefik.http.routers.auth-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/public`)"
-      - "traefik.http.routers.auth-public.entrypoints=web"
-      - "traefik.http.routers.auth-public.service=auth-service"
-      - "traefik.http.routers.auth-public.middlewares=cors,api-limit"
+            - "traefik.http.routers.auth-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/public`)"
+            - "traefik.http.routers.auth-public.entrypoints=web"
+            - "traefik.http.routers.auth-public.service=auth-service"
+            - "traefik.http.routers.auth-public.middlewares=cors,api-limit"
 
-      - "traefik.http.routers.auth-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/protected`)"
-      - "traefik.http.routers.auth-protected.entrypoints=web"
-      - "traefik.http.routers.auth-protected.service=auth-service"
-      - "traefik.http.routers.auth-protected.middlewares=cors,auth-middleware, api-limit"
+            - "traefik.http.routers.auth-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/auth/protected`)"
+            - "traefik.http.routers.auth-protected.entrypoints=web"
+            - "traefik.http.routers.auth-protected.service=auth-service"
+            - "traefik.http.routers.auth-protected.middlewares=cors,auth-middleware, api-limit"
 
-      - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
-      - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
-      - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
+            - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
+            - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
+            - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
 
-  # Satellite Data Service
-  satellite-data-service:
-    build:
-      context: ./
-      dockerfile: services/satellite-data-service/Dockerfile
-    container_name: agrisa-satellite-data-service
-    restart: unless-stopped
-    ports:
-      - "${SATELLITE_DATA_SERVICE_PORT:-8084}:8000"
-    environment:
-      - APP_NAME=Agrisa Satellite Data Service
-      - APP_VERSION=${SATELLITE_DATA_SERVICE_VERSION:-1.0.0}
-      - DEBUG=false
-      - HOST=0.0.0.0
-      - PORT=8000
-      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:${POSTGRES_PORT:-9406}/${POSTGRES_DEFAULT_DB:-agrisa}
-      - MINIO_ENDPOINT=${MINIO_URL}
-      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
-      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
-      - MINIO_SECURE=${MINIO_SECURE}
-      - MINIO_BUCKET_NAME=${SATELLITE_BUCKET_NAME:-satellite-data}
-      - GEE_SERVICE_ACCOUNT_KEY=/app/secrets/agrisa_keys.json
-      - GEE_PROJECT_ID=${GEE_PROJECT_ID}
-      - DEFAULT_IMAGE_SCALE=30
-      - MAX_IMAGE_PIXELS=10000000
-      - CACHE_EXPIRY_HOURS=24
-      - LOG_LEVEL=INFO
-    volumes:
-      - ./logs/satellite-data-service:/app/log
-      - ./${GEE_SERVICE_ACCOUNT_KEY_LOCATION}:/app/secrets/agrisa_keys.json
-    networks:
-      - traefik-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.satellite-data-service.loadbalancer.server.port=8000"
-      - "traefik.http.routers.satellite-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/satellite/public`)"
-      - "traefik.http.routers.satellite-public.entrypoints=web"
-      - "traefik.http.routers.satellite-public.service=satellite-data-service"
-      - "traefik.http.routers.satellite-public.middlewares=cors, api-limit"
-      - "traefik.http.routers.satellite-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/satellite/protected`)"
-      - "traefik.http.routers.satellite-protected.entrypoints=web"
-      - "traefik.http.routers.satellite-protected.service=satellite-data-service"
-      - "traefik.http.routers.satellite-protected.middlewares=cors,auth-middleware, api-limit"
+    # Satellite Data Service
+    satellite-data-service:
+        build:
+            context: ./
+            dockerfile: services/satellite-data-service/Dockerfile
+        container_name: agrisa-satellite-data-service
+        restart: unless-stopped
+        ports:
+            - "${SATELLITE_DATA_SERVICE_PORT:-8084}:8000"
+        environment:
+            - APP_NAME=Agrisa Satellite Data Service
+            - APP_VERSION=${SATELLITE_DATA_SERVICE_VERSION:-1.0.0}
+            - DEBUG=false
+            - HOST=0.0.0.0
+            - PORT=8000
+            - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:${POSTGRES_PORT:-9406}/${POSTGRES_DEFAULT_DB:-agrisa}
+            - MINIO_ENDPOINT=${MINIO_URL}
+            - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+            - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+            - MINIO_SECURE=${MINIO_SECURE}
+            - MINIO_BUCKET_NAME=${SATELLITE_BUCKET_NAME:-satellite-data}
+            - GEE_SERVICE_ACCOUNT_KEY=/app/secrets/agrisa_keys.json
+            - GEE_PROJECT_ID=${GEE_PROJECT_ID}
+            - DEFAULT_IMAGE_SCALE=30
+            - MAX_IMAGE_PIXELS=10000000
+            - CACHE_EXPIRY_HOURS=24
+            - LOG_LEVEL=INFO
+        volumes:
+            - ./logs/satellite-data-service:/app/log
+            - ./${GEE_SERVICE_ACCOUNT_KEY_LOCATION}:/app/secrets/agrisa_keys.json
+        networks:
+            - traefik-net
+        depends_on:
+            postgres:
+                condition: service_healthy
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.services.satellite-data-service.loadbalancer.server.port=8000"
+            - "traefik.http.routers.satellite-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/satellite/public`)"
+            - "traefik.http.routers.satellite-public.entrypoints=web"
+            - "traefik.http.routers.satellite-public.service=satellite-data-service"
+            - "traefik.http.routers.satellite-public.middlewares=cors, api-limit"
+            - "traefik.http.routers.satellite-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/satellite/protected`)"
+            - "traefik.http.routers.satellite-protected.entrypoints=web"
+            - "traefik.http.routers.satellite-protected.service=satellite-data-service"
+            - "traefik.http.routers.satellite-protected.middlewares=cors,auth-middleware, api-limit"
 
-  # Payment Service
-  payment-service:
-    build:
-      context: ./
-      dockerfile: services/payment-service/Dockerfile
-    container_name: agrisa-payment-service
-    restart: unless-stopped
-    ports:
-      - "${PAYMENT_SERVICE_PORT:-8085}:3000"
-    environment:
-      - BUN_ENV=production
-      - PAYOS_CLIENT_ID=${PAYOS_CLIENT_ID}
-      - PAYOS_API_KEY=${PAYOS_API_KEY}
-      - PAYOS_CHECKSUM_KEY=${PAYOS_CHECKSUM_KEY}
-      - PAYOS_EXPIRED_DURATION=${PAYOS_EXPIRED_DURATION:-60*5}
-      - PAYMENT_CRON_EXPRESSION=${PAYMENT_CRON_EXPRESSION:-"0 6 * * *"}
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
-      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
-      - RABBITMQ_USER=${RABBITMQ_USER}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
-    volumes:
-      - ./logs/payment-service:/app/log
-    networks:
-      - traefik-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.payment-service.loadbalancer.server.port=3000"
-      - "traefik.http.routers.payment-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/payment/public`)"
-      - "traefik.http.routers.payment-public.entrypoints=web"
-      - "traefik.http.routers.payment-public.service=payment-service"
-      - "traefik.http.routers.payment-public.middlewares=cors, api-limit"
-      - "traefik.http.routers.payment-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/payment/protected`)"
-      - "traefik.http.routers.payment-protected.entrypoints=web"
-      - "traefik.http.routers.payment-protected.service=payment-service"
-      - "traefik.http.routers.payment-protected.middlewares=cors,auth-middleware, api-limit"
+    # Payment Service
+    payment-service:
+        build:
+            context: ./
+            dockerfile: services/payment-service/Dockerfile
+        container_name: agrisa-payment-service
+        restart: unless-stopped
+        ports:
+            - "${PAYMENT_SERVICE_PORT:-8085}:3000"
+        environment:
+            - BUN_ENV=production
+            - PAYOS_CLIENT_ID=${PAYOS_CLIENT_ID}
+            - PAYOS_API_KEY=${PAYOS_API_KEY}
+            - PAYOS_CHECKSUM_KEY=${PAYOS_CHECKSUM_KEY}
+            - PAYOS_EXPIRED_DURATION=${PAYOS_EXPIRED_DURATION:-60*5}
+            - PAYMENT_CRON_EXPRESSION=${PAYMENT_CRON_EXPRESSION:-"0 6 * * *"}
+            - POSTGRES_HOST=${POSTGRES_HOST}
+            - POSTGRES_PORT=${POSTGRES_PORT}
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            - RABBITMQ_HOST=${RABBITMQ_HOST:-rabbitmq}
+            - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+            - RABBITMQ_USER=${RABBITMQ_USER}
+            - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+        volumes:
+            - ./logs/payment-service:/app/log
+        networks:
+            - traefik-net
+        depends_on:
+            postgres:
+                condition: service_healthy
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.services.payment-service.loadbalancer.server.port=3000"
+            - "traefik.http.routers.payment-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/payment/public`)"
+            - "traefik.http.routers.payment-public.entrypoints=web"
+            - "traefik.http.routers.payment-public.service=payment-service"
+            - "traefik.http.routers.payment-public.middlewares=cors, api-limit"
+            - "traefik.http.routers.payment-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/payment/protected`)"
+            - "traefik.http.routers.payment-protected.entrypoints=web"
+            - "traefik.http.routers.payment-protected.service=payment-service"
+            - "traefik.http.routers.payment-protected.middlewares=cors,auth-middleware, api-limit"
 
-  # Weather Service
-  weather-service:
-    build:
-      context: ./
-      dockerfile: services/weather-service/Dockerfile
-    container_name: agrisa-weather-service
-    restart: unless-stopped
-    ports:
-      - "${WEATHER_SERVICE_PORT:-8086}:8086"
-    environment:
-      - WEATHER_API_KEY=${WEATHER_API_KEY}
-      - XWEATHER_CLIENT_ID=${XWEATHER_CLIENT_ID}
-      - XWEATHER_CLIENT_SECRET=${XWEATHER_CLIENT_SECRET}
-    volumes:
-      - ./logs/weather-service:/agrisa/log/weather_service
-    networks:
-      - traefik-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.weather-service.loadbalancer.server.port=8086"
-      - "traefik.http.routers.weather-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/public`)"
-      - "traefik.http.routers.weather-public.entrypoints=web"
-      - "traefik.http.routers.weather-public.service=weather-service"
-      - "traefik.http.routers.weather-public.middlewares=cors, api-limit"
-      - "traefik.http.routers.weather-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/protected`)"
-      - "traefik.http.routers.weather-protected.entrypoints=web"
-      - "traefik.http.routers.weather-protected.service=weather-service"
-      - "traefik.http.routers.weather-protected.middlewares=cors,auth-middleware, api-limit"
+    # Weather Service
+    weather-service:
+        build:
+            context: ./
+            dockerfile: services/weather-service/Dockerfile
+        container_name: agrisa-weather-service
+        restart: unless-stopped
+        ports:
+            - "${WEATHER_SERVICE_PORT:-8086}:8086"
+        environment:
+            - WEATHER_API_KEY=${WEATHER_API_KEY}
+            - XWEATHER_CLIENT_ID=${XWEATHER_CLIENT_ID}
+            - XWEATHER_CLIENT_SECRET=${XWEATHER_CLIENT_SECRET}
+        volumes:
+            - ./logs/weather-service:/agrisa/log/weather_service
+        networks:
+            - traefik-net
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.services.weather-service.loadbalancer.server.port=8086"
+            - "traefik.http.routers.weather-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/public`)"
+            - "traefik.http.routers.weather-public.entrypoints=web"
+            - "traefik.http.routers.weather-public.service=weather-service"
+            - "traefik.http.routers.weather-public.middlewares=cors, api-limit"
+            - "traefik.http.routers.weather-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/weather/protected`)"
+            - "traefik.http.routers.weather-protected.entrypoints=web"
+            - "traefik.http.routers.weather-protected.service=weather-service"
+            - "traefik.http.routers.weather-protected.middlewares=cors,auth-middleware, api-limit"
 
-  notification-service:
-    build:
-      context: ./
-      dockerfile: services/notification-service/Dockerfile
-    container_name: agrisa-notification-service
-    restart: unless-stopped
-    ports:
-      - "${NOTIFICATION_SERVICE_PORT:-8083}:8088"
-    environment:
-      - NOTIFICATION_SERVICE_PORT=8088
-      - GOOGLE_USERNAME=${GOOGLE_USERNAME}
-      - GOOGLE_PASSWORD=${GOOGLE_PASSWORD}
-      - FIREBASE_SERVICE_ACCOUNT_KEY=/app/secrets/agrisa-firebase.json
+    notification-service:
+        build:
+            context: ./
+            dockerfile: services/notification-service/Dockerfile
+        container_name: agrisa-notification-service
+        restart: unless-stopped
+        ports:
+            - "${NOTIFICATION_SERVICE_PORT:-8083}:8088"
+        environment:
+            - NOTIFICATION_SERVICE_PORT=8088
+            - GOOGLE_USERNAME=${GOOGLE_USERNAME}
+            - GOOGLE_PASSWORD=${GOOGLE_PASSWORD}
+            - FIREBASE_SERVICE_ACCOUNT_KEY=/app/secrets/agrisa-firebase.json
 
-    volumes:
-      - ./logs/notification_service:/agrisa/log/notification_service
-      - ./${FIREBASE_SERVICE_ACCOUNT_KEY_LOCATION}:/app/secrets/agrisa-firebase.json
-    networks:
-      - traefik-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.notification-service.loadbalancer.server.port=8088"
+        volumes:
+            - ./logs/notification_service:/agrisa/log/notification_service
+            - ./${FIREBASE_SERVICE_ACCOUNT_KEY_LOCATION}:/app/secrets/agrisa-firebase.json
+        networks:
+            - traefik-net
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.services.notification-service.loadbalancer.server.port=8088"
 
-      - "traefik.http.routers.notification-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/public`)"
-      - "traefik.http.routers.notification-public.entrypoints=web"
-      - "traefik.http.routers.notification-public.service=notification-service"
-      - "traefik.http.routers.notification-public.middlewares=cors, api-limit"
+            - "traefik.http.routers.notification-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/public`)"
+            - "traefik.http.routers.notification-public.entrypoints=web"
+            - "traefik.http.routers.notification-public.service=notification-service"
+            - "traefik.http.routers.notification-public.middlewares=cors, api-limit"
 
-      - "traefik.http.routers.notification-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/protected`)"
-      - "traefik.http.routers.notification-protected.entrypoints=web"
-      - "traefik.http.routers.notification-protected.service=notification-service"
-      - "traefik.http.routers.notification-protected.middlewares=cors,auth-middleware, api-limit"
+            - "traefik.http.routers.notification-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/notification/protected`)"
+            - "traefik.http.routers.notification-protected.entrypoints=web"
+            - "traefik.http.routers.notification-protected.service=notification-service"
+            - "traefik.http.routers.notification-protected.middlewares=cors,auth-middleware, api-limit"
 
-  # Profile Service
-  profile-service:
-    build:
-      context: ./
-      dockerfile: services/profile-service/Dockerfile
-    container_name: agrisa-profile-service
-    restart: unless-stopped
-    ports:
-      - "${PROFILE_SERVICE_PORT:-8087}:8087"
-    environment:
-      - POSTGRES_HOST=${POSTGRES_HOST:-rabbitmq}
-      - POSTGRES_PORT=${POSTGRES_PORT:-9406}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${PROFILE_SERVICE_DB_NAME:-profile_service}
-      - SERVER_PORT=8087
-      - MINIO_ENDPOINT=${MINIO_URL}
-      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
-      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
-      - MINIO_LOCATION=${MINIO_LOCATION}
-      - MINIO_SECURE=${MINIO_SECURE}
-      - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
-    volumes:
-      - ./logs/profile-service:/agrisa/log/profile_service
-    networks:
-      - traefik-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.profile-service.loadbalancer.server.port=8087"
+    # Profile Service
+    profile-service:
+        build:
+            context: ./
+            dockerfile: services/profile-service/Dockerfile
+        container_name: agrisa-profile-service
+        restart: unless-stopped
+        ports:
+            - "${PROFILE_SERVICE_PORT:-8087}:8087"
+        environment:
+            - POSTGRES_HOST=${POSTGRES_HOST:-rabbitmq}
+            - POSTGRES_PORT=${POSTGRES_PORT:-9406}
+            - POSTGRES_USER=${POSTGRES_USER:-postgres}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+            - POSTGRES_DB=${PROFILE_SERVICE_DB_NAME:-profile_service}
+            - SERVER_PORT=8087
+            - MINIO_ENDPOINT=${MINIO_URL}
+            - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+            - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+            - MINIO_LOCATION=${MINIO_LOCATION}
+            - MINIO_SECURE=${MINIO_SECURE}
+            - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
+        volumes:
+            - ./logs/profile-service:/agrisa/log/profile_service
+        networks:
+            - traefik-net
+        depends_on:
+            postgres:
+                condition: service_healthy
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.services.profile-service.loadbalancer.server.port=8087"
 
-      - "traefik.http.routers.profile-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/profile/public`)"
-      - "traefik.http.routers.profile-public.entrypoints=web"
-      - "traefik.http.routers.profile-public.service=profile-service"
-      - "traefik.http.routers.profile-public.middlewares=cors, api-limit"
+            - "traefik.http.routers.profile-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/profile/public`)"
+            - "traefik.http.routers.profile-public.entrypoints=web"
+            - "traefik.http.routers.profile-public.service=profile-service"
+            - "traefik.http.routers.profile-public.middlewares=cors, api-limit"
 
-      - "traefik.http.routers.profile-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/profile/protected`)"
-      - "traefik.http.routers.profile-protected.entrypoints=web"
-      - "traefik.http.routers.profile-protected.service=profile-service"
-      - "traefik.http.routers.profile-protected.middlewares=cors,auth-middleware, api-limit"
+            - "traefik.http.routers.profile-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/profile/protected`)"
+            - "traefik.http.routers.profile-protected.entrypoints=web"
+            - "traefik.http.routers.profile-protected.service=profile-service"
+            - "traefik.http.routers.profile-protected.middlewares=cors,auth-middleware, api-limit"
 
-  policy-service:
-    build:
-      context: ./
-      dockerfile: services/policy-service/Dockerfile
-    container_name: agrisa-policy-service
-    restart: unless-stopped
-    ports:
-      - "${POLICY_SERVICE_PORT:-8083}:8089"
-    environment:
-      - PORT=8089
-      - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
-      - POSTGRES_PORT=${POSTGRES_PORT:-9406}
-      - POSTGRES_USER=${POSTGRES_USER:-postgres}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
-      - POSTGRES_DB=${POLICY_SERVICE_DB_NAME:-agrisa}
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-example}
-      - MINIO_ENDPOINT=${MINIO_URL}
-      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
-      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
-      - MINIO_LOCATION=${MINIO_LOCATION}
-      - MINIO_SECURE=${MINIO_SECURE}
-      - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
-      - GEMINI_KEY=${GEMINI_KEY}
-      - GEMINI_FLASH_MODEL=${GEMINI_FLASH_MODEL}
-      - GEMINI_PRO_MODEL=${GEMINI_PRO_MODEL}
-      - API_KEY=${API_KEY}
-      - VERIFY_NATIONAL_ID_URL=${VERIFY_NATIONAL_ID_URL}
-      - VERIFY_LAND_CERTIFICATE_HOST_API=${VERIFY_LAND_CERTIFICATE_HOST_API}
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_USER=admin
-      - RABBITMQ_PWD=${RABBITMQ_PASSWORD}
-      - RABBITMQ_PORT=5672
+    policy-service:
+        build:
+            context: ./
+            dockerfile: services/policy-service/Dockerfile
+        container_name: agrisa-policy-service
+        restart: unless-stopped
+        ports:
+            - "${POLICY_SERVICE_PORT:-8083}:8089"
+        environment:
+            - PORT=8089
+            - POSTGRES_HOST=${POSTGRES_HOST:-localhost}
+            - POSTGRES_PORT=${POSTGRES_PORT:-9406}
+            - POSTGRES_USER=${POSTGRES_USER:-postgres}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+            - POSTGRES_DB=${POLICY_SERVICE_DB_NAME:-agrisa}
+            - REDIS_HOST=redis
+            - REDIS_PORT=6379
+            - REDIS_PASSWORD=${REDIS_PASSWORD:-example}
+            - MINIO_ENDPOINT=${MINIO_URL}
+            - MINIO_ACCESS_KEY=${MINIO_ROOT_USER}
+            - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD}
+            - MINIO_LOCATION=${MINIO_LOCATION}
+            - MINIO_SECURE=${MINIO_SECURE}
+            - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
+            - GEMINI_KEY=${GEMINI_KEY}
+            - GEMINI_FLASH_MODEL=${GEMINI_FLASH_MODEL}
+            - GEMINI_PRO_MODEL=${GEMINI_PRO_MODEL}
+            - API_KEY=${API_KEY}
+            - VERIFY_NATIONAL_ID_URL=${VERIFY_NATIONAL_ID_URL}
+            - VERIFY_LAND_CERTIFICATE_HOST_API=${VERIFY_LAND_CERTIFICATE_HOST_API}
+            - RABBITMQ_HOST=rabbitmq
+            - RABBITMQ_USER=admin
+            - RABBITMQ_PWD=${RABBITMQ_PASSWORD}
+            - RABBITMQ_PORT=5672
 
-    volumes:
-      - ./logs/policy_service:/agrisa/log/policy_service
-      - ./services/policy-service/schema.sql:/app/schema.sql:ro
-    networks:
-      - traefik-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.policy-service.loadbalancer.server.port=8089"
+        volumes:
+            - ./logs/policy_service:/agrisa/log/policy_service
+            - ./services/policy-service/schema.sql:/app/schema.sql:ro
+        networks:
+            - traefik-net
+        depends_on:
+            postgres:
+                condition: service_healthy
+            redis:
+                condition: service_healthy
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.services.policy-service.loadbalancer.server.port=8089"
 
-      - "traefik.http.routers.policy-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/policy/public`)"
-      - "traefik.http.routers.policy-public.entrypoints=web"
-      - "traefik.http.routers.policy-public.service=policy-service"
-      - "traefik.http.routers.policy-public.middlewares=cors, api-limit"
+            - "traefik.http.routers.policy-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/policy/public`)"
+            - "traefik.http.routers.policy-public.entrypoints=web"
+            - "traefik.http.routers.policy-public.service=policy-service"
+            - "traefik.http.routers.policy-public.middlewares=cors, api-limit"
 
-      - "traefik.http.routers.policy-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/policy/protected`)"
-      - "traefik.http.routers.policy-protected.entrypoints=web"
-      - "traefik.http.routers.policy-protected.service=policy-service"
-      - "traefik.http.routers.policy-protected.middlewares=cors,auth-middleware, api-limit"
+            - "traefik.http.routers.policy-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/policy/protected`)"
+            - "traefik.http.routers.policy-protected.entrypoints=web"
+            - "traefik.http.routers.policy-protected.service=policy-service"
+            - "traefik.http.routers.policy-protected.middlewares=cors,auth-middleware, api-limit"
 
-  push-noti-service:
-    build:
-      context: ./
-      dockerfile: services/push-noti-service/Dockerfile
-    container_name: agrisa-push-noti-service
-    restart: unless-stopped
-    ports:
-      - "${PORT:-8090}:8090"
-    environment:
-      - BUN_ENV=production
-      - POSTGRES_HOST=${POSTGRES_HOST}
-      - POSTGRES_PORT=${POSTGRES_PORT}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - RABBITMQ_HOST=rabbitmq
-      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
-      - RABBITMQ_USER=${RABBITMQ_USER}
-      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
-      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
-      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
-      - VAPID_SUBJECT=${VAPID_SUBJECT}
-      - PORT=8090
-    volumes:
-      - ./logs/push-noti-service:/agrisa/log/push_noti_service
-    networks:
-      - traefik-net
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.services.push-noti-service.loadbalancer.server.port=8090"
-      - "traefik.http.routers.push-noti-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/push-noti/public`)"
-      - "traefik.http.routers.push-noti-public.entrypoints=web"
-      - "traefik.http.routers.push-noti-public.service=push-noti-service"
-      - "traefik.http.routers.push-noti-public.middlewares=cors,api-limit"
-      - "traefik.http.routers.push-noti-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/push-noti/protected`)"
-      - "traefik.http.routers.push-noti-protected.entrypoints=web"
-      - "traefik.http.routers.push-noti-protected.service=push-noti-service"
-      - "traefik.http.routers.push-noti-protected.middlewares=cors,auth-middleware,api-limit"
+    push-noti-service:
+        build:
+            context: ./
+            dockerfile: services/push-noti-service/Dockerfile
+        container_name: agrisa-push-noti-service
+        restart: unless-stopped
+        ports:
+            - "${PORT:-8090}:8090"
+        environment:
+            - BUN_ENV=production
+            - POSTGRES_HOST=${POSTGRES_HOST}
+            - POSTGRES_PORT=${POSTGRES_PORT}
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            - RABBITMQ_HOST=rabbitmq
+            - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+            - RABBITMQ_USER=${RABBITMQ_USER}
+            - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+            - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+            - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+            - VAPID_SUBJECT=${VAPID_SUBJECT}
+            - PORT=8090
+        volumes:
+            - ./logs/push-noti-service:/agrisa/log/push_noti_service
+        networks:
+            - traefik-net
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.services.push-noti-service.loadbalancer.server.port=8090"
+            - "traefik.http.routers.push-noti-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/push-noti/public`)"
+            - "traefik.http.routers.push-noti-public.entrypoints=web"
+            - "traefik.http.routers.push-noti-public.service=push-noti-service"
+            - "traefik.http.routers.push-noti-public.middlewares=cors,api-limit"
+            - "traefik.http.routers.push-noti-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/push-noti/protected`)"
+            - "traefik.http.routers.push-noti-protected.entrypoints=web"
+            - "traefik.http.routers.push-noti-protected.service=push-noti-service"
+            - "traefik.http.routers.push-noti-protected.middlewares=cors,auth-middleware,api-limit"
+
+    noti-service:
+        build:
+            context: ./
+            dockerfile: services/noti-service/Dockerfile
+        container_name: agrisa-noti-service
+        restart: unless-stopped
+        ports:
+            - "${PORT:-8091}:8091"
+        environment:
+            - BUN_ENV=production
+            - POSTGRES_HOST=${POSTGRES_HOST}
+            - POSTGRES_PORT=${POSTGRES_PORT}
+            - POSTGRES_USER=${POSTGRES_USER}
+            - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+            - RABBITMQ_HOST=rabbitmq
+            - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+            - RABBITMQ_USER=${RABBITMQ_USER}
+            - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+            - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+            - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+            - VAPID_SUBJECT=${VAPID_SUBJECT}
+            - PORT=8091
+        volumes:
+            - ./logs/noti-service:/agrisa/log/noti_service
+        networks:
+            - traefik-net
+        depends_on:
+            rabbitmq:
+                condition: service_healthy
+        labels:
+            - "traefik.enable=true"
+            - "traefik.http.services.noti-service.loadbalancer.server.port=8091"
+            - "traefik.http.routers.noti-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/noti/public`)"
+            - "traefik.http.routers.noti-public.entrypoints=web"
+            - "traefik.http.routers.noti-public.service=noti-service"
+            - "traefik.http.routers.noti-public.middlewares=cors,api-limit"
+            - "traefik.http.routers.noti-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/noti/protected`)"
+            - "traefik.http.routers.noti-protected.entrypoints=web"
+            - "traefik.http.routers.noti-protected.service=noti-service"
+            - "traefik.http.routers.noti-protected.middlewares=cors,auth-middleware,api-limit"
 
 networks:
-  traefik-net:
-    driver: bridge
-    name: agrisa_traefik-net
+    traefik-net:
+        driver: bridge
+        name: agrisa_traefik-net
 
 volumes:
-  mongodb_data:
-  redis_data:
-  postgres_data:
-  rabbitmq_data:
-  minio_data:
+    mongodb_data:
+    redis_data:
+    postgres_data:
+    rabbitmq_data:
+    minio_data:

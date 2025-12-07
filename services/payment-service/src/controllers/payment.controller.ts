@@ -320,8 +320,9 @@ export class PaymentController {
     return this.paymentService.findByIdAndUserId(id, user_id);
   }
 
-  @Post('public/payout')
+  @Post('protected/payout')
   async createPayout(
+    @Headers('x-user-id') created_by: string,
     @Body()
     body: CreatePayoutData,
   ) {
@@ -344,7 +345,7 @@ export class PaymentController {
       amount,
       description: description || 'Chi trả bảo hiểm',
       status: 'pending',
-      user_id,
+      user_id: created_by,
       type,
     });
 
@@ -474,5 +475,18 @@ export class PaymentController {
     @Param('id') id: string,
   ) {
     return this.payoutService.findByIdAndUserId(id, user_id);
+  }
+
+  @Get('protected/total')
+  getTotalPayments(
+    @Headers('x-user-id') user_id: string,
+    @Param('type') type: string,
+  ) {
+    return this.paymentService.getTotalAmountByUserAndType(user_id, type);
+  }
+
+  @Get('protected/total/admin')
+  getTotalPaymentsAdmin(@Param('type') type: string) {
+    return this.paymentService.getTotalAmountByType(type);
   }
 }

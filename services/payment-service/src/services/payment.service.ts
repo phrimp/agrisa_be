@@ -19,4 +19,6 @@ export interface PaymentService {
     status?: string[],
   ): Promise<{ items: Payment[]; total: number }>;
   findExpired(): Promise<Payment[]>;
+  getTotalAmountByUserAndType(user_id: string, type: string): Promise<number>;
+  getTotalAmountByType(type: string): Promise<number>;
 }
