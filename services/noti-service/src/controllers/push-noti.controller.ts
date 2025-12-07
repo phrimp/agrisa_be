@@ -1,7 +1,7 @@
 import { SendPayloadDto } from '@/libs/types/send-payload.dto';
 import { SubscribeDto } from '@/libs/types/subscribe.dto';
 import { PushNotiService } from '@/services/push-noti.service';
-import { Body, Controller, Headers, Post } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Post, Query } from '@nestjs/common';
 
 @Controller('noti')
 export class PushNotiController {
@@ -55,5 +55,10 @@ export class PushNotiController {
   @Post('public/send')
   async send(@Body() data: SendPayloadDto) {
     return this.pushNotiService.send(data);
+  }
+
+  @Get('protected/validate')
+  async me(@Headers('x-user-id') userId: string, @Query('platform') platform: string) {
+    return this.pushNotiService.isSubcribed(userId, platform);
   }
 }

@@ -198,4 +198,11 @@ export class PushNotiService {
       platform: ePlatform.ios,
     });
   }
+
+  async isSubcribed(userId: string, platform: string): Promise<boolean> {
+    const existing = await this.subscriberRepository.findOne({
+      where: { user_id: userId, platform },
+    });
+    return !!existing;
+  }
 }

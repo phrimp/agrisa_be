@@ -1,0 +1,246 @@
+{
+  "info": {
+    "name": "Noti Service API",
+    "description": "Postman collection for Noti Service endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://agrisa-api.phrimp.io.vn/noti",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "test-user-id",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Subscribe",
+      "item": [
+        {
+          "name": "Subscribe Web",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"endpoint\": \"https://example.com/push\",\n  \"p256dh\": \"p256dh_key\",\n  \"auth\": \"auth_key\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/protected/subscribe/web",
+              "host": ["{{base_url}}"],
+              "path": ["protected", "subscribe", "web"]
+            }
+          }
+        },
+        {
+          "name": "Subscribe Android",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"expoToken\": \"ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/protected/subscribe/android",
+              "host": ["{{base_url}}"],
+              "path": ["protected", "subscribe", "android"]
+            }
+          }
+        },
+        {
+          "name": "Subscribe iOS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"endpoint\": \"wss://example.com/socket\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/protected/subscribe/ios",
+              "host": ["{{base_url}}"],
+              "path": ["protected", "subscribe", "ios"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Unsubscribe",
+      "item": [
+        {
+          "name": "Unsubscribe Web",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/protected/unsubscribe/web",
+              "host": ["{{base_url}}"],
+              "path": ["protected", "unsubscribe", "web"]
+            }
+          }
+        },
+        {
+          "name": "Unsubscribe Android",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/protected/unsubscribe/android",
+              "host": ["{{base_url}}"],
+              "path": ["protected", "unsubscribe", "android"]
+            }
+          }
+        },
+        {
+          "name": "Unsubscribe iOS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/protected/unsubscribe/ios",
+              "host": ["{{base_url}}"],
+              "path": ["protected", "unsubscribe", "ios"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Send Notification",
+      "item": [
+        {
+          "name": "Send Web",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Test Notification\",\n  \"body\": \"This is a test message\",\n  \"lstUserIds\": [\"{{user_id}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/public/send/web",
+              "host": ["{{base_url}}"],
+              "path": ["public", "send", "web"]
+            }
+          }
+        },
+        {
+          "name": "Send Android",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Test Notification\",\n  \"body\": \"This is a test message\",\n  \"lstUserIds\": [\"{{user_id}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/public/send/android",
+              "host": ["{{base_url}}"],
+              "path": ["public", "send", "android"]
+            }
+          }
+        },
+        {
+          "name": "Send iOS",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Test Notification\",\n  \"body\": \"This is a test message\",\n  \"lstUserIds\": [\"{{user_id}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/public/send/ios",
+              "host": ["{{base_url}}"],
+              "path": ["public", "send", "ios"]
+            }
+          }
+        },
+        {
+          "name": "Send All Platforms",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Test Notification\",\n  \"body\": \"This is a test message\",\n  \"lstUserIds\": [\"{{user_id}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/public/send",
+              "host": ["{{base_url}}"],
+              "path": ["public", "send"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
