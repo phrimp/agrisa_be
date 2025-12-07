@@ -1016,6 +1016,9 @@ func (s *InsurancePartnerService) GetPrivateProfile(userID string) (*models.Priv
 	if err != nil {
 		return nil, err
 	}
+	if (staff.PartnerID == nil) || (staff.PartnerID.String() == "") {
+		return nil, fmt.Errorf("forbidden: user is not associated with any insurance partner")
+	}
 	partnerID := staff.PartnerID
 	return s.repo.GetPrivateProfile(partnerID.String())
 }
