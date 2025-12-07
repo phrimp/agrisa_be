@@ -7,32 +7,32 @@ import { Body, Controller, Headers, Post } from '@nestjs/common';
 export class PushNotiController {
   constructor(private readonly pushNotiService: PushNotiService) {}
 
-  @Post('private/subscribe/web')
+  @Post('protected/subscribe/web')
   async subscribe(@Headers('x-user-id') userId: string, @Body() data: SubscribeDto) {
     return this.pushNotiService.subscribeWeb(userId, data);
   }
 
-  @Post('private/subscribe/android')
+  @Post('protected/subscribe/android')
   async subscribeAndroid(@Headers('x-user-id') userId: string, @Body() data: SubscribeDto) {
     return this.pushNotiService.subscribeAndroid(userId, data);
   }
 
-  @Post('private/subscribe/ios')
+  @Post('protected/subscribe/ios')
   async subscribeIOS(@Headers('x-user-id') userId: string, @Body() data: SubscribeDto) {
     return this.pushNotiService.subscribeIOS(userId, data);
   }
 
-  @Post('private/unsubscribe/web')
+  @Post('protected/unsubscribe/web')
   async unsubscribeWeb(@Headers('x-user-id') userId: string) {
     return this.pushNotiService.unsubscribeWeb(userId);
   }
 
-  @Post('private/unsubscribe/android')
+  @Post('protected/unsubscribe/android')
   async unsubscribeAndroid(@Headers('x-user-id') userId: string) {
     return this.pushNotiService.unsubscribeAndroid(userId);
   }
 
-  @Post('private/unsubscribe/ios')
+  @Post('protected/unsubscribe/ios')
   async unsubscribeIOS(@Headers('x-user-id') userId: string) {
     return this.pushNotiService.unsubscribeIOS(userId);
   }

@@ -5,7 +5,7 @@ export const databaseConfig: TypeOrmModuleOptions = {
   host: process.env.POSTGRES_HOST || 'localhost',
   port: process.env.POSTGRES_PORT ? Number(process.env.POSTGRES_PORT) : 5432,
   username: process.env.POSTGRES_USER || 'postgres',
-  password: process.env.POSTGRES_PASSWORD || 'Thinh2k4',
+  password: process.env.POSTGRES_PASSWORD || '123456',
   database: 'noti_service',
   entities: [__dirname + '/../**/*.entity{.ts,.js}'],
   synchronize: process.env.BUN_ENV !== 'production',
