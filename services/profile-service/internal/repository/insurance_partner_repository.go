@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"log"
 	"log/slog"
@@ -28,6 +29,7 @@ type IInsurancePartnerRepository interface {
 	ProcessRequestReview(request models.ProcessRequestReviewDTO) error
 	GetDeletionRequestsByRequestID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error)
 	UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string) error
+	GetLatestDeletionRequestByRequesterID(requestedBy string) (*models.PartnerDeletionRequest, error)
 }
 type InsurancePartnerRepository struct {
 	db *sqlx.DB
@@ -622,4 +624,25 @@ func (r *InsurancePartnerRepository) ProcessRequestReview(request models.Process
 		request.ReviewNote,
 		request.RequestID,
 	)
+}
+
+func (r *InsurancePartnerRepository) GetLatestDeletionRequestByRequesterID(requestedBy string) (*models.PartnerDeletionRequest, error) {
+	query := `
+		SELECT *
+		FROM partner_deletion_requests
+		WHERE requested_by = $1
+		ORDER BY requested_at DESC
+		LIMIT 1
+	`
+
+	var request models.PartnerDeletionRequest
+	err := r.db.Get(&request, query, requestedBy)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("error querying partner deletion request: %w", err)
+	}
+
+	return &request, nil
 }

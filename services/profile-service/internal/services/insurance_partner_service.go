@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 	"utils"
 
+	"github.com/google/uuid"
 	"github.com/lib/pq"
 )
 
@@ -33,6 +34,7 @@ type IInsurancePartnerService interface {
 	GetDeletionRequestsByRequesterID(requesterID string) ([]models.PartnerDeletionRequest, error)
 	ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.PartnerDeletionRequest, err error)
 	ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO) error
+	RevokePartnerDeletionRequest(requestID uuid.UUID, userID string, reviewNote string) error
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
@@ -1014,6 +1016,9 @@ func (s *InsurancePartnerService) GetPrivateProfile(userID string) (*models.Priv
 	if err != nil {
 		return nil, err
 	}
+	if (staff.PartnerID == nil) || (staff.PartnerID.String() == "") {
+		return nil, fmt.Errorf("forbidden: user is not associated with any insurance partner")
+	}
 	partnerID := staff.PartnerID
 	return s.repo.GetPrivateProfile(partnerID.String())
 }
@@ -1034,6 +1039,18 @@ func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.Partn
 	if err != nil {
 		return nil, err
 	}
+
+	// Fetch the most recent request. If its status is pending, block new requests and notify the user that the previous one is still being processed.
+	latestRequest, err := s.repo.GetLatestDeletionRequestByRequesterID(userProfile.UserID)
+	if err != nil && !strings.Contains(err.Error(), "no rows in result set") {
+		return nil, err
+	}
+
+	if latestRequest != nil && latestRequest.Status == models.DeletionRequestPending {
+		slog.Error("A pending deletion request already exists for this user", "userID", userProfile.UserID)
+		return nil, fmt.Errorf("invalid: a pending deletion request already exists. Please wait for it to be processed before submitting a new one")
+	}
+
 	req.RequestedBy = userProfile.UserID
 	req.RequestedByName = userProfile.FullName
 	req.Status = models.DeletionRequestPending
@@ -1095,7 +1112,7 @@ func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.
 	}
 
 	now := time.Now()
-	if now.Before(deletionRequest.CancellableUntil) {
+	if now.Before(deletionRequest.CancellableUntil) || now.Equal(deletionRequest.CancellableUntil) {
 		// loging time.now value
 		slog.Info("Current time: ", now)
 		// loging cancellable until time value
@@ -1105,5 +1122,49 @@ func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.
 	}
 
 	return deletionRequest, nil
+
+}
+
+func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UUID, userID string, reviewNote string) error {
+	// check if deletion request exists
+	deletionRequest, err := s.repo.GetDeletionRequestsByRequestID(requestID)
+	if err != nil {
+		return err
+	}
+
+	// check if the requester is the same as the user trying to revoke
+	if deletionRequest.RequestedBy != userID {
+		slog.Error("User is not authorized to revoke this deletion request", "userID", userID, "requestedBy", deletionRequest.RequestedBy)
+		return fmt.Errorf("forbidden: Bạn không có quyền hủy yêu cầu này")
+	}
+
+	// check if the request is still pending
+	if deletionRequest.Status != models.DeletionRequestPending {
+		slog.Error("Only pending requests can be revoked", "requestID", requestID, "status", deletionRequest.Status)
+		return fmt.Errorf("invalid: Chỉ các yêu cầu đang chờ xử lý mới có thể bị hủy")
+	}
+
+	// check if now is before cancellable until
+	now := time.Now()
+	if now.After(deletionRequest.CancellableUntil) {
+		slog.Error("Cannot revoke request after cancellable until time", "currentTime", now, "cancellableUntil", deletionRequest.CancellableUntil)
+		return fmt.Errorf("invalid: Không thể tự hủy yêu cầu sau thời gian có thể hủy")
+	}
+
+	// get revoker profile
+	revokerProfile, err := s.userProfileRepository.GetUserProfileByUserID(userID)
+	if err != nil {
+		return err
+	}
+
+	processRequestReview := models.ProcessRequestReviewDTO{
+		RequestID:      requestID,
+		Status:         models.DeletionRequestCancelled,
+		ReviewedByID:   userID,
+		ReviewedByName: revokerProfile.FullName,
+		ReviewNote:     reviewNote,
+	}
+
+	return s.repo.ProcessRequestReview(processRequestReview)
 
 }

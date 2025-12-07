@@ -366,7 +366,7 @@ func (s *FarmService) VerifyLandCertificate(verifyRequest models.VerifyLandCerti
 		fileuploadRquest = append(fileuploadRquest, fileUpload)
 	}
 
-	fileUploadedInfos, err := s.minioClient.FileProcessing(fileuploadRquest, context.Background(), []string{".jpg", ".png", ".jpeg", ".webp"}, 5, "mb")
+	fileUploadedInfos, err := s.minioClient.FileProcessing(fileuploadRquest, context.Background(), []string{".jpg", ".png", ".jpeg", ".webp"}, 100, "mb")
 	if err != nil {
 		return err
 	}
