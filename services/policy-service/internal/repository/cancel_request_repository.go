@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"context"
+	"fmt"
 	"policy-service/internal/models"
 	"time"
 
@@ -36,14 +38,14 @@ func (r *CancelRequestRepository) GetCancelRequestByID(id uuid.UUID) (*models.Ca
 	return &cancelRequest, nil
 }
 
-func (r *CancelRequestRepository) GetCancelRequestByPolicyID(id uuid.UUID) (*models.CancelRequest, error) {
-	var cancelRequest models.CancelRequest
+func (r *CancelRequestRepository) GetCancelRequestByPolicyID(id uuid.UUID) ([]models.CancelRequest, error) {
+	var cancelRequest []models.CancelRequest
 	query := `SELECT * FROM cancel_request WHERE registered_policy_id = $1 ORDER BY created_at DESC LIMIT 1`
 	err := r.db.Get(&cancelRequest, query, id)
 	if err != nil {
 		return nil, err
 	}
-	return &cancelRequest, nil
+	return cancelRequest, nil
 }
 
 func (r *CancelRequestRepository) GetCancelRequestByCancelRequestType(requestType models.CancelRequestType) (*models.CancelRequest, error) {
@@ -81,6 +83,31 @@ func (r *CancelRequestRepository) CreateNewCancelRequest(cancelRequest models.Ca
 	return nil
 }
 
+func (r *CancelRequestRepository) CreateNewCancelRequestTx(tx *sqlx.Tx, cancelRequest models.CancelRequest) error {
+	if cancelRequest.ID == uuid.Nil {
+		cancelRequest.ID = uuid.New()
+	}
+
+	cancelRequest.CreatedAt = time.Now()
+
+	query := `
+		INSERT INTO cancel_request (
+			id, registered_policy_id, cancel_request_type, reason, evidence,
+			status, requested_by, requested_at, compensate_amount,
+			reviewed_by, reviewed_at, review_notes
+		) VALUES (
+			:id, :registered_policy_id, :cancel_request_type, :reason, :evidence,
+			:status, :requested_by, :requested_at, :compensate_amount,
+			:reviewed_by, :reviewed_at, :review_notes
+		)
+	`
+	_, err := tx.NamedExec(query, cancelRequest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *CancelRequestRepository) UpdateCancelRequest(cancelRequest models.CancelRequest) error {
 	query := `
 		UPDATE cancel_request SET
@@ -111,4 +138,42 @@ func (r *CancelRequestRepository) DeleteCancelRequestByID(id uuid.UUID) error {
 		return err
 	}
 	return nil
+}
+
+func (r *CancelRequestRepository) GetAllRequestsByFarmerID(ctx context.Context, farmerID string) ([]models.CancelRequest, error) {
+	var requests []models.CancelRequest
+	query := `SELECT cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, cr.created_at, cr.updated_at
+FROM public.cancel_request cr
+JOIN 
+    registered_policy rp ON cr.registered_policy_id = rp.id
+WHERE 
+    rp.farmer_id = $1
+ORDER BY 
+    cr.requested_at DESC;`
+
+	err := r.db.SelectContext(ctx, &requests, query, farmerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list payouts: %w", err)
+	}
+
+	return requests, nil
+}
+
+func (r *CancelRequestRepository) GetAllRequestsByProviderID(ctx context.Context, providerID string) ([]models.CancelRequest, error) {
+	var requests []models.CancelRequest
+	query := `SELECT cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, cr.created_at, cr.updated_at
+FROM public.cancel_request cr
+JOIN 
+    registered_policy rp ON cr.registered_policy_id = rp.id
+WHERE 
+    rp.insurance_provider_id = $1
+ORDER BY 
+    cr.requested_at DESC;`
+
+	err := r.db.SelectContext(ctx, &requests, query, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list payouts: %w", err)
+	}
+
+	return requests, nil
 }

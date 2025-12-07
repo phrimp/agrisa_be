@@ -37,6 +37,7 @@ const (
 	PolicyPendingCancel  PolicyStatus = "pending_cancel"
 	PolicyCancelled      PolicyStatus = "cancelled"
 	PolicyRejected       PolicyStatus = "rejected"
+	PolicyDispute        PolicyStatus = "dispute"
 )
 
 type UnderwritingStatus string
