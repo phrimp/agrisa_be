@@ -546,6 +546,47 @@ services:
       - "traefik.http.routers.push-noti-protected.service=push-noti-service"
       - "traefik.http.routers.push-noti-protected.middlewares=cors,auth-middleware,api-limit"
 
+  noti-service:
+    build:
+    context: ./
+    dockerfile: services/noti-service/Dockerfile
+    container_name: agrisa-noti-service
+    restart: unless-stopped
+    ports:
+      - "${PORT:-8091}:8091"
+    environment:
+      - BUN_ENV=production
+      - POSTGRES_HOST=${POSTGRES_HOST}
+      - POSTGRES_PORT=${POSTGRES_PORT}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_PORT=${RABBITMQ_PORT:-5672}
+      - RABBITMQ_USER=${RABBITMQ_USER}
+      - RABBITMQ_PASSWORD=${RABBITMQ_PASSWORD}
+      - VAPID_PUBLIC_KEY=${VAPID_PUBLIC_KEY}
+      - VAPID_PRIVATE_KEY=${VAPID_PRIVATE_KEY}
+      - VAPID_SUBJECT=${VAPID_SUBJECT}
+      - PORT=8091
+    volumes:
+      - ./logs/noti-service:/agrisa/log/noti_service
+    networks:
+      - traefik-net
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.services.noti-service.loadbalancer.server.port=8091"
+      - "traefik.http.routers.noti-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/noti/public`)"
+      - "traefik.http.routers.noti-public.entrypoints=web"
+      - "traefik.http.routers.noti-public.service=noti-service"
+      - "traefik.http.routers.noti-public.middlewares=cors,api-limit"
+      - "traefik.http.routers.noti-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/noti/protected`)"
+      - "traefik.http.routers.noti-protected.entrypoints=web"
+      - "traefik.http.routers.noti-protected.service=noti-service"
+      - "traefik.http.routers.noti-protected.middlewares=cors,auth-middleware,api-limit"
+
 networks:
   traefik-net:
     driver: bridge

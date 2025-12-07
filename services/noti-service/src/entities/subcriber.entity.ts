@@ -15,7 +15,7 @@ export class Subscriber {
   expo_token: string;
 
   @Column({ type: 'varchar', length: 255 })
-  type: string;
+  platform: string;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   p256dh: string;

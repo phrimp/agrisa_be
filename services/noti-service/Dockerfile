@@ -1,0 +1,21 @@
+# Use an official Bun runtime as the base image
+FROM oven/bun:latest
+
+# Set timezone to Vietnam
+ENV TZ=Asia/Ho_Chi_Minh
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Set the working directory in the container
+WORKDIR /app
+
+# Copy package.json and package-lock.json (if available) from the correct location
+COPY services/noti-service/package*.json ./
+
+# Install dependencies using Bun
+RUN bun install
+
+# Copy the rest of the application code
+COPY ./services/noti-service .
+
+# Define the command to run the app using Bun
+CMD ["bun", "run", "start"]
