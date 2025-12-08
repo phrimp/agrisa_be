@@ -32,6 +32,7 @@ func (h *CancelRequestHandler) Register(app *fiber.App) {
 	cancelRequestGr.Post("/", h.CreateNewRequest)
 	cancelRequestGr.Put("/review/:id", h.ReviewCancelRequest)
 	cancelRequestGr.Put("/resolve-dispute/:id", h.ResolveDispute)
+	cancelRequestGr.Put("/compensation-amount/:id", h.GetCompensationAmount)
 	farmerGr := cancelRequestGr.Group("/read-own")
 	farmerGr.Get("/me", h.GetAllMyRequests)
 
@@ -117,6 +118,28 @@ func (h *CancelRequestHandler) ReviewCancelRequest(c fiber.Ctx) error {
 
 func (h *CancelRequestHandler) ResolveDispute(c fiber.Ctx) error {
 	return nil
+}
+
+func (h *CancelRequestHandler) GetCompensationAmount(c fiber.Ctx) error {
+	requestIDStr := c.Params("id")
+	requestID, err := uuid.Parse(requestIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid cancel request ID format"))
+	}
+
+	policyIDStr := c.Query("policy_id")
+	policyID, err := uuid.Parse(policyIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid cancel request ID format"))
+	}
+	compensationAmount, err := h.cancelRequestService.GetCompensationAmount(c.Context(), requestID, policyID)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retriving request compensation amount"))
+	}
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(compensationAmount))
 }
 
 func (h *CancelRequestHandler) CreateNewRequest(c fiber.Ctx) error {

@@ -158,11 +158,7 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 
 	if review.Approved {
 		request.Status = models.CancelRequestStatusApproved
-		if policy.FarmerID == request.RequestedBy {
-			compensationAmount, err = c.policyRepo.GetCompensationAmount(policy.ID, request.RequestedBy, "", request.CancelRequestType)
-		} else if policy.InsuranceProviderID == request.RequestedBy {
-			compensationAmount, err = c.policyRepo.GetCompensationAmount(policy.ID, "", request.RequestedBy, request.CancelRequestType)
-		}
+		compensationAmount, err = c.policyRepo.GetCompensationAmount(policy.ID, request.RequestedBy, request.CancelRequestType)
 		if compensationAmount == 0 {
 			policy.Status = models.PolicyCancelled
 			err := c.policyRepo.UpdateTx(tx, policy)
@@ -260,13 +256,10 @@ func (c *CancelRequestService) ResolveConflict(ctx context.Context, review model
 	return "Cancel Request Reviewed", nil
 }
 
-func (s *CancelRequestService) GetCompensationAmount(ctx context.Context, requestID, policyID uuid.UUID, isFarmer bool) (float64, error) {
+func (s *CancelRequestService) GetCompensationAmount(ctx context.Context, requestID, policyID uuid.UUID) (float64, error) {
 	request, err := s.cancelRequestRepo.GetCancelRequestByID(requestID)
 	if err != nil {
 		return 0, err
 	}
-	if isFarmer {
-		return s.policyRepo.GetCompensationAmount(policyID, request.RequestedBy, "", request.CancelRequestType)
-	}
-	return s.policyRepo.GetCompensationAmount(policyID, "", request.RequestedBy, request.CancelRequestType)
+	return s.policyRepo.GetCompensationAmount(policyID, request.RequestedBy, request.CancelRequestType)
 }

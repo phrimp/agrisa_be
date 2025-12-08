@@ -185,7 +185,7 @@ func (r *RegisteredPolicyRepository) GetAllPoliciesAndStatus() (map[uuid.UUID]mo
 	return queryResult, nil
 }
 
-func (r *RegisteredPolicyRepository) GetCompensationAmount(id uuid.UUID, farmerID, providerID string, compensationType models.CancelRequestType) (float64, error) {
+func (r *RegisteredPolicyRepository) GetCompensationAmount(id uuid.UUID, requestedBy string, compensationType models.CancelRequestType) (float64, error) {
 	now := time.Now().Unix()
 	compensationAmount := 0.0
 	coveragePercentage := 0.0
@@ -201,20 +201,14 @@ func (r *RegisteredPolicyRepository) GetCompensationAmount(id uuid.UUID, farmerI
 
 	coveragePercentage = float64((now - policy.CoverageStartDate) * 100 / (policy.CoverageEndDate - policy.CoverageStartDate))
 
-	if farmerID != "" {
-		if policy.FarmerID != farmerID {
-			return 0, fmt.Errorf("the current farmer is not the owner of this policy")
-		}
+	if policy.FarmerID == requestedBy {
 		if compensationType == models.CancelRequestTypeContractViolation {
 			compensationAmount = policy.TotalFarmerPremium
 		} else {
 			compensationAmount = policy.TotalFarmerPremium * coveragePercentage / 100
 		}
 	}
-	if providerID != "" {
-		if policy.InsuranceProviderID != providerID {
-			return 0, fmt.Errorf("the current provider is not the owner of this policy")
-		}
+	if policy.InsuranceProviderID == requestedBy {
 		if compensationType == models.CancelRequestTypeContractViolation {
 			compensationAmount = 0
 		} else {
