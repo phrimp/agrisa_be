@@ -2,6 +2,12 @@ package services
 
 import (
 	agrisa_utils "agrisa_utils"
+	"auth-service/internal/config"
+	"auth-service/internal/database/minio"
+	"auth-service/internal/event"
+	"auth-service/internal/models"
+	"auth-service/internal/repository"
+	"auth-service/utils"
 	"bytes"
 	"context"
 	"encoding/gob"
@@ -16,13 +22,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"auth-service/internal/config"
-	"auth-service/internal/database/minio"
-	"auth-service/internal/event"
-	"auth-service/internal/models"
-	"auth-service/internal/repository"
-	"auth-service/utils"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -1369,7 +1368,7 @@ func (s *UserService) GeneratePhoneOTP(ctx context.Context, phoneNumber string) 
 		event := event.NotificationEventPushModel{
 			Notification: event.Notification{
 				Title: "Xac Thuc So Dien Thoai",
-				Body:  fmt.Sprintf("Ma OTP cua ban la %s. Luu y: khong cung cap ma OTP cho nguoi khac."),
+				Body:  fmt.Sprintf("Ma OTP cua ban la %s. Luu y: khong cung cap ma OTP cho nguoi khac.", otp),
 			},
 			Destinations: []string{phoneNumber},
 		}
