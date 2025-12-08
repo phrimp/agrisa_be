@@ -37,7 +37,7 @@ export class PushNotiService {
 
     await this.createReceivers(notification.id, data.lstUserIds || []);
 
-    await Promise.all([this.sendWeb(data), this.sendAndroid(data)]);
+    await Promise.all([this.sendWeb(data), this.sendAndroid(data), this.sendIOS(data)]);
 
     return {
       message: 'Notification đã được gửi',
@@ -51,7 +51,6 @@ export class PushNotiService {
       where.user_id = In(userIds);
     }
 
-    // Lấy tất cả subscribers (web, android, ios)
     const subscribers = await this.subscriberRepository.find({ where });
 
     const receivers = subscribers.map(sub => ({
@@ -67,7 +66,6 @@ export class PushNotiService {
   }
 
   async sendWeb(data: SendPayloadDto) {
-    // Tạo notification record
     const notification = await this.notificationRepository.save({
       title: data.title,
       body: data.body,
@@ -83,7 +81,6 @@ export class PushNotiService {
       where,
     });
 
-    // Tạo receiver records
     const receivers = subscribers.map(sub => ({
       notification_id: notification.id,
       user_id: sub.user_id,
@@ -126,7 +123,6 @@ export class PushNotiService {
   }
 
   async sendAndroid(data: SendPayloadDto) {
-    // Tạo notification record
     const notification = await this.notificationRepository.save({
       title: data.title,
       body: data.body,
@@ -142,7 +138,6 @@ export class PushNotiService {
       where,
     });
 
-    // Tạo receiver records
     const receivers = subscribers.map(sub => ({
       notification_id: notification.id,
       user_id: sub.user_id,
@@ -183,7 +178,6 @@ export class PushNotiService {
   }
 
   async sendIOS(data: SendPayloadDto) {
-    // Tạo notification record
     const notification = await this.notificationRepository.save({
       title: data.title,
       body: data.body,
@@ -199,7 +193,6 @@ export class PushNotiService {
       where,
     });
 
-    // Tạo receiver records cho iOS (dùng pull notification)
     const receivers = subscribers.map(sub => ({
       notification_id: notification.id,
       user_id: sub.user_id,
@@ -211,7 +204,6 @@ export class PushNotiService {
       await this.receiverRepository.save(receivers);
     }
 
-    // iOS không gửi push notification, chỉ tạo receiver để pull
     return {
       message: 'Notification đã được tạo cho iOS (pull notification)',
       notificationId: notification.id,
@@ -334,7 +326,6 @@ export class PushNotiService {
       createdAt: r.notification.created_at,
     }));
 
-    // Tự động đánh dấu đã đọc để tránh duplicate
     if (hasNew) {
       const receiverIds = receivers.map(r => r.id);
       await this.markAsRead(receiverIds);
