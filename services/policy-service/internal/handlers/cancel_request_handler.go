@@ -143,7 +143,7 @@ func (h *CancelRequestHandler) GetCompensationAmount(c fiber.Ctx) error {
 }
 
 func (h *CancelRequestHandler) CreateNewRequest(c fiber.Ctx) error {
-	var req models.CancelRequest
+	var req models.CreateCancelRequestRequest
 	if err := c.Bind().Body(&req); err != nil {
 		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(

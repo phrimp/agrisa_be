@@ -30,7 +30,7 @@ func NewCancelRequestService(
 	}
 }
 
-func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID uuid.UUID, createdBy string, request models.CancelRequest) (*models.CreateCancelRequestResponse, error) {
+func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID uuid.UUID, createdBy string, req models.CreateCancelRequestRequest) (*models.CreateCancelRequestResponse, error) {
 	policy, err := c.policyRepo.GetByID(policyID)
 	if err != nil {
 		slog.Error("error retriving policy", "error", err)
@@ -62,6 +62,16 @@ func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID
 			tx.Rollback()
 		}
 	}()
+
+	request := models.CancelRequest{
+		RegisteredPolicyID: policy.ID,
+		CancelRequestType:  req.CancelRequestType,
+		Reason:             req.Reason,
+		Evidence:           req.Evidence,
+		CompensateAmount:   0, // TODO:calculate here
+		RequestedBy:        createdBy,
+		RequestedAt:        time.Now(),
+	}
 
 	if policy.Status == models.PolicyPendingReview || policy.Status == models.PolicyPendingPayment {
 		slog.Info("Policy has not activated change status to cancelled", "policy_id", policyID, "status", policy.Status)

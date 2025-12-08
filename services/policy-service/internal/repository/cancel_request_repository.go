@@ -89,6 +89,7 @@ func (r *CancelRequestRepository) CreateNewCancelRequestTx(tx *sqlx.Tx, cancelRe
 	}
 
 	cancelRequest.CreatedAt = time.Now()
+	cancelRequest.UpdatedAt = time.Now()
 
 	query := `
 		INSERT INTO cancel_request (
