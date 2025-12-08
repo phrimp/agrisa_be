@@ -1943,7 +1943,7 @@ func fetchSatelliteData(
 	}
 
 	// Execute request with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 	httpReq = httpReq.WithContext(ctx)
 
