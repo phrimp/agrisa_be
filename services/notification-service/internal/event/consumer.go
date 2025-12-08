@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"log/slog"
 	"notification-service/internal/google"
 	"notification-service/internal/phone"
 	"time"
@@ -156,6 +157,7 @@ func (q *QueueConsumer) processSMS(ctx context.Context, notif *NotificationMessa
 	if err := json.Unmarshal(payloadBytes, &smsPayload); err != nil {
 		return fmt.Errorf("failed to unmarshal push payload: %v", err)
 	}
+	slog.Info("SMS event receive", "payload", smsPayload)
 	err = q.phoneService.SendSMS(smsPayload.Payload.Notification.Title, smsPayload.Payload.Notification.Body, smsPayload.Payload.Destinations)
 	if err != nil {
 		return fmt.Errorf("failed to send notification: %w", err)
