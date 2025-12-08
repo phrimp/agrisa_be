@@ -1079,3 +1079,6 @@ func (s *RegisteredPolicyService) GetAllUserIDsFromInsuranceProvider(providerID 
 func (s *RegisteredPolicyService) GetByBasePolicy(ctx context.Context, basePolicyID uuid.UUID) ([]models.RegisteredPolicy, error) {
 	return s.registeredPolicyRepo.GetByBasePolicyID(ctx, basePolicyID)
 }
+
+func (s *RegisteredPolicyService) GetCompensationAmount(id uuid.UUID, farmerID, providerID string, compensationType models.CancelRequestType) {
+}

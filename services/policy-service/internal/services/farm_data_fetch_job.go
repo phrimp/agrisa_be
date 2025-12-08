@@ -714,7 +714,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	}
 
 	// Check policy trigger conditions if enabled
-	if checkPolicy && len(allMonitoringData) > 0 {
+	if checkPolicy {
 		slog.Info("Step 8: Evaluating policy trigger conditions",
 			"policy_id", policyID,
 			"farm_id", farmID,
@@ -1237,7 +1237,7 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 				triggerConditionsForThisTrigger = append(triggerConditionsForThisTrigger, tc)
 
 				if isSatisfied {
-					slog.Info("    ✅ Condition SATISFIED",
+					slog.Info("     Condition SATISFIED",
 						"condition_id", cond.ID,
 						"parameter", tc.ParameterName,
 						"measured_value", tc.MeasuredValue,
@@ -1245,14 +1245,14 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 						"operator", tc.Operator,
 						"consecutive_days", tc.ConsecutiveDays)
 				} else if isEarlyWarning {
-					slog.Warn("    ⚠️  Condition EARLY WARNING only",
+					slog.Warn("      Condition EARLY WARNING only",
 						"condition_id", cond.ID,
 						"parameter", tc.ParameterName,
 						"measured_value", tc.MeasuredValue,
 						"early_warning_threshold", *tc.EarlyWarningThreshold)
 				}
 			} else {
-				slog.Info("    ❌ Condition NOT satisfied",
+				slog.Info("     Condition NOT satisfied",
 					"condition_id", cond.ID,
 					"measured_value", aggregatedValue,
 					"threshold_value", cond.ThresholdValue,
@@ -1273,13 +1273,13 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 			"trigger_satisfied", triggerSatisfied)
 
 		if triggerSatisfied {
-			slog.Info("  ✅ TRIGGER SATISFIED - Adding to triggered conditions",
+			slog.Info("   TRIGGER SATISFIED - Adding to triggered conditions",
 				"trigger_id", trigger.ID,
 				"logical_operator", trigger.LogicalOperator,
 				"triggered_conditions_count", len(triggerConditionsForThisTrigger))
 			triggeredConditions = append(triggeredConditions, triggerConditionsForThisTrigger...)
 		} else {
-			slog.Info("  ❌ Trigger NOT satisfied",
+			slog.Info("   Trigger NOT satisfied",
 				"trigger_id", trigger.ID,
 				"logical_operator", trigger.LogicalOperator)
 			// Log early warnings even if trigger not fully satisfied
