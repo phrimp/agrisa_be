@@ -34,8 +34,9 @@ func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID
 	policy, err := c.policyRepo.GetByID(policyID)
 	if err != nil {
 		slog.Error("error retriving policy", "error", err)
-		return nil, fmt.Errorf("error retriving policy by id err=%w", "err")
+		return nil, fmt.Errorf("error retriving policy by id err=%w", err)
 	}
+
 	allowedStatus := map[models.PolicyStatus]bool{
 		models.PolicyActive:         true,
 		models.PolicyPendingPayment: true,
@@ -124,6 +125,9 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 	if request.Status != models.CancelRequestStatusPendingReview {
 		return "", fmt.Errorf("cancel request status invalid")
 	}
+	if request.RequestedBy == review.ReviewedBy {
+		return "", fmt.Errorf("cannot review your own request")
+	}
 
 	tx, err := c.policyRepo.BeginTransaction()
 	if err != nil {
@@ -143,6 +147,10 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 		return "", fmt.Errorf("error retriving policy by id err=%w", err)
 
 	}
+	if policy.InsuranceProviderID != review.ReviewedBy && policy.FarmerID != review.ReviewedBy {
+		return "", fmt.Errorf("reviewer cannot review cancel request of this policy")
+	}
+
 	now := time.Now()
 	request.ReviewedBy = &review.ReviewedBy
 	request.ReviewedAt = &now
@@ -150,6 +158,11 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 
 	if review.Approved {
 		request.Status = models.CancelRequestStatusApproved
+		if policy.FarmerID == request.RequestedBy {
+			compensationAmount, err = c.policyRepo.GetCompensationAmount(policy.ID, request.RequestedBy, "", request.CancelRequestType)
+		} else if policy.InsuranceProviderID == request.RequestedBy {
+			compensationAmount, err = c.policyRepo.GetCompensationAmount(policy.ID, "", request.RequestedBy, request.CancelRequestType)
+		}
 		if compensationAmount == 0 {
 			policy.Status = models.PolicyCancelled
 			err := c.policyRepo.UpdateTx(tx, policy)
