@@ -18,8 +18,8 @@ export class PushNotiController {
   }
 
   @Post('protected/subscribe/ios')
-  async subscribeIOS(@Headers('x-user-id') userId: string, @Body() data: SubscribeDto) {
-    return this.pushNotiService.subscribeIOS(userId, data);
+  async subscribeIOS(@Headers('x-user-id') userId: string) {
+    return this.pushNotiService.subscribeIOS(userId);
   }
 
   @Post('protected/unsubscribe/web')
