@@ -28,11 +28,12 @@ func (h *CancelRequestHandler) Register(app *fiber.App) {
 	protectedGr := app.Group("policy/protected/api/v2")
 
 	// Claim routes
-	cancelRequestGr := protectedGr.Group("/cancel_request", h.CreateNewRequest)
+	cancelRequestGr := protectedGr.Group("/cancel_request")
 	cancelRequestGr.Post("/", h.CreateNewRequest)
 	cancelRequestGr.Put("/review/:id", h.ReviewCancelRequest)
 	cancelRequestGr.Put("/resolve-dispute/:id", h.ResolveDispute)
 	cancelRequestGr.Put("/compensation-amount/:id", h.GetCompensationAmount)
+
 	farmerGr := cancelRequestGr.Group("/read-own")
 	farmerGr.Get("/me", h.GetAllMyRequests)
 
