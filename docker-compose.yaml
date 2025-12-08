@@ -386,6 +386,11 @@ services:
             - PHONE_PORT=${PHONE_PORT}
             - PHONE_USERNAME=${PHONE_USERNAME}
             - PHONE_PASSWORD=${PHONE_PASSWORD}
+            - RABBITMQ_HOST=rabbitmq
+            - RABBITMQ_USER=admin
+            - RABBITMQ_PWD=${RABBITMQ_PASSWORD}
+            - RABBITMQ_PORT=5672
+
         volumes:
             - ./logs/notification_service:/agrisa/log/notification_service
             - ./${FIREBASE_SERVICE_ACCOUNT_KEY_LOCATION}:/app/secrets/agrisa-firebase.json
