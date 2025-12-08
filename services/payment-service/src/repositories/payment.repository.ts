@@ -114,7 +114,7 @@ export class PaymentRepository {
     type: string,
   ): Promise<number> {
     const all = await this.paymentRepo.find({
-      where: { user_id, type, status: 'completed' },
+      where: { user_id: user_id, type: type, status: 'completed' },
     });
     let result = 0;
     all.forEach((item: Payment) => {
@@ -125,7 +125,7 @@ export class PaymentRepository {
 
   async getTotalAmountByType(type: string): Promise<number> {
     const all = await this.paymentRepo.find({
-      where: { type, status: 'completed' },
+      where: { type: type, status: 'completed' },
     });
     let result = 0;
     all.forEach((item: Payment) => {
