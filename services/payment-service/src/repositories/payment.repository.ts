@@ -118,7 +118,7 @@ export class PaymentRepository {
     });
     let result = 0;
     all.forEach((item: Payment) => {
-      result += item.amount || 0;
+      result += Number(item.amount) || 0;
     });
     return result || 0;
   }
@@ -129,7 +129,7 @@ export class PaymentRepository {
     });
     let result = 0;
     all.forEach((item: Payment) => {
-      result += item.amount || 0;
+      result += Number(item.amount) || 0;
     });
     return result || 0;
   }
