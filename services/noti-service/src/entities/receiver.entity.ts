@@ -6,7 +6,6 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { Notification } from './notification.entity';
 
 @Entity('receivers')
 export class Receiver {
@@ -16,9 +15,9 @@ export class Receiver {
   @Column({ type: 'uuid' })
   notification_id: string;
 
-  @ManyToOne(() => Notification, notification => notification.receivers)
+  @ManyToOne('Notification', 'receivers')
   @JoinColumn({ name: 'notification_id' })
-  notification: Notification;
+  notification: any;
 
   @Column({ type: 'varchar', length: 255 })
   user_id: string;

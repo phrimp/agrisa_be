@@ -1,5 +1,4 @@
 import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
-import { Receiver } from './receiver.entity';
 
 @Entity('notifications')
 export class Notification {
@@ -18,6 +17,6 @@ export class Notification {
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
 
-  @OneToMany(() => Receiver, (receiver: Receiver) => receiver.notification)
-  receivers: Receiver[];
+  @OneToMany('Receiver', 'notification')
+  receivers: any[];
 }
