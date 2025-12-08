@@ -114,21 +114,21 @@ export class PaymentRepository {
     type: string,
   ): Promise<number> {
     const result = await this.paymentRepo
-      .createQueryBuilder('payment')
-      .select('SUM(payment.amount)', 'sum')
-      .where('payment.user_id = :user_id', { user_id })
-      .andWhere('payment.type = :type', { type })
-      .andWhere('payment.status = :status', { status: 'completed' })
+      .createQueryBuilder('payments')
+      .select('SUM(payments.amount)', 'sum')
+      .where('payments.user_id = :user_id', { user_id })
+      .andWhere('payments.type = :type', { type })
+      .andWhere('payments.status = :status', { status: 'completed' })
       .getRawOne();
     return parseFloat(result.sum) || 0;
   }
 
   async getTotalAmountByType(type: string): Promise<number> {
     const result = await this.paymentRepo
-      .createQueryBuilder('payment')
-      .select('SUM(payment.amount)', 'sum')
-      .where('payment.type = :type', { type })
-      .andWhere('payment.status = :status', { status: 'completed' })
+      .createQueryBuilder('payments')
+      .select('SUM(payments.amount)', 'sum')
+      .where('payments.type = :type', { type })
+      .andWhere('payments.status = :status', { status: 'completed' })
       .getRawOne();
     return parseFloat(result.sum) || 0;
   }

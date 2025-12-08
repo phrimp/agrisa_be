@@ -29,17 +29,14 @@ export class PushNotiService {
   }
 
   async send(data: SendPayloadDto) {
-    // Tạo notification record
     const notification = await this.notificationRepository.save({
       title: data.title,
       body: data.body,
       data: data.data ?? null,
     });
 
-    // Tạo receiver records cho từng platform
     await this.createReceivers(notification.id, data.lstUserIds || []);
 
-    // Gửi push notification cho các platform (trừ iOS - iOS sẽ dùng pull)
     await Promise.all([this.sendWeb(data), this.sendAndroid(data)]);
 
     return {
