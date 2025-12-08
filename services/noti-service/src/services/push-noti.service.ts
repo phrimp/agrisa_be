@@ -405,6 +405,13 @@ export class PushNotiService {
       take: limit,
     });
 
+    const unread = await this.receiverRepository.count({
+      where: {
+        user_id: userId,
+        status: 'sent',
+      },
+    });
+
     const notifications = receivers.map(r => ({
       id: r.id,
       notificationId: r.notification_id,
@@ -418,6 +425,7 @@ export class PushNotiService {
 
     return {
       data: notifications,
+      unread,
       pagination: {
         page,
         limit,
