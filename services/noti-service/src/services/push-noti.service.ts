@@ -250,7 +250,7 @@ export class PushNotiService {
     }
   }
 
-  async subscribeIOS(userId: string, data: SubscribeDto) {
+  async subscribeIOS(userId: string) {
     const existing = await this.subscriberRepository.findOne({
       where: { user_id: userId, platform: ePlatform.ios },
     });
@@ -259,7 +259,6 @@ export class PushNotiService {
       const newSub = this.subscriberRepository.create({
         user_id: userId,
         platform: ePlatform.ios,
-        endpoint: data.endpoint,
       });
       await this.subscriberRepository.save(newSub);
       return {
