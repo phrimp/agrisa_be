@@ -1,4 +1,5 @@
 import { Notification } from '@/entities/notification.entity';
+import { Receiver } from '@/entities/receiver.entity';
 import { Subscriber } from '@/entities/subcriber.entity';
 import { ePlatform } from '@/libs/enum';
 import { SendPayloadDto } from '@/libs/types/send-payload.dto';
@@ -9,7 +10,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { In, Repository } from 'typeorm';
 import * as webpush from 'web-push';
-import WebSocket from 'ws';
 
 @Injectable()
 export class PushNotiService {
@@ -19,6 +19,8 @@ export class PushNotiService {
   constructor(
     @InjectRepository(Notification)
     private readonly notificationRepository: Repository<Notification>,
+    @InjectRepository(Receiver)
+    private readonly receiverRepository: Repository<Receiver>,
     @InjectRepository(Subscriber)
     private readonly subscriberRepository: Repository<Subscriber>,
   ) {
@@ -27,10 +29,54 @@ export class PushNotiService {
   }
 
   async send(data: SendPayloadDto) {
-    await Promise.all([this.sendWeb(data), this.sendAndroid(data), this.sendIOS(data)]);
+    // Tạo notification record
+    const notification = await this.notificationRepository.save({
+      title: data.title,
+      body: data.body,
+      data: data.data ?? null,
+    });
+
+    // Tạo receiver records cho từng platform
+    await this.createReceivers(notification.id, data.lstUserIds || []);
+
+    // Gửi push notification cho các platform (trừ iOS - iOS sẽ dùng pull)
+    await Promise.all([this.sendWeb(data), this.sendAndroid(data)]);
+
+    return {
+      message: 'Notification đã được gửi',
+      notificationId: notification.id,
+    };
+  }
+
+  private async createReceivers(notificationId: string, userIds: string[]) {
+    const where: any = {};
+    if (userIds && userIds.length > 0) {
+      where.user_id = In(userIds);
+    }
+
+    // Lấy tất cả subscribers (web, android, ios)
+    const subscribers = await this.subscriberRepository.find({ where });
+
+    const receivers = subscribers.map(sub => ({
+      notification_id: notificationId,
+      user_id: sub.user_id,
+      platform: sub.platform,
+      status: 'sent',
+    }));
+
+    if (receivers.length > 0) {
+      await this.receiverRepository.save(receivers);
+    }
   }
 
   async sendWeb(data: SendPayloadDto) {
+    // Tạo notification record
+    const notification = await this.notificationRepository.save({
+      title: data.title,
+      body: data.body,
+      data: data.data ?? null,
+    });
+
     const where: any = { platform: ePlatform.web };
     if (data.lstUserIds && data.lstUserIds.length > 0) {
       where.user_id = In(data.lstUserIds);
@@ -39,6 +85,18 @@ export class PushNotiService {
     const subscribers = await this.subscriberRepository.find({
       where,
     });
+
+    // Tạo receiver records
+    const receivers = subscribers.map(sub => ({
+      notification_id: notification.id,
+      user_id: sub.user_id,
+      platform: ePlatform.web,
+      status: 'sent',
+    }));
+
+    if (receivers.length > 0) {
+      await this.receiverRepository.save(receivers);
+    }
 
     const payload = JSON.stringify({
       title: data.title,
@@ -63,9 +121,21 @@ export class PushNotiService {
         }
       }
     }
+
+    return {
+      message: 'Notification đã được gửi cho Web',
+      notificationId: notification.id,
+    };
   }
 
   async sendAndroid(data: SendPayloadDto) {
+    // Tạo notification record
+    const notification = await this.notificationRepository.save({
+      title: data.title,
+      body: data.body,
+      data: data.data ?? null,
+    });
+
     const where: any = { platform: ePlatform.android };
     if (data.lstUserIds && data.lstUserIds.length > 0) {
       where.user_id = In(data.lstUserIds);
@@ -74,6 +144,18 @@ export class PushNotiService {
     const subscribers = await this.subscriberRepository.find({
       where,
     });
+
+    // Tạo receiver records
+    const receivers = subscribers.map(sub => ({
+      notification_id: notification.id,
+      user_id: sub.user_id,
+      platform: ePlatform.android,
+      status: 'sent',
+    }));
+
+    if (receivers.length > 0) {
+      await this.receiverRepository.save(receivers);
+    }
 
     const messages: ExpoPushMessage[] = [];
 
@@ -96,9 +178,21 @@ export class PushNotiService {
         console.error('Lỗi: ', error);
       }
     }
+
+    return {
+      message: 'Notification đã được gửi cho Android',
+      notificationId: notification.id,
+    };
   }
 
   async sendIOS(data: SendPayloadDto) {
+    // Tạo notification record
+    const notification = await this.notificationRepository.save({
+      title: data.title,
+      body: data.body,
+      data: data.data ?? null,
+    });
+
     const where: any = { platform: ePlatform.ios };
     if (data.lstUserIds && data.lstUserIds.length > 0) {
       where.user_id = In(data.lstUserIds);
@@ -108,27 +202,23 @@ export class PushNotiService {
       where,
     });
 
-    const payload = JSON.stringify({
-      title: data.title,
-      body: data.body,
-    });
+    // Tạo receiver records cho iOS (dùng pull notification)
+    const receivers = subscribers.map(sub => ({
+      notification_id: notification.id,
+      user_id: sub.user_id,
+      platform: ePlatform.ios,
+      status: 'sent',
+    }));
 
-    for (const sub of subscribers) {
-      if (sub.endpoint) {
-        try {
-          const ws = new WebSocket(sub.endpoint);
-          ws.on('open', () => {
-            ws.send(payload);
-            ws.close();
-          });
-          ws.on('error', error => {
-            console.error('Lỗi: ', sub.id, error);
-          });
-        } catch (error) {
-          console.error('Lỗi: ', sub.id, error);
-        }
-      }
+    if (receivers.length > 0) {
+      await this.receiverRepository.save(receivers);
     }
+
+    // iOS không gửi push notification, chỉ tạo receiver để pull
+    return {
+      message: 'Notification đã được tạo cho iOS (pull notification)',
+      notificationId: notification.id,
+    };
   }
 
   async subscribeWeb(userId: string, data: SubscribeDto) {
@@ -220,6 +310,102 @@ export class PushNotiService {
     });
     return {
       value: !!existing,
+    };
+  }
+
+  async pullNotifications(userId: string, limit: number = 10) {
+    const receivers = await this.receiverRepository.find({
+      where: {
+        user_id: userId,
+        platform: ePlatform.ios,
+        status: 'sent',
+      },
+      relations: ['notification'],
+      order: {
+        created_at: 'DESC',
+      },
+      take: limit,
+    });
+
+    const hasNew = receivers.length > 0;
+    const notifications = receivers.map(r => ({
+      id: r.id,
+      notificationId: r.notification_id,
+      title: r.notification.title,
+      body: r.notification.body,
+      data: r.notification.data,
+      createdAt: r.notification.created_at,
+    }));
+
+    // Tự động đánh dấu đã đọc để tránh duplicate
+    if (hasNew) {
+      const receiverIds = receivers.map(r => r.id);
+      await this.markAsRead(receiverIds);
+    }
+
+    return {
+      hasNew,
+      count: receivers.length,
+      notifications,
+    };
+  }
+
+  async markAsRead(receiverIds: string[]) {
+    await this.receiverRepository.update(
+      {
+        id: In(receiverIds),
+      },
+      {
+        status: 'read',
+      },
+    );
+
+    return {
+      message: 'Đã đánh dấu thông báo đã đọc',
+      count: receiverIds.length,
+    };
+  }
+
+  async getAllNotifications(userId: string, page: number = 1, limit: number = 20, status?: string) {
+    const skip = (page - 1) * limit;
+
+    const where: any = {
+      user_id: userId,
+    };
+
+    if (status) {
+      where.status = status;
+    }
+
+    const [receivers, total] = await this.receiverRepository.findAndCount({
+      where,
+      relations: ['notification'],
+      order: {
+        created_at: 'DESC',
+      },
+      skip,
+      take: limit,
+    });
+
+    const notifications = receivers.map(r => ({
+      id: r.id,
+      notificationId: r.notification_id,
+      title: r.notification.title,
+      body: r.notification.body,
+      data: r.notification.data,
+      platform: r.platform,
+      status: r.status,
+      createdAt: r.notification.created_at,
+    }));
+
+    return {
+      data: notifications,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
     };
   }
 }

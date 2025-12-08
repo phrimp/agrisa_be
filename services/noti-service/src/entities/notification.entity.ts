@@ -1,12 +1,10 @@
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
+import { Receiver } from './receiver.entity';
 
 @Entity('notifications')
 export class Notification {
   @PrimaryGeneratedColumn('uuid')
   id: string;
-
-  @Column({ type: 'varchar', length: 255 })
-  user_id: string;
 
   @Column({ type: 'varchar', length: 500 })
   title: string;
@@ -17,15 +15,9 @@ export class Notification {
   @Column({ type: 'jsonb', nullable: true })
   data: any;
 
-  @Column({ type: 'varchar', length: 50 })
-  platform: string;
-
-  @Column({ type: 'varchar', length: 50, default: 'sent' })
-  status: string;
-
-  @Column({ type: 'text', nullable: true })
-  error_message: string;
-
   @CreateDateColumn({ name: 'created_at' })
   created_at: Date;
+
+  @OneToMany(() => Receiver, (receiver: Receiver) => receiver.notification)
+  receivers: Receiver[];
 }
