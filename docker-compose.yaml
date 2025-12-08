@@ -590,14 +590,25 @@ services:
         labels:
             - "traefik.enable=true"
             - "traefik.http.services.noti-service.loadbalancer.server.port=8091"
+            # WebSocket support - public routes
             - "traefik.http.routers.noti-public.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/noti/public`)"
             - "traefik.http.routers.noti-public.entrypoints=web"
             - "traefik.http.routers.noti-public.service=noti-service"
             - "traefik.http.routers.noti-public.middlewares=cors,api-limit"
+            # Protected routes
             - "traefik.http.routers.noti-protected.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/noti/protected`)"
             - "traefik.http.routers.noti-protected.entrypoints=web"
             - "traefik.http.routers.noti-protected.service=noti-service"
             - "traefik.http.routers.noti-protected.middlewares=cors,auth-middleware,api-limit"
+            # HTTPS WebSocket support
+            - "traefik.http.routers.noti-public-secure.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/noti/public`)"
+            - "traefik.http.routers.noti-public-secure.entrypoints=websecure"
+            - "traefik.http.routers.noti-public-secure.service=noti-service"
+            - "traefik.http.routers.noti-public-secure.middlewares=cors,api-limit"
+            - "traefik.http.routers.noti-protected-secure.rule=Host(`${DOMAIN:-localhost}`) && PathPrefix(`/noti/protected`)"
+            - "traefik.http.routers.noti-protected-secure.entrypoints=websecure"
+            - "traefik.http.routers.noti-protected-secure.service=noti-service"
+            - "traefik.http.routers.noti-protected-secure.middlewares=cors,auth-middleware,api-limit"
 
 networks:
     traefik-net:
