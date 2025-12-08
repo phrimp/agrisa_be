@@ -28,8 +28,12 @@ func (h *CancelRequestHandler) Register(app *fiber.App) {
 	protectedGr := app.Group("policy/protected/api/v2")
 
 	// Claim routes
-	cancelRequestGr := protectedGr.Group("/cancel_request", h.CreateNewRequest)
+	cancelRequestGr := protectedGr.Group("/cancel_request")
 	cancelRequestGr.Post("/", h.CreateNewRequest)
+	cancelRequestGr.Put("/review/:id", h.ReviewCancelRequest)
+	cancelRequestGr.Put("/resolve-dispute/:id", h.ResolveDispute)
+	cancelRequestGr.Put("/compensation-amount/:id", h.GetCompensationAmount)
+
 	farmerGr := cancelRequestGr.Group("/read-own")
 	farmerGr.Get("/me", h.GetAllMyRequests)
 
@@ -57,8 +61,90 @@ func (h *CancelRequestHandler) GetAllMyRequests(c fiber.Ctx) error {
 	}))
 }
 
+func (h *CancelRequestHandler) ReviewCancelRequest(c fiber.Ctx) error {
+	var req models.ReviewCancelRequestReq
+	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body: "+err.Error()))
+	}
+
+	requestIDStr := c.Params("id")
+	requestID, err := uuid.Parse(requestIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid cancel request ID format"))
+	}
+
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+	requestBy := userID
+	tokenString := c.Get("Authorization")
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
+	partnerFound := true
+	if err != nil {
+		if !strings.Contains(err.Error(), "insurance partner profile not found") {
+			slog.Error("error retriving partner profile", "error", err)
+			return c.Status(http.StatusInternalServerError).JSON(
+				utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+		}
+		partnerFound = false
+	}
+
+	if partnerFound {
+		requestBy, err = h.registeredPolicyService.GetPartnerID(partnerProfileData)
+		if err != nil {
+			slog.Error("error retriving partner id", "error", err)
+			return c.Status(http.StatusInternalServerError).JSON(
+				utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
+		}
+	}
+	req.ReviewedBy = requestBy
+	req.RequestID = requestID
+	res, err := h.cancelRequestService.ReviewCancelRequest(c.Context(), req, 1) // TODO:Get compensation amount
+	if err != nil {
+		slog.Error("error reviewing cancel request", "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to reviewing cancel request"))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(res))
+}
+
+func (h *CancelRequestHandler) ResolveDispute(c fiber.Ctx) error {
+	return nil
+}
+
+func (h *CancelRequestHandler) GetCompensationAmount(c fiber.Ctx) error {
+	requestIDStr := c.Params("id")
+	requestID, err := uuid.Parse(requestIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid cancel request ID format"))
+	}
+
+	policyIDStr := c.Query("policy_id")
+	policyID, err := uuid.Parse(policyIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid cancel request ID format"))
+	}
+	compensationAmount, err := h.cancelRequestService.GetCompensationAmount(c.Context(), requestID, policyID)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retriving request compensation amount"))
+	}
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(compensationAmount))
+}
+
 func (h *CancelRequestHandler) CreateNewRequest(c fiber.Ctx) error {
-	var req models.CancelRequest
+	var req models.CreateCancelRequestRequest
 	if err := c.Bind().Body(&req); err != nil {
 		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(

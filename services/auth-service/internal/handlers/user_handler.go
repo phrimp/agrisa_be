@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"auth-service/internal/models"
 	"auth-service/internal/services"
 	"auth-service/utils"
 	"log"
@@ -39,6 +40,7 @@ func (u *UserHandler) RegisterRoutes(router *gin.Engine, userHandler *UserHandle
 	userAuthGrPro.POST("/ocridcard", userHandler.OCRNationalIDCardHandler)
 	userAuthGrPro.GET("/ekyc-progress/:i", userHandler.GetUserEkycProgressByUserID)
 	userAuthGrPro.POST("/face-liveness", userHandler.VerifyFaceLiveness)
+	userAuthGrPro.POST("/user-card", userHandler.UpdateUserCardByUserID)
 
 	// For testing API
 	userAuthGrPro.POST("/testing/upload", userHandler.UploadFileTestHandler)
@@ -191,4 +193,29 @@ func (h *UserHandler) GetAllUsers(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, utils.CreateSuccessResponse(result))
+}
+
+func (h *UserHandler) UpdateUserCardByUserID(c *gin.Context) {
+	var req models.UpdateUserCardRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload"))
+		return
+	}
+
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "User ID is required"))
+		return
+	}
+	err := h.userService.UpdateUserCardByUserID(userID, req)
+	if err != nil {
+		if err.Error() == "not_found:no user card found with user_id: "+userID {
+			c.JSON(http.StatusNotFound, utils.CreateErrorResponse("NOT_FOUND", "User card not found"))
+			return
+		}
+		log.Println("internal error:", err)
+		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("INTERNAL_ERROR", "Internal server error"))
+		return
+	}
+	c.JSON(http.StatusOK, utils.CreateSuccessResponse("User card updated successfully"))
 }

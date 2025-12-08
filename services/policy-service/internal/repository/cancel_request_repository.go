@@ -89,6 +89,7 @@ func (r *CancelRequestRepository) CreateNewCancelRequestTx(tx *sqlx.Tx, cancelRe
 	}
 
 	cancelRequest.CreatedAt = time.Now()
+	cancelRequest.UpdatedAt = time.Now()
 
 	query := `
 		INSERT INTO cancel_request (
@@ -125,6 +126,29 @@ func (r *CancelRequestRepository) UpdateCancelRequest(cancelRequest models.Cance
 		WHERE id = :id
 	`
 	_, err := r.db.NamedExec(query, cancelRequest)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (r *CancelRequestRepository) UpdateCancelRequestTx(tx *sqlx.Tx, cancelRequest models.CancelRequest) error {
+	query := `
+		UPDATE cancel_request SET
+			registered_policy_id = :registered_policy_id,
+			cancel_request_type = :cancel_request_type,
+			reason = :reason,
+			evidence = :evidence,
+			status = :status,
+			requested_by = :requested_by,
+			requested_at = :requested_at,
+			compensate_amount = :compensate_amount,
+			reviewed_by = :reviewed_by,
+			reviewed_at = :reviewed_at,
+			review_notes = :review_notes
+		WHERE id = :id
+	`
+	_, err := tx.NamedExec(query, cancelRequest)
 	if err != nil {
 		return err
 	}

@@ -913,7 +913,7 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 }
 
 func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[string]any, error) {
-	url := "http://profile-service:8087/profile/protected/api/v1/insurance-partners/me/profile"
+	url := "https://agrisa-api.phrimp.io.vn/profile/protected/api/v1/insurance-partners/me/profile"
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		slog.Error("Error creating request for insurance partner profile", "error", err)
@@ -937,6 +937,10 @@ func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[
 	}
 
 	if resp.StatusCode == http.StatusNotFound {
+		slog.Error("insurance partner profile not found", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("insurance partner profile not found %d, body: %s", resp.StatusCode, string(body))
+	}
+	if resp.StatusCode == http.StatusForbidden {
 		slog.Error("insurance partner profile not found", "status_code", resp.StatusCode, "body", string(body))
 		return nil, fmt.Errorf("insurance partner profile not found %d, body: %s", resp.StatusCode, string(body))
 	}
@@ -1078,4 +1082,7 @@ func (s *RegisteredPolicyService) GetAllUserIDsFromInsuranceProvider(providerID 
 
 func (s *RegisteredPolicyService) GetByBasePolicy(ctx context.Context, basePolicyID uuid.UUID) ([]models.RegisteredPolicy, error) {
 	return s.registeredPolicyRepo.GetByBasePolicyID(ctx, basePolicyID)
+}
+
+func (s *RegisteredPolicyService) GetCompensationAmount(id uuid.UUID, farmerID, providerID string, compensationType models.CancelRequestType) {
 }

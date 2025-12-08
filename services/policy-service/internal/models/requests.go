@@ -923,5 +923,23 @@ type ConfirmPayoutRequest struct {
 	FarmerRating    *int    `json:"farmer_rating,omitempty" `
 	FarmerFeedback  *string `json:"farmer_feedback,omitempty"`
 }
-
+type CreateCancelRequestRequest struct {
+	CancelRequestType CancelRequestType `json:"cancel_request_type" db:"cancel_request_type"`
+	Reason            string            `json:"reason" db:"reason"`
+	Evidence          utils.JSONMap     `json:"evidence,omitempty" db:"evidence"`
+}
 type CreateCancelRequestResponse struct{}
+
+type ReviewCancelRequestReq struct {
+	ReviewNote string `json:"review_notes"`
+	Approved   bool   `json:"approved"`
+	ReviewedBy string
+	RequestID  uuid.UUID
+}
+
+type ResolveConflictCancelRequestReq struct {
+	ReviewNote    string `json:"review_notes"`
+	FinalDecision CancelRequestStatus
+	ReviewedBy    string
+	RequestID     uuid.UUID
+}

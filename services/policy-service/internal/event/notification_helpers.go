@@ -29,6 +29,17 @@ func (h *NotificationHelper) NotifyPolicyRegistered(ctx context.Context, userID,
 	return h.publisher.PublishNotification(ctx, event)
 }
 
+func (h *NotificationHelper) NotifyPolicyCancelRequestCreated(ctx context.Context, userID, policyNumber string) error {
+	event := NotificationEventPushModel{
+		Notification: Notification{
+			Title: "Yêu Cầu Huỷ Hợp Đồng",
+			Body:  fmt.Sprintf("Một yêu cầu huỷ hợp đồng %s đã được tạo, và đang chờ bạn xem xét yêu cầu.", policyNumber),
+		},
+		UserIDs: []string{userID},
+	}
+	return h.publisher.PublishNotification(ctx, event)
+}
+
 func (h *NotificationHelper) NotifyPolicyRegisteredPartner(ctx context.Context, userIDs []string, basePolicyNumber string) error {
 	event := NotificationEventPushModel{
 		Notification: Notification{

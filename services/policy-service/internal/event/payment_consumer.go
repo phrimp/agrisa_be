@@ -295,6 +295,8 @@ func (h *DefaultPaymentEventHandler) HandlePaymentCompleted(ctx context.Context,
 		return h.handlePolicyRegistrationPayment(ctx, event)
 	case models.PaymentTypePolicyPayout:
 		return h.handlePolicyPayoutPayment(ctx, event)
+	case models.PaymentTypePolicyCompensation:
+		return h.handlePolicyCompensationPayment(ctx, event)
 
 	// ============================================================================
 	// TODO: ADD NEW PAYMENT TYPE HANDLERS HERE
@@ -430,6 +432,57 @@ func (h *DefaultPaymentEventHandler) handlePolicyRegistrationPayment(
 	}
 
 	slog.Info("payment event processed successfully", "payment_id", event.ID)
+	return nil
+}
+
+func (h *DefaultPaymentEventHandler) handlePolicyCompensationPayment(ctx context.Context, event PaymentEvent) error {
+	paidAt := event.PaidAt.Unix()
+	slog.Info("processing policy compensation payment",
+		"payment_id", event.ID,
+		"order_items_count", len(event.OrderItems),
+		"amount", event.Amount)
+
+	for _, orderItem := range event.OrderItems {
+		if err := h.processPolicyCompensationPayment(ctx, event, orderItem, paidAt); err != nil {
+			slog.Error("failed to process policy compensation payment",
+				"payment_id", event.ID,
+				"order_item_id", orderItem.ID,
+				"error", err)
+			return err
+		}
+	}
+
+	slog.Info("payment event processed successfully", "payment_id", event.ID)
+	return nil
+}
+
+func (h *DefaultPaymentEventHandler) processPolicyCompensationPayment(ctx context.Context, event PaymentEvent, orderItem OrderItem, paidAt int64) error {
+	registeredPolicyID, err := uuid.Parse(orderItem.ItemID)
+	if err != nil {
+		slog.Error("invalid policy id in order item",
+			"order_item_id", orderItem.ID,
+			"item_id", orderItem.ItemID,
+			"error", err)
+		return &PaymentValidationError{
+			PaymentID: event.ID,
+			Reason:    "invalid policy id format",
+		}
+	}
+	registeredPolicy, err := h.registeredPolicyRepo.GetByID(registeredPolicyID)
+	if err != nil {
+		slog.Error("failed to retrieve registered policy",
+			"policy_id", registeredPolicyID,
+			"error", err)
+		return err
+	}
+
+	if registeredPolicy.Status != models.PolicyPendingCancel {
+		slog.Error("registered policy invalid status",
+			"policy_id", registeredPolicyID,
+			"error", err)
+		return fmt.Errorf("invalid policy status")
+
+	}
 	return nil
 }
 

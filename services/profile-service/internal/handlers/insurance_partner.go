@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"log"
+	"log/slog"
 	"net/http"
 	"profile-service/internal/models"
 	"profile-service/internal/services"
@@ -39,6 +40,7 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	// partner endpoint
 	partnerGr.POST("/deletion-requests", h.CreatePartnerDeletionRequest)
 	partnerGr.GET("/:partner_admin_id/deletion-requests", h.GetPartnerDeletionRequestsByPartnerAdminID)
+	partnerGr.POST("/deletion-requests/revoke", h.RevokePartnerDeletionRequest)
 
 	//admin endpoint
 	partnerAdminGr := insurancePartnerProtectedGrPub.Group("/insurance-partners/admin")
@@ -262,4 +264,27 @@ func (h *InsurancePartnerHandler) ProcessPartnerDeletionRequestReview(c *gin.Con
 		return
 	}
 	c.JSON(http.StatusOK, utils.CreateSuccessResponse("Request processed successfully"))
+}
+
+func (h *InsurancePartnerHandler) RevokePartnerDeletionRequest(c *gin.Context) {
+	var req models.ProcessRequestReviewDTO
+	userID := c.GetHeader("X-User-ID")
+	if err := c.ShouldBindJSON(&req); err != nil {
+		slog.Error("Error binding JSON for RevokePartnerDeletionRequest", "error", err.Error())
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
+		c.JSON(http.StatusBadRequest, errorResponse)
+		return
+	}
+
+	req.ReviewedByID = userID
+	err := h.InsurancePartnerService.RevokePartnerDeletionRequest(req.RequestID, userID, req.ReviewNote)
+	if err != nil {
+		slog.Error("Error revoking deletion request", "error", err.Error())
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.CreateSuccessResponse("Request revoked successfully"))
 }

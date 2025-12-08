@@ -1434,20 +1434,27 @@ func (s *BasePolicyService) CancelBasePolicy(ctx context.Context, basePolicyID u
 		}
 		for _, policy := range policies {
 			if affectedStatus[policy.Status] {
+
+				cancelRequest := models.CancelRequest{
+					RegisteredPolicyID: policy.ID,
+					CancelRequestType:  models.CancelRequestTypePolicyholderRequest,
+					Status:             models.CancelRequestStatusPendingReview,
+					Reason:             "Nhà cung cấp bảo hiểm huỷ hợp đồng gốc",
+					RequestedBy:        providerID,
+					RequestedAt:        time.Now(),
+					CompensateAmount:   int(policy.TotalFarmerPremium),
+				}
+
 				policy.Status = models.PolicyPendingCancel
+				if policy.Status == models.PolicyPendingReview || policy.Status == models.PolicyPendingPayment {
+					policy.Status = models.PolicyCancelled
+					cancelRequest.Status = models.CancelRequestStatusApproved
+				}
 				err := s.registerPolicyRepo.UpdateTx(tx, &policy)
 				if err != nil {
 					tx.Rollback()
 					slog.Error("error updating policy status", "current status", policy.Status, "error", err)
 					return "", err
-				}
-				cancelRequest := models.CancelRequest{
-					RegisteredPolicyID: policy.ID,
-					CancelRequestType:  models.CancelRequestTypePolicyholderRequest,
-					Reason:             "Nhà cung cấp bảo hiểm huỷ hợp đồng gốc",
-					RequestedBy:        providerID,
-					RequestedAt:        time.Now(),
-					CompensateAmount:   int(policy.TotalFarmerPremium),
 				}
 				err = s.cancelRequestRepo.CreateNewCancelRequestTx(tx, cancelRequest)
 				if err != nil {
