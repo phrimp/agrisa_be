@@ -51,11 +51,6 @@ func NewQueueConsumer(cfg *ConsumerConfig, email *google.EmailService, phoneServ
 	}
 
 	// Declare main queue with DLX
-	args := amqp.Table{
-		"x-dead-letter-exchange":    "",
-		"x-dead-letter-routing-key": cfg.DeadLetterQueue,
-		"x-message-ttl":             300000, // 5 minutes
-	}
 
 	_, err = ch.QueueDeclare(
 		cfg.QueueName,
@@ -63,7 +58,7 @@ func NewQueueConsumer(cfg *ConsumerConfig, email *google.EmailService, phoneServ
 		false, // delete when unused
 		false, // exclusive
 		false, // no-wait
-		args,
+		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to declare queue: %v", err)
