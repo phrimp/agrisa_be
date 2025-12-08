@@ -78,16 +78,6 @@ func main() {
 
 	emailHandler.Register(app)
 
-	firebaseConfig := &google.FirebaseConfig{
-		CredentialsPath: cfg.GoogleConfig.FirebaseCredentials,
-		ProjectID:       cfg.GoogleConfig.FirebaseProjectID,
-		BatchSize:       500,
-	}
-
-	firebaseService, err := google.NewFirebaseService(firebaseConfig)
-	if err != nil {
-		log.Fatalf("Failed to initialize Firebase: %v", err)
-	}
 	phoneService := phone.NewPhoneService(cfg.PhoneServerConfig.Host, cfg.PhoneServerConfig.Port, cfg.PhoneServerConfig.Username, cfg.PhoneServerConfig.Password)
 
 	// Setup queue consumer
@@ -101,7 +91,7 @@ func main() {
 		PrefetchCount:   10,
 	}
 
-	consumer, err := event.NewQueueConsumer(consumerConfig, firebaseService, emailService, phoneService)
+	consumer, err := event.NewQueueConsumer(consumerConfig, emailService, phoneService)
 	if err != nil {
 		log.Fatalf("Failed to setup queue consumer: %v", err)
 	}

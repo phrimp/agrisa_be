@@ -29,7 +29,7 @@ type ConsumerConfig struct {
 	PrefetchCount   int
 }
 
-func NewQueueConsumer(cfg *ConsumerConfig, firebase *google.FirebaseService, email *google.EmailService, phoneService *phone.PhoneService) (*QueueConsumer, error) {
+func NewQueueConsumer(cfg *ConsumerConfig, email *google.EmailService, phoneService *phone.PhoneService) (*QueueConsumer, error) {
 	conn, err := amqp.Dial(cfg.RabbitMQURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to RabbitMQ: %v", err)
@@ -85,7 +85,6 @@ func NewQueueConsumer(cfg *ConsumerConfig, firebase *google.FirebaseService, ema
 	return &QueueConsumer{
 		conn:            conn,
 		channel:         ch,
-		firebaseService: firebase,
 		emailService:    email,
 		phoneService:    phoneService,
 		queueName:       cfg.QueueName,
