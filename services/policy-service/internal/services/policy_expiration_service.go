@@ -23,9 +23,11 @@ type PolicyExpirationService struct {
 	redisClient               *redis.Client
 	minioClient               *minio.MinioClient
 	policyService             *BasePolicyService
+	registerPolicyRepo        *repository.RegisteredPolicyRepository
 	stopChannel               chan struct{}
 	stats                     *ExpirationStats
 	policyRenewalOrchestrator *PolicyRenewalOrchestrator
+	cancelRequestRepo         *repository.CancelRequestRepository
 	basePolicyRepo            *repository.BasePolicyRepository
 	notievent                 *event.NotificationHelper
 }
@@ -40,7 +42,7 @@ type ExpirationStats struct {
 }
 
 // NewPolicyExpirationService creates a new expiration service instance
-func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePolicyService, minioClient *minio.MinioClient, policyRepo *repository.RegisteredPolicyRepository, basePolicyRepo *repository.BasePolicyRepository, notievent *event.NotificationHelper, workerManager *worker.WorkerManagerV2) *PolicyExpirationService {
+func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePolicyService, minioClient *minio.MinioClient, policyRepo *repository.RegisteredPolicyRepository, basePolicyRepo *repository.BasePolicyRepository, notievent *event.NotificationHelper, workerManager *worker.WorkerManagerV2, cancelRequestRepo *repository.CancelRequestRepository) *PolicyExpirationService {
 	validityCalculator := NewBasePolicyValidityCalculator()
 	policyRenewalOrchestrator := NewPolicyRenewalOrchestrator(basePolicyRepo, policyRepo, validityCalculator, workerManager, notievent)
 	return &PolicyExpirationService{
@@ -54,6 +56,8 @@ func NewPolicyExpirationService(redisClient *redis.Client, policyService *BasePo
 		policyRenewalOrchestrator: policyRenewalOrchestrator,
 		basePolicyRepo:            basePolicyRepo,
 		notievent:                 notievent,
+		cancelRequestRepo:         cancelRequestRepo,
+		registerPolicyRepo:        policyRepo,
 	}
 }
 
@@ -79,6 +83,19 @@ func (s *PolicyExpirationService) StartListener(ctx context.Context) error {
 			if s.isEnrollmentClosed(msg.Payload) {
 				slog.Info("DEBUG Expiration key catched", "key", msg.Payload)
 				go s.processEnrollmentClosed(ctx, msg.Payload)
+			}
+			if s.isNoticePeriod(msg.Payload) {
+				go func() {
+					for {
+						err := s.processCancellationNoticePeriod(ctx, msg.Payload)
+						if err != nil {
+							slog.Error("CRITICAL: error cancellation notice period", "error", err)
+							time.Sleep(1 * time.Second)
+							continue
+						}
+						break
+					}
+				}()
 			}
 		case <-ctx.Done():
 			slog.Info("Policy expiration listener stopped")
@@ -112,6 +129,77 @@ func (s *PolicyExpirationService) isEnrollmentClosed(expiredKey string) bool {
 
 func (s *PolicyExpirationService) isValidDateKey(expiredKey string) bool {
 	return strings.Contains(expiredKey, "--BasePolicy--ValidDate")
+}
+
+func (s *PolicyExpirationService) isNoticePeriod(expiredKey string) bool {
+	return strings.Contains(expiredKey, "--CancelRequest--NoticePeriod")
+}
+
+func (s *PolicyExpirationService) processCancellationNoticePeriod(ctx context.Context, expiredKey string) error {
+	expiredKeyID := strings.Split(expiredKey, "--CancelRequest--NoticePeriod")[0]
+	requestID, err := uuid.Parse(expiredKeyID)
+	if err != nil {
+		slog.Error("error parsing request_id", "request_id", expiredKey, "error", err)
+		return err
+	}
+	request, err := s.cancelRequestRepo.GetCancelRequestByID(requestID)
+	if err != nil {
+		slog.Error("error retriving policy request", "error", err)
+		return err
+	}
+	policy, err := s.registerPolicyRepo.GetByID(request.RegisteredPolicyID)
+	if err != nil {
+		slog.Error("error retriving policy request", "error", err)
+		return err
+	}
+	if policy.Status != models.PolicyPendingCancel {
+		slog.Error("error ending cancel request notice period: policy status invalid", "current status", policy.Status)
+		return err
+	}
+	if request.Status != models.CancelRequestStatusApproved {
+		slog.Error("error ending cancel request notice period: cancel request status invalid", "current status", request.Status)
+		return err
+	}
+
+	if request.Paid {
+		policy.Status = models.PolicyCancelled
+	} else {
+		policy.Status = models.PolicyCancelledPendingPayment
+		slog.Error("error cancel request is not paid")
+	}
+	request.DuringNoticePeriod = false
+
+	tx, err := s.registerPolicyRepo.BeginTransaction()
+	if err != nil {
+		slog.Error("error beginning transaction", "error", err)
+		return err
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			slog.Error("CRITICAL: Panic recovery", "panic", r)
+		} else if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	err = s.registerPolicyRepo.UpdateTx(tx, policy)
+	if err != nil {
+		slog.Error("error updating policy", "error", err)
+		return err
+	}
+	err = s.cancelRequestRepo.UpdateCancelRequestTx(tx, *request)
+	if err != nil {
+		slog.Error("error updating cancel request", "error", err)
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("error commiting transaction", "error", err)
+		return err
+	}
+	return nil
 }
 
 func (s *PolicyExpirationService) processEnrollmentClosed(ctx context.Context, expiredKey string) {

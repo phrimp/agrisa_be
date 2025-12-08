@@ -114,7 +114,7 @@ func (m *WorkerManagerV2) CreatePolicyWorkerInfrastructure(
 	var monitorInterval time.Duration
 	switch basePolicyTrigger.MonitorFrequencyUnit {
 	case models.MonitorFrequencyHour:
-		monitorInterval = time.Duration(basePolicyTrigger.MonitorInterval) * time.Hour
+		monitorInterval = time.Duration(basePolicyTrigger.MonitorInterval) * time.Minute // TODO:Update To Hour
 	case models.MonitorFrequencyDay:
 		monitorInterval = time.Duration(basePolicyTrigger.MonitorInterval) * 24 * time.Hour
 	case models.MonitorFrequencyWeek:
@@ -160,22 +160,6 @@ func (m *WorkerManagerV2) CreatePolicyWorkerInfrastructure(
 	schedulerName := fmt.Sprintf("policy-%s-scheduler", registeredPolicy.ID)
 
 	scheduler := NewJobScheduler(schedulerName, monitorInterval, pool)
-
-	// TODO: Add jobs for each data source endpoint
-	// This requires loading trigger conditions which reference data sources
-	// For now, we'll create a placeholder job that can be populated later
-	//job := JobPayload{
-	//	JobID: uuid.NewString(),
-	//	Type:  "fetch-farm-monitoring-data",
-	//	Params: map[string]any{
-	//		"policy_id":      registeredPolicy.ID.String(),
-	//		"base_policy_id": basePolicy.ID.String(),
-	//		"farm_id":        registeredPolicy.FarmID.String(),
-	//		"trigger_id":     basePolicyTrigger.ID.String(),
-	//	},
-	//	MaxRetries: 3,
-	//}
-	//scheduler.AddJob(job)
 
 	// 3. Store in memory
 	m.mu.Lock()
