@@ -1388,7 +1388,7 @@ func (s *UserService) GeneratePhoneOTP(ctx context.Context, phoneNumber string) 
 }
 
 func (s *UserService) ValidatePhoneOTP(ctx context.Context, phoneNumber, otp string) error {
-	generatedOTP := s.redisClient.Get(ctx, phoneNumber).String()
+	generatedOTP := s.redisClient.Get(ctx, phoneNumber).Val()
 	if otp != generatedOTP {
 		slog.Info("incorrect otp", "actual otp", generatedOTP)
 		return fmt.Errorf("incorrect otp")
