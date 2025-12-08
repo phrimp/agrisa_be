@@ -43,6 +43,7 @@ type IUserService interface {
 	CheckExistEmailOrPhone(input string) (bool, error)
 	GetUserCardByUserID(userID string) (*models.UserCard, error)
 	ResetEkycData(userID string) error
+	UpdateUserCardByUserID(userID string, req models.UpdateUserCardRequest) error
 }
 
 type UserService struct {
@@ -1339,4 +1340,15 @@ func (s *UserService) ResetEkycData(userID string) error {
 		return fmt.Errorf("failed to delete user card data: %w", err)
 	}
 	return nil
+}
+
+func (s *UserService) UpdateUserCardByUserID(userID string, req models.UpdateUserCardRequest) error {
+	// check if user exists
+	_, error := s.userCardRepo.GetUserCardByUserID(userID)
+	if error != nil {
+		log.Printf("Failed to get user card by user ID: %v", error)
+		return fmt.Errorf("not_found: user card not found")
+	}
+
+	return s.userCardRepo.UpdateUserCardByUserID(userID, req)
 }

@@ -93,3 +93,21 @@ type GetAllUsersResponse struct {
 type VerifyIdentifierRequest struct {
 	Identifier string `json:"identifier" binding:"required"`
 }
+
+type UpdateUserCardRequest struct {
+	NationalID        *string `json:"national_id" db:"national_id"`
+	Name              *string `json:"name" db:"name"`
+	DOB               *string `json:"dob" db:"dob"`
+	Sex               *string `json:"sex" db:"sex"`
+	Nationality       *string `json:"nationality" db:"nationality"`
+	Home              *string `json:"home" db:"home"`
+	Address           *string `json:"address" db:"address"`
+	DOE               *string `json:"doe" db:"doe"`
+	NumberOfNameLines *string `json:"number_of_name_lines" db:"number_of_name_lines"`
+	Features          *string `json:"features" db:"features"`
+	IssueDate         *string `json:"issue_date" db:"issue_date"`
+	MRZ               *string `json:"mrz" db:"mrz"`
+	IssueLoc          *string `json:"issue_loc" db:"issue_loc"`
+	ImageFront        *string `json:"image_front" db:"image_front"`
+	ImageBack         *string `json:"image_back" db:"image_back"`
+}
