@@ -1,17 +1,16 @@
 package handlers
 
 import (
+	"auth-service/internal/config"
+	"auth-service/internal/models"
+	"auth-service/internal/services"
+	"auth-service/utils"
 	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
 	"strings"
 	"time"
-
-	"auth-service/internal/config"
-	"auth-service/internal/models"
-	"auth-service/internal/services"
-	"auth-service/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -377,10 +376,12 @@ func (a *AuthHandler) GeneratePhoneOTP(c *gin.Context) {
 	phoneNumber := c.Param("phone_number")
 	if phoneNumber == "" {
 		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "phone_number is required"))
+		return
 	}
 	err := a.userService.GeneratePhoneOTP(c, phoneNumber)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("INTERNAL_ERROR", fmt.Sprintf("error generating otp code, err=%w", err)))
+		return
 	}
 	c.JSON(http.StatusCreated, utils.CreateSuccessResponse("phone otp generated"))
 }
@@ -389,15 +390,18 @@ func (a *AuthHandler) ValidatePhoneOTP(c *gin.Context) {
 	phoneNumber := c.Param("phone_number")
 	if phoneNumber == "" {
 		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "phone_number is required"))
+		return
 	}
 	otp := c.Query("otp")
 	if otp == "" {
 		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "otp is required"))
+		return
 	}
 
 	err := a.userService.ValidatePhoneOTP(c, phoneNumber, otp)
 	if err != nil {
 		c.JSON(http.StatusForbidden, utils.CreateErrorResponse("ACTION_FORBIDDEN", "incorrect otp"))
+		return
 	}
 	c.JSON(http.StatusOK, utils.CreateSuccessResponse("phone validated"))
 }

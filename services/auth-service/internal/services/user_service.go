@@ -1368,7 +1368,7 @@ func (s *UserService) GeneratePhoneOTP(ctx context.Context, phoneNumber string) 
 		event := event.NotificationEventPushModel{
 			Notification: event.Notification{
 				Title: "Xac Thuc So Dien Thoai",
-				Body:  fmt.Sprintf("Ma OTP cua ban la %s. Luu y: khong cung cap ma OTP cho nguoi khac.", otp),
+				Body:  fmt.Sprintf("Ma xac thuc OTP: %s", otp),
 			},
 			Destinations: []string{phoneNumber},
 		}
@@ -1388,8 +1388,9 @@ func (s *UserService) GeneratePhoneOTP(ctx context.Context, phoneNumber string) 
 }
 
 func (s *UserService) ValidatePhoneOTP(ctx context.Context, phoneNumber, otp string) error {
-	generatedOTP := s.redisClient.Get(ctx, phoneNumber).String()
+	generatedOTP := s.redisClient.Get(ctx, phoneNumber).Val()
 	if otp != generatedOTP {
+		slog.Info("incorrect otp", "actual otp", generatedOTP)
 		return fmt.Errorf("incorrect otp")
 	}
 	return nil
