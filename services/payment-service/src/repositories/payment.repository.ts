@@ -114,22 +114,22 @@ export class PaymentRepository {
     type: string,
   ): Promise<number> {
     const all = await this.paymentRepo.find({
-      where: { user_id, type, status: 'completed' },
+      where: { user_id: user_id, type: type, status: 'completed' },
     });
     let result = 0;
     all.forEach((item: Payment) => {
-      result += item.amount || 0;
+      result += Number(item.amount) || 0;
     });
     return result || 0;
   }
 
   async getTotalAmountByType(type: string): Promise<number> {
     const all = await this.paymentRepo.find({
-      where: { type, status: 'completed' },
+      where: { type: type, status: 'completed' },
     });
     let result = 0;
     all.forEach((item: Payment) => {
-      result += item.amount || 0;
+      result += Number(item.amount) || 0;
     });
     return result || 0;
   }

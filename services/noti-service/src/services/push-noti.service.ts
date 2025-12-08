@@ -10,6 +10,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 import { In, Repository } from 'typeorm';
 import * as webpush from 'web-push';
+import { NotificationGateway } from './notification.gateway';
 
 @Injectable()
 export class PushNotiService {
@@ -23,6 +24,7 @@ export class PushNotiService {
     private readonly receiverRepository: Repository<Receiver>,
     @InjectRepository(Subscriber)
     private readonly subscriberRepository: Repository<Subscriber>,
+    private readonly notificationGateway: NotificationGateway,
   ) {
     this.webpush = setupWebPush();
     this.expo = new Expo();
@@ -204,9 +206,38 @@ export class PushNotiService {
       await this.receiverRepository.save(receivers);
     }
 
+    const payload = {
+      type: 'notification',
+      id: notification.id,
+      title: data.title,
+      body: data.body,
+      data: data.data,
+      createdAt: notification.created_at,
+    };
+
+    let onlineCount = 0;
+    if (data.lstUserIds && data.lstUserIds.length > 0) {
+      data.lstUserIds.forEach(userId => {
+        if (this.notificationGateway.sendToUser(userId, payload)) {
+          onlineCount++;
+        }
+      });
+    } else {
+      subscribers.forEach(sub => {
+        if (this.notificationGateway.sendToUser(sub.user_id, payload)) {
+          onlineCount++;
+        }
+      });
+    }
+
     return {
-      message: 'Notification đã được tạo cho iOS (pull notification)',
+      message: 'Notification đã được tạo cho iOS (WebSocket + Pull)',
       notificationId: notification.id,
+      stats: {
+        totalSubscribers: subscribers.length,
+        sentViaWebSocket: onlineCount,
+        availableForPull: subscribers.length,
+      },
     };
   }
 
@@ -374,6 +405,13 @@ export class PushNotiService {
       take: limit,
     });
 
+    const unread = await this.receiverRepository.count({
+      where: {
+        user_id: userId,
+        status: 'sent',
+      },
+    });
+
     const notifications = receivers.map(r => ({
       id: r.id,
       notificationId: r.notification_id,
@@ -387,6 +425,7 @@ export class PushNotiService {
 
     return {
       data: notifications,
+      unread,
       pagination: {
         page,
         limit,

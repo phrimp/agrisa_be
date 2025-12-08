@@ -480,13 +480,13 @@ export class PaymentController {
   @Get('protected/total')
   getTotalPayments(
     @Headers('x-user-id') user_id: string,
-    @Param('type') type: string,
+    @Query('type') type: string,
   ) {
     return this.paymentService.getTotalAmountByUserAndType(user_id, type);
   }
 
   @Get('protected/total/admin')
-  getTotalPaymentsAdmin(@Param('type') type: string) {
+  getTotalPaymentsAdmin(@Query('type') type: string) {
     return this.paymentService.getTotalAmountByType(type);
   }
 }
