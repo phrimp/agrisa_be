@@ -1368,7 +1368,7 @@ func (s *UserService) GeneratePhoneOTP(ctx context.Context, phoneNumber string) 
 		event := event.NotificationEventPushModel{
 			Notification: event.Notification{
 				Title: "Xac Thuc So Dien Thoai",
-				Body:  fmt.Sprintf("Ma OTP cua ban la %s. Luu y: khong cung cap ma OTP cho nguoi khac.", otp),
+				Body:  fmt.Sprintf("Ma xac thuc OTP: %s", otp),
 			},
 			Destinations: []string{phoneNumber},
 		}
