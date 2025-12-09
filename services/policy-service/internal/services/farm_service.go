@@ -486,7 +486,7 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 	q.Add("start_date", startDate)
 	q.Add("end_date", endDate)
 	q.Add("max_cloud_cover", "100.0")
-	q.Add("buffer_meters", "1000") // 250m buffer for better farm visibility in photos
+	q.Add("buffer_meters", "700") // 250m buffer for better farm visibility in photos
 	req.URL.RawQuery = q.Encode()
 
 	slog.Info("GetFarmPhotoJob: calling satellite service with 250m buffer", "farm_id", farmID, "url", req.URL.String())
