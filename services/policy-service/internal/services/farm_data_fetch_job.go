@@ -1190,6 +1190,43 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 			// Sort data by timestamp for proper chronological analysis
 			sortMonitoringDataByTimestamp(condData)
 
+			// Log sample of raw data before aggregation (first 3 and last 3)
+			if len(condData) > 0 {
+				sampleSize := 3
+				if len(condData) <= 6 {
+					var timestamps []string
+					var values []float64
+					for _, d := range condData {
+						timestamps = append(timestamps, time.Unix(d.MeasurementTimestamp, 0).Format("2006-01-02"))
+						values = append(values, d.MeasuredValue)
+					}
+					slog.Info("    [Pre-Aggregation] All data points",
+						"condition_id", cond.ID,
+						"timestamps", timestamps,
+						"values", values)
+				} else {
+					var firstTimestamps []string
+					var firstValues []float64
+					for i := 0; i < sampleSize; i++ {
+						firstTimestamps = append(firstTimestamps, time.Unix(condData[i].MeasurementTimestamp, 0).Format("2006-01-02"))
+						firstValues = append(firstValues, condData[i].MeasuredValue)
+					}
+					var lastTimestamps []string
+					var lastValues []float64
+					for i := len(condData) - sampleSize; i < len(condData); i++ {
+						lastTimestamps = append(lastTimestamps, time.Unix(condData[i].MeasurementTimestamp, 0).Format("2006-01-02"))
+						lastValues = append(lastValues, condData[i].MeasuredValue)
+					}
+					slog.Info("    [Pre-Aggregation] Sample data points",
+						"condition_id", cond.ID,
+						"first_3_timestamps", firstTimestamps,
+						"first_3_values", firstValues,
+						"last_3_timestamps", lastTimestamps,
+						"last_3_values", lastValues,
+						"total_points", len(condData))
+				}
+			}
+
 			// Apply aggregation function to get the current value
 			aggregatedValue := s.applyAggregation(condData, cond.AggregationFunction, cond.AggregationWindowDays, policy.CoverageStartDate)
 			slog.Info("    Aggregation applied",
@@ -1617,40 +1654,98 @@ func (s *RegisteredPolicyService) applyAggregation(
 	coverageStartDate int64,
 ) float64 {
 	if len(data) == 0 {
+		slog.Warn("      [Aggregation] No data provided for aggregation")
 		return 0
 	}
 
 	// Filter data within aggregation window
-	cutoffTime := time.Now().AddDate(0, 0, -windowDays).Unix()
+	now := time.Now()
+	cutoffTime := now.AddDate(0, 0, -windowDays).Unix()
+	originalCutoff := cutoffTime
 
 	if cutoffTime < coverageStartDate {
 		cutoffTime = coverageStartDate
+		slog.Info("      [Aggregation] Cutoff adjusted to coverage start date",
+			"original_cutoff", time.Unix(originalCutoff, 0).Format("2006-01-02"),
+			"adjusted_cutoff", time.Unix(cutoffTime, 0).Format("2006-01-02"),
+			"coverage_start", time.Unix(coverageStartDate, 0).Format("2006-01-02"))
+	}
+
+	slog.Info("      [Aggregation] Filtering data by time window",
+		"aggregation_function", aggFunc,
+		"window_days", windowDays,
+		"cutoff_time", time.Unix(cutoffTime, 0).Format("2006-01-02 15:04:05"),
+		"now", now.Format("2006-01-02 15:04:05"),
+		"total_data_points", len(data))
+
+	// Log first and last data point timestamps for debugging
+	if len(data) > 0 {
+		firstTime := time.Unix(data[0].MeasurementTimestamp, 0)
+		lastTime := time.Unix(data[len(data)-1].MeasurementTimestamp, 0)
+		slog.Info("      [Aggregation] Data timestamp range",
+			"first_measurement", firstTime.Format("2006-01-02 15:04:05"),
+			"last_measurement", lastTime.Format("2006-01-02 15:04:05"),
+			"first_value", data[0].MeasuredValue,
+			"last_value", data[len(data)-1].MeasuredValue)
 	}
 
 	var windowData []float64
+	var filteredOutCount int
 	for _, d := range data {
 		if d.MeasurementTimestamp >= cutoffTime {
 			windowData = append(windowData, d.MeasuredValue)
+		} else {
+			filteredOutCount++
 		}
 	}
 
+	slog.Info("      [Aggregation] Window filtering results",
+		"points_in_window", len(windowData),
+		"points_filtered_out", filteredOutCount,
+		"total_points", len(data))
+
 	if len(windowData) == 0 {
+		slog.Warn("      [Aggregation] No data points within aggregation window",
+			"cutoff_time", time.Unix(cutoffTime, 0).Format("2006-01-02 15:04:05"),
+			"window_days", windowDays,
+			"total_data_points", len(data))
 		return 0
 	}
 
+	// Log sample values from window for debugging (first 5 and last 5)
+	sampleSize := 5
+	if len(windowData) <= 10 {
+		slog.Info("      [Aggregation] All values in window", "values", windowData)
+	} else {
+		firstValues := windowData[:sampleSize]
+		lastValues := windowData[len(windowData)-sampleSize:]
+		slog.Info("      [Aggregation] Sample values in window",
+			"first_5_values", firstValues,
+			"last_5_values", lastValues,
+			"total_count", len(windowData))
+	}
+
+	var result float64
 	switch aggFunc {
 	case models.AggregationSum:
 		var sum float64
 		for _, v := range windowData {
 			sum += v
 		}
-		return sum
+		result = sum
+		slog.Info("      [Aggregation] Sum calculated",
+			"sum", sum,
+			"data_points", len(windowData))
 	case models.AggregationAvg:
 		var sum float64
 		for _, v := range windowData {
 			sum += v
 		}
-		return sum / float64(len(windowData))
+		result = sum / float64(len(windowData))
+		slog.Info("      [Aggregation] Average calculated",
+			"sum", sum,
+			"average", result,
+			"data_points", len(windowData))
 	case models.AggregationMin:
 		minVal := windowData[0]
 		for _, v := range windowData[1:] {
@@ -1658,7 +1753,10 @@ func (s *RegisteredPolicyService) applyAggregation(
 				minVal = v
 			}
 		}
-		return minVal
+		result = minVal
+		slog.Info("      [Aggregation] Minimum calculated",
+			"min", minVal,
+			"data_points", len(windowData))
 	case models.AggregationMax:
 		maxVal := windowData[0]
 		for _, v := range windowData[1:] {
@@ -1666,15 +1764,36 @@ func (s *RegisteredPolicyService) applyAggregation(
 				maxVal = v
 			}
 		}
-		return maxVal
+		result = maxVal
+		slog.Info("      [Aggregation] Maximum calculated",
+			"max", maxVal,
+			"data_points", len(windowData))
 	case models.AggregationChange:
 		if len(windowData) < 2 {
+			slog.Warn("      [Aggregation] Insufficient data for change calculation",
+				"data_points", len(windowData),
+				"required", 2)
 			return 0
 		}
-		return windowData[len(windowData)-1] - windowData[0]
+		result = windowData[len(windowData)-1] - windowData[0]
+		slog.Info("      [Aggregation] Change calculated",
+			"first_value", windowData[0],
+			"last_value", windowData[len(windowData)-1],
+			"change", result,
+			"data_points", len(windowData))
 	default:
-		return windowData[len(windowData)-1] // Return latest value
+		result = windowData[len(windowData)-1] // Return latest value
+		slog.Info("      [Aggregation] Latest value returned (default)",
+			"latest_value", result,
+			"data_points", len(windowData))
 	}
+
+	slog.Info("      [Aggregation] Final result",
+		"function", aggFunc,
+		"result", result,
+		"window_size", len(windowData))
+
+	return result
 }
 
 // checkThreshold checks if the measured value satisfies the threshold condition
