@@ -11,6 +11,8 @@ import (
 // REGISTERED POLICY (ACTUAL POLICY INSTANCES)
 // ============================================================================
 
+const NoticePeriod = 30 * 24 * time.Hour
+
 type RegisteredPolicy struct {
 	ID                      uuid.UUID          `json:"id" db:"id"`
 	PolicyNumber            string             `json:"policy_number" db:"policy_number"`
@@ -105,7 +107,10 @@ type CancelRequest struct {
 	RequestedBy string              `json:"requested_by,omitempty" db:"requested_by"`
 	RequestedAt time.Time           `json:"requested_at" db:"requested_at"`
 
-	CompensateAmount int `json:"compensate_amount,omitempty" db:"compensate_amount"`
+	CompensateAmount   int        `json:"compensate_amount,omitempty" db:"compensate_amount"`
+	Paid               bool       `json:"paid" db:"paid"`
+	PaidAt             *time.Time `json:"paid_at" db:"paid_at"`
+	DuringNoticePeriod bool       `json:"during_notice_period" db:"during_notice_period"`
 
 	// Processing details
 	ReviewedBy  *string    `json:"reviewed_by,omitempty" db:"reviewed_by"`

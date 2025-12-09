@@ -161,14 +161,14 @@ func main() {
 	farmService := services.NewFarmService(farmRepo, cfg, minioClient, workerManager)
 	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, notificationHelper, geminiSelector)
-	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient, registeredPolicyRepo, basePolicyRepo, notificationHelper, workerManager)
+	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient, registeredPolicyRepo, basePolicyRepo, notificationHelper, workerManager, cancelRepo)
 	basePolicyTriggerService := services.NewBasePolicyTriggerService(basePolicyTriggerRepo)
 	riskAnalysisService := services.NewRiskAnalysisCRUDService(registeredPolicyRepo)
 	claimService := services.NewClaimService(claimRepo, registeredPolicyRepo, farmRepo, payoutRepo, notificationHelper)
 	claimRejectionService := services.NewClaimRejectionService(registeredPolicyRepo, claimRepo, claimRejectionRepo)
 	dashboardService := services.NewDashboardService(registeredPolicyRepo)
 	payoutServie := services.NewPayoutService(payoutRepo, registeredPolicyRepo, farmRepo)
-	cancelRequestService := services.NewCancelRequestService(registeredPolicyRepo, cancelRepo, notificationHelper)
+	cancelRequestService := services.NewCancelRequestService(registeredPolicyRepo, cancelRepo, notificationHelper, redisClient)
 
 	// Expiration Listener
 	ctx, cancel := context.WithCancel(context.Background())

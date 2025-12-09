@@ -1546,3 +1546,14 @@ func (r *RegisteredPolicyRepository) UpdateStatusByProviderAndStatus(providerID 
 
 	return nil
 }
+
+func (r *RegisteredPolicyRepository) GetByStatus(status models.PolicyStatus) ([]models.RegisteredPolicy, error) {
+	var policies []models.RegisteredPolicy
+	query := `SELECT * FROM public.registered_policy where status = $1`
+	err := r.db.Select(&policies, query, status)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get registered policies by farmer: %w", err)
+	}
+
+	return policies, nil
+}
