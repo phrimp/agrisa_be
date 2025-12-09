@@ -236,7 +236,7 @@ async def get_ndvi(
         gee_service = GoogleEarthEngineService()
 
         # Get NDVI data for ALL images
-        result = gee_service.get_ndvi_data(
+        result = await gee_service.get_ndvi_data(
             coordinates=coords_list,
             coordinate_crs=crs,
             start_date=start_date,
