@@ -99,9 +99,9 @@ This JSON represents what the system extracted/stored from the PDF. Your task is
 
 **Float fields (float64):**
 - Rates/multipliers: tolerance ±0.00001 (accounting for floating-point precision)
-- PDF "5%" = system should store 0.05
-- PDF "15.5%" = system should store 0.155
-- PDF "0.05" or "5%" both mean system stores 0.05
+- PDF "5%%" = system should store 0.05
+- PDF "15.5%%" = system should store 0.155
+- PDF "0.05" or "5%%" both mean system stores 0.05
 
 **Currency amounts:**
 - Must match exactly (integer values)
@@ -319,7 +319,7 @@ When you find a mismatch, include specific impact explanation:
 - Impact: "Coverage period incorrect. PDF specifies [X] days, system has [Y] days, creating [gap/overlap] of [Z] days."
 
 **Rate/multiplier mismatches:**
-- Impact: "Calculation formula incorrect. Using system rate of [X] instead of PDF rate [Y] will result in [higher/lower] premiums by [Z]%."
+- Impact: "Calculation formula incorrect. Using system rate of [X] instead of PDF rate [Y] will result in [higher/lower] premiums by [Z]%%."
 
 **Boolean logic mismatches:**
 - Impact: "Calculation method wrong. PDF specifies [per hectare], system uses [fixed amount], causing incorrect scaling."
@@ -351,7 +351,7 @@ If same field appears multiple times with different values in PDF:
 - Recommendation: "Clarify if system should store minimum, maximum, or average"
 
 **CASE 2: PDF uses formula/calculation, system stores result**
-- Example: PDF says "Premium = Base Rate (5%) × Coverage Amount"
+- Example: PDF says "Premium = Base Rate (5%%) × Coverage Amount"
 - System stores: premium_base_rate = 0.05
 - Action: PASS if extracted rate matches, verify calculation logic is correct
 
@@ -366,7 +366,7 @@ If same field appears multiple times with different values in PDF:
 - If PDF says "Premium: 500,000 VND (≈ $21 USD)" → system should store VND as coverage_currency
 
 **CASE 5: Percentage formatting variations**
-- PDF: "5%" or "0.05" or "5 percent"
+- PDF: "5%%" or "0.05" or "5 percent"
 - All should result in system storing: 0.05
 - Check if system correctly normalized to decimal
 
@@ -471,7 +471,7 @@ Before outputting JSON, verify:
 ### Example 3: Percentage Correctly Stored
 
 **System JSON:** base_policy.premium_base_rate = 0.05
-**PDF Content:** "Tỷ lệ phí bảo hiểm cơ bản: 5%"
+**PDF Content:** "Tỷ lệ phí bảo hiểm cơ bản: 5%%"
 
 **Output excerpt:**
 {
@@ -482,7 +482,7 @@ Before outputting JSON, verify:
     }
   }
 }
-(Note: System correctly converted 5% to 0.05)
+(Note: System correctly converted 5%% to 0.05)
 
 ### Example 4: Array Length Mismatch
 
