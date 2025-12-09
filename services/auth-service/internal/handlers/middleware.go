@@ -4,7 +4,9 @@ import (
 	"auth-service/internal/config"
 	"auth-service/internal/services"
 	"auth-service/utils"
+	"fmt"
 	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -16,13 +18,15 @@ type Middleware struct {
 	jwtService     *services.JWTService
 	sessionService *services.SessionService
 	config         *config.AuthConfig
+	roleService    *services.RoleService
 }
 
-func NewMiddleware(jwtService *services.JWTService, sessionService *services.SessionService, config *config.AuthConfig) *Middleware {
+func NewMiddleware(jwtService *services.JWTService, sessionService *services.SessionService, config *config.AuthConfig, roleService *services.RoleService) *Middleware {
 	return &Middleware{
 		jwtService:     jwtService,
 		sessionService: sessionService,
 		config:         config,
+		roleService:    roleService,
 	}
 }
 
@@ -114,6 +118,18 @@ func (m *Middleware) ValidateToken(c *gin.Context) {
 		return
 	}
 
+	err = m.ValidatePermission(c.FullPath(), claims.UserID)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, utils.ErrorResponse{
+			Success: false,
+			Error: utils.APIError{
+				Code:    "PERMISSION_DENIED",
+				Message: "you have no permission to do this action",
+			},
+		})
+		return
+	}
+
 	c.Header("X-User-ID", claims.UserID)
 	c.Header("X-User-Email", claims.Email)
 
@@ -125,4 +141,21 @@ func (m *Middleware) ValidateToken(c *gin.Context) {
 			Timestamp: time.Now(),
 		},
 	})
+}
+
+func (m *Middleware) ValidatePermission(url string, userID string) error {
+	activeOnly := true
+	roles, err := m.roleService.GetUserRoles(userID, activeOnly)
+	if err != nil {
+		return err
+	}
+
+	for _, role := range roles {
+		permissions, err := m.roleService.GetRolePermissions(role.ID)
+		if err != nil {
+			return fmt.Errorf("error processing permission for role=%s ; error=%w", role.Name, err)
+		}
+		slog.Info("", "permission", permissions)
+	}
+	return nil
 }

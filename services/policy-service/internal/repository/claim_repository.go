@@ -51,6 +51,27 @@ func (r *ClaimRepository) GetByID(ctx context.Context, id uuid.UUID) (*models.Cl
 	return &claim, nil
 }
 
+func (r *ClaimRepository) GetByPolicyID(ctx context.Context, policyID uuid.UUID) ([]models.Claim, error) {
+	var claims []models.Claim
+	query := `
+		SELECT id, claim_number, registered_policy_id, base_policy_id, farm_id,
+		       base_policy_trigger_id, trigger_timestamp, over_threshold_value,
+		       calculated_fix_payout, calculated_threshold_payout, claim_amount,
+		       status, auto_generated, partner_review_timestamp, partner_decision,
+		       partner_notes, reviewed_by, auto_approval_deadline, auto_approved,
+		       evidence_summary, created_at, updated_at
+		FROM claim
+		WHERE registered_policy_id = $1
+	`
+
+	err := r.db.GetContext(ctx, &claims, query, policyID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get claim by id: %w", err)
+	}
+
+	return claims, nil
+}
+
 // GetAll retrieves all claims with optional filters
 func (r *ClaimRepository) GetAll(ctx context.Context, filters map[string]interface{}) ([]models.Claim, error) {
 	var claims []models.Claim

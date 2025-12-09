@@ -73,8 +73,8 @@ func (p *NotificationPublisher) PublishNotification(ctx context.Context, event N
 
 	slog.Info("Notification event published",
 		"queue", PushNotiQueue,
-		"title", event.Notification.Title,
-		"user_count", len(event.UserIDs),
+		"title", event.Title,
+		"user_count", len(event.LstUserIds),
 	)
 
 	return nil
