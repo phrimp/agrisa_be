@@ -909,6 +909,18 @@ func (s *RegisteredPolicyService) generateClaimFromTrigger(
 		return recentClaim, nil // Return existing claim instead of creating duplicate
 	}
 
+	claims, err := s.registeredPolicyRepo.GetClaimsByPolicyID(policyID)
+	if err != nil {
+		if !strings.Contains(err.Error(), "no rows in result set") {
+			return nil, fmt.Errorf("failed to get existing claims: %w", err)
+		}
+	}
+	for _, claim := range claims {
+		if claim.Status == models.ClaimPendingPartnerReview {
+			return nil, fmt.Errorf("existing claim is in pending review")
+		}
+	}
+
 	// Get registered policy for coverage amount
 	policy, err := s.registeredPolicyRepo.GetByID(policyID)
 	if err != nil {
@@ -1129,9 +1141,12 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 			// Continue with just the fetched data
 			historicalData = nil
 		}
+		slog.Info("historical data retrieve successfully", "count", len(historicalData))
 
 		// Merge fetched data with historical data, avoiding duplicates
 		allData := s.mergeMonitoringData(monitoringData, historicalData)
+
+		slog.Info("merged data", "count", len(allData))
 
 		// Group all monitoring data by data source ID
 		// This allows each condition to access data from its specific data source
