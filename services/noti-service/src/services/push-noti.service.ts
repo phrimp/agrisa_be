@@ -39,7 +39,11 @@ export class PushNotiService {
 
     await this.createReceivers(notification.id, data.lstUserIds || []);
 
-    await Promise.all([this.sendWeb(data), this.sendAndroid(data), this.sendIOS(data)]);
+    await Promise.all([
+      this.sendWeb(data),
+      this.sendAndroid(data),
+      this.sendIOS(data, notification.id),
+    ]);
 
     return {
       message: 'Notification đã được gửi',
@@ -179,12 +183,14 @@ export class PushNotiService {
     };
   }
 
-  async sendIOS(data: SendPayloadDto) {
-    const notification = await this.notificationRepository.save({
-      title: data.title,
-      body: data.body,
-      data: data.data ?? null,
-    });
+  async sendIOS(data: SendPayloadDto, notificationId?: string) {
+    const notification = notificationId
+      ? { id: notificationId, created_at: new Date() }
+      : await this.notificationRepository.save({
+          title: data.title,
+          body: data.body,
+          data: data.data ?? null,
+        });
 
     const where: any = { platform: ePlatform.ios };
     if (data.lstUserIds && data.lstUserIds.length > 0) {
@@ -195,15 +201,17 @@ export class PushNotiService {
       where,
     });
 
-    const receivers = subscribers.map(sub => ({
-      notification_id: notification.id,
-      user_id: sub.user_id,
-      platform: ePlatform.ios,
-      status: 'sent',
-    }));
+    if (!notificationId) {
+      const receivers = subscribers.map(sub => ({
+        notification_id: notification.id,
+        user_id: sub.user_id,
+        platform: ePlatform.ios,
+        status: 'sent',
+      }));
 
-    if (receivers.length > 0) {
-      await this.receiverRepository.save(receivers);
+      if (receivers.length > 0) {
+        await this.receiverRepository.save(receivers);
+      }
     }
 
     const payload = {
