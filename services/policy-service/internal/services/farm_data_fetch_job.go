@@ -120,6 +120,12 @@ func (s *RegisteredPolicyService) recoverPolicyInfrastructure(ctx context.Contex
 		return fmt.Errorf("failed to start worker infrastructure: %w", err)
 	}
 
+	scheduler, ok = s.workerManager.GetSchedulerByPolicyID(policy.ID)
+	if !ok {
+		slog.Info("scheduler double check failed")
+		return fmt.Errorf("scheduler double check failed")
+
+	}
 	dailyJob := worker.JobPayload{
 		JobID: uuid.NewString(),
 		Type:  "fetch-farm-monitoring-data",
