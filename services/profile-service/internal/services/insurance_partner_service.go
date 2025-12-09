@@ -149,9 +149,9 @@ func ValidateInsurancePartner(req *models.CreateInsurancePartnerRequest) []*util
 		validationErrors = append(validationErrors, err)
 	}
 	// Validate Postal Code
-	if err := ValidatePostalCode(req.PostalCode); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
+	// if err := ValidatePostalCode(req.PostalCode); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
 	// Validate Insurance License Number
 	if err := ValidateInsuranceLicenseNumber(req.InsuranceLicenseNumber); err != nil {
 		validationErrors = append(validationErrors, err)
