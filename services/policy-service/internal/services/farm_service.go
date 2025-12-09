@@ -877,9 +877,9 @@ func ValidateCroptype(cropType string) bool {
 }
 
 var riceSoilTypes = map[string]bool{
-	"Đất chuyên trồng lúa nước (LUC)":  true,
-	"Đất trồng lúa nước còn lại (LUK)": true,
-	"Đất lúa nương (LUN)":              true,
+	"Đất chuyên trồng lúa (LUC)":  true,
+	"Đất trồng lúa còn lại (LUK)": true,
+	"Đất lúa nương (LUN)":         true,
 }
 
 var coffeeSoilTypes = map[string]bool{
