@@ -754,9 +754,9 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 			"records_stored", len(allMonitoringData))
 
 		// Only fail if ALL sources failed
-		if len(errorSummary) == len(conditionsWithDataSources) {
-			return fmt.Errorf("all %d data sources failed to fetch", len(conditionsWithDataSources))
-		}
+		//if len(errorSummary) == len(conditionsWithDataSources) {
+		//	return fmt.Errorf("all %d data sources failed to fetch", len(conditionsWithDataSources))
+		//}
 	}
 
 	// Check policy trigger conditions if enabled
