@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Payout } from '../entities/payout.entity';
 
 @Injectable()
@@ -49,6 +49,19 @@ export class PayoutRepository {
   async findByIdAndUserId(id: string, user_id: string): Promise<Payout | null> {
     return await this.payoutRepo.findOne({
       where: { id, user_id },
+      relations: ['payment', 'payment.items'],
+    });
+  }
+
+  async findByItemIds(item_ids: string[]): Promise<Payout[]> {
+    return await this.payoutRepo.find({
+      where: {
+        payment: {
+          items: {
+            item_id: In(item_ids),
+          },
+        },
+      },
       relations: ['payment', 'payment.items'],
     });
   }

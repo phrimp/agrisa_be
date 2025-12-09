@@ -489,4 +489,133 @@ export class PaymentController {
   getTotalPaymentsAdmin(@Query('type') type: string) {
     return this.paymentService.getTotalAmountByType(type);
   }
+
+  @Get('public/payout/scan')
+  async scanPayouts(@Query('payout_id') payout_id?: string) {
+    if (!payout_id) {
+      throw new HttpException('payout_id is required', HttpStatus.BAD_REQUEST);
+    }
+
+    const payout = await this.payoutService.findById(payout_id);
+    if (!payout) {
+      throw new HttpException('Payout not found', HttpStatus.NOT_FOUND);
+    }
+
+    await this.payoutService.update(payout_id, {
+      status: 'scanned',
+      completed_at: new Date(),
+    });
+
+    if (payout.payment_id) {
+      await this.paymentService.update(payout.payment_id, {
+        status: 'scanned',
+        paid_at: new Date(),
+      });
+
+      const publisher_payment = await this.paymentService.findById(
+        payout.payment_id,
+      );
+      if (publisher_payment) {
+        this.logger.log('Publishing payout payment to queue', {
+          payment_id: payout.payment_id,
+          type: publisher_payment.type,
+          amount: publisher_payment.amount,
+        });
+        await publisher(publisher_payment);
+        this.logger.log('Payout payment event published to queue', {
+          payment_id: payout.payment_id,
+        });
+      } else {
+        this.logger.error('Failed to fetch created payment for publishing', {
+          payment_id: payout.payment_id,
+        });
+      }
+    }
+  }
+
+  @Post('public/payout/verify/bulk')
+  async verifyPayoutsBulk(@Body('lstItemIds') item_ids: string[]) {
+    if (!item_ids || !Array.isArray(item_ids) || item_ids.length === 0) {
+      throw new HttpException('lstItemIds is required', HttpStatus.BAD_REQUEST);
+    }
+
+    const payouts = await this.payoutService.findByItemIds(item_ids);
+
+    if (!payouts || payouts.length === 0) {
+      throw new HttpException(
+        'No payouts found for the provided item_ids',
+        HttpStatus.NOT_FOUND,
+      );
+    }
+
+    const results: Array<{
+      payout_id: string;
+      item_ids: string[];
+      success: boolean;
+      message?: string;
+    }> = [];
+
+    for (const payout of payouts) {
+      try {
+        const payout_item_ids =
+          payout.payment?.items
+            ?.map((item) => item.item_id)
+            .filter((item_id): item_id is string => item_id !== null) || [];
+
+        await this.payoutService.update(payout.id, {
+          status: 'completed',
+          completed_at: new Date(),
+        });
+
+        if (payout.payment_id) {
+          await this.paymentService.update(payout.payment_id, {
+            status: 'completed',
+            paid_at: new Date(),
+          });
+
+          const publisher_payment = await this.paymentService.findById(
+            payout.payment_id,
+          );
+          if (publisher_payment) {
+            this.logger.log('Publishing payout payment to queue', {
+              payment_id: payout.payment_id,
+              type: publisher_payment.type,
+              amount: publisher_payment.amount,
+              item_ids: payout_item_ids,
+            });
+            await publisher({
+              item_ids: payout_item_ids,
+            });
+            this.logger.log('Payout payment event published to queue', {
+              payment_id: payout.payment_id,
+              item_ids: payout_item_ids,
+            });
+          } else {
+            this.logger.error(
+              'Failed to fetch created payment for publishing',
+              {
+                payment_id: payout.payment_id,
+              },
+            );
+          }
+        }
+
+        results.push({
+          payout_id: payout.id,
+          item_ids: payout_item_ids,
+          success: true,
+        });
+      } catch (error) {
+        this.logger.error(`Failed to verify payout ${payout.id}`, error);
+        results.push({
+          payout_id: payout.id,
+          item_ids: [],
+          success: false,
+          message: 'Internal error',
+        });
+      }
+    }
+
+    return results;
+  }
 }

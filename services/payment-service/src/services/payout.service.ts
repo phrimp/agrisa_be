@@ -10,4 +10,5 @@ export interface PayoutService {
     limit: number,
   ): Promise<{ items: Payout[]; total: number }>;
   findByIdAndUserId(id: string, user_id: string): Promise<Payout | null>;
+  findByItemIds(item_ids: string[]): Promise<Payout[]>;
 }
