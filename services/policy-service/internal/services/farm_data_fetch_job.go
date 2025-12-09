@@ -73,6 +73,12 @@ func (s *RegisteredPolicyService) RecoverPolicy(ctx context.Context, policyID uu
 
 // recoverPolicyInfrastructure recovers worker infrastructure for a single policy
 func (s *RegisteredPolicyService) recoverPolicyInfrastructure(ctx context.Context, policy *models.RegisteredPolicy) error {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("CRITICAL: Panic recovery", "panic", r)
+		}
+	}()
+
 	slog.Info("Recovering policy infrastructure", "policy_id", policy.ID)
 
 	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(policy.ID)
