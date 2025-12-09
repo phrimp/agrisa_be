@@ -27,7 +27,6 @@ func (r *RoleHandler) RegisterRoutes(router *gin.Engine) {
 	// Public routes
 	publicGroup := router.Group("/auth/public/api/v2/role")
 	{
-		publicGroup.GET("", r.GetAllRoles)
 		publicGroup.GET("/:id", r.GetRole)
 		publicGroup.GET("/name/:name", r.GetRoleByName)
 	}
@@ -41,6 +40,7 @@ func (r *RoleHandler) RegisterRoutes(router *gin.Engine) {
 		protectedGroup.DELETE("/:id", r.DeleteRole)
 		protectedGroup.PATCH("/:id/activate", r.ActivateRole)
 		protectedGroup.PATCH("/:id/deactivate", r.DeactivateRole)
+		publicGroup.GET("", r.GetAllRoles)
 
 		// Role-Permission Management
 		protectedGroup.POST("/:id/permissions/:permissionId", r.GrantPermissionToRole)
@@ -64,7 +64,7 @@ func (r *RoleHandler) RegisterRoutes(router *gin.Engine) {
 // Public Endpoints
 
 func (r *RoleHandler) GetAllRoles(c *gin.Context) {
-	activeOnly := c.DefaultQuery("active_only", "false") == "true"
+	activeOnly := c.DefaultQuery("active_only", "true") == "true"
 	limit, offset := utils.ParsePaginationParams(c)
 
 	roles, err := r.roleService.GetAllRoles(activeOnly, limit, offset)
@@ -456,5 +456,16 @@ func (r *RoleHandler) InitDefaultRole() error {
 		return fmt.Errorf("default admin role creation failed: %s", err)
 	}
 	log.Println("default admin role created successfully: ", adminRole)
+	adminPartnerRole, err := r.roleService.CreateRole("admin_partner", "Admin Partner", "Admin for Insurance Partner")
+	if err != nil {
+		return fmt.Errorf("default admin partner role creation failed: %s", err)
+	}
+	log.Println("default admin role created successfully: ", adminPartnerRole)
+	farmerRole, err := r.roleService.CreateRole("farmer", "Farmer", "Farmer")
+	if err != nil {
+		return fmt.Errorf("default farmer role creation failed: %s", err)
+	}
+	log.Println("default admin role created successfully: ", farmerRole)
+
 	return nil
 }

@@ -335,8 +335,18 @@ func (a *AuthHandler) Register(c *gin.Context) {
 		})
 		return
 	}
+	roleID := 1
+	roleName := c.Query("role_name")
+	if roleName != "" {
+		role, err := a.roleService.GetRoleByName(roleName)
+		if err != nil {
+			c.JSON(400, utils.CreateErrorResponse("NOT_FOUND", "role name not found"))
+			return
+		}
+		roleID = role.ID
+	}
 	// Assign default user role
-	err = a.roleService.AssignRoleToUser(user.ID, 1, &systemUSER.ID, nil)
+	err = a.roleService.AssignRoleToUser(user.ID, roleID, &systemUSER.ID, nil)
 	if err != nil {
 		log.Println("error assigning default role when registering:", err)
 		statusCode, errorCode := a.mapRegisterError(err)
