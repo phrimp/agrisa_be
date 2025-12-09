@@ -123,6 +123,23 @@ export class PaymentRepository {
     return result || 0;
   }
 
+  async getTotalPayoutByUserAndType(
+    user_id: string,
+    type: string,
+  ): Promise<number> {
+    const all = await this.paymentRepo.find({
+      where: { payouts: { user_id: user_id }, type: type, status: 'completed' },
+      relations: ['payouts'],
+    });
+    let result = 0;
+    all.forEach((item: Payment) => {
+      item.payouts.forEach((payout) => {
+        result += Number(payout.amount) || 0;
+      });
+    });
+    return result || 0;
+  }
+
   async getTotalAmountByType(type: string): Promise<number> {
     const all = await this.paymentRepo.find({
       where: { type: type, status: 'completed' },
