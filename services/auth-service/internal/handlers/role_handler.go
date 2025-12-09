@@ -446,16 +446,6 @@ func (r *RoleHandler) DeleteRoleHierarchy(c *gin.Context) {
 }
 
 func (r *RoleHandler) InitDefaultRole() error {
-	userRole, err := r.roleService.CreateRole("user_default", "User", "Default role for new user")
-	if err != nil {
-		return fmt.Errorf("default user role creation failed: %s", err)
-	}
-	log.Println("default user role created successfully: ", userRole)
-	adminRole, err := r.roleService.CreateRole("admin", "Admin", "Admin")
-	if err != nil {
-		return fmt.Errorf("default admin role creation failed: %s", err)
-	}
-	log.Println("default admin role created successfully: ", adminRole)
 	adminPartnerRole, err := r.roleService.CreateRole("admin_partner", "Admin Partner", "Admin for Insurance Partner")
 	if err != nil {
 		return fmt.Errorf("default admin partner role creation failed: %s", err)
@@ -466,6 +456,17 @@ func (r *RoleHandler) InitDefaultRole() error {
 		return fmt.Errorf("default farmer role creation failed: %s", err)
 	}
 	log.Println("default admin role created successfully: ", farmerRole)
+
+	userRole, err := r.roleService.CreateRole("user_default", "User", "Default role for new user")
+	if err != nil {
+		return fmt.Errorf("default user role creation failed: %s", err)
+	}
+	log.Println("default user role created successfully: ", userRole)
+	adminRole, err := r.roleService.CreateRole("admin", "Admin", "Admin")
+	if err != nil {
+		return fmt.Errorf("default admin role creation failed: %s", err)
+	}
+	log.Println("default admin role created successfully: ", adminRole)
 
 	return nil
 }
