@@ -215,6 +215,7 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 
 	if request.IsNewFarm {
 		// Create new farm with validation
+		return nil, fmt.Errorf("unsupport operation")
 		farm = &request.Farm
 		slog.Info("new farm creation request for a new registered policy", "farm", farm)
 
@@ -269,8 +270,13 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 		}
 		existingPolicy, err := s.registeredPolicyRepo.GetByBasePolicyIDAndFarmID(request.RegisteredPolicy.BasePolicyID, farmID)
 		if existingPolicy != nil {
-			slog.Error("farm already registered to this base policy, additional error", "error", err)
-			return nil, fmt.Errorf("farm already registered to this base policy")
+			allowedStatus := map[models.PolicyStatus]bool{
+				models.PolicyRejected: true,
+			}
+			if !allowedStatus[existingPolicy.Status] {
+				slog.Error("farm already registered to this base policy, additional error", "error", err)
+				return nil, fmt.Errorf("farm already registered to this base policy")
+			}
 		}
 
 		farm, err = s.farmService.GetByFarmID(ctx, request.FarmID)
