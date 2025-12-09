@@ -124,7 +124,7 @@ func (s *RegisteredPolicyService) recoverPolicyInfrastructure(ctx context.Contex
 			"check_policy": true,
 		},
 		MaxRetries: 5,
-		RunNow:     true,
+		RunNow:     false,
 	}
 
 	scheduler.AddJob(dailyJob)
