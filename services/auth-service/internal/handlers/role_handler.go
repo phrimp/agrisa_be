@@ -40,7 +40,7 @@ func (r *RoleHandler) RegisterRoutes(router *gin.Engine) {
 		protectedGroup.DELETE("/:id", r.DeleteRole)
 		protectedGroup.PATCH("/:id/activate", r.ActivateRole)
 		protectedGroup.PATCH("/:id/deactivate", r.DeactivateRole)
-		publicGroup.GET("", r.GetAllRoles)
+		protectedGroup.GET("", r.GetAllRoles)
 
 		// Role-Permission Management
 		protectedGroup.POST("/:id/permissions/:permissionId", r.GrantPermissionToRole)
