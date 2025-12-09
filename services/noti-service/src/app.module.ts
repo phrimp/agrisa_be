@@ -2,6 +2,7 @@ import { PushNotiController } from '@/controllers/push-noti.controller';
 import { Notification } from '@/entities/notification.entity';
 import { Receiver } from '@/entities/receiver.entity';
 import { Subscriber } from '@/entities/subcriber.entity';
+import { PushNotificationConsumer } from '@/events/consumer';
 import { databaseConfig } from '@/libs/db.config';
 import { NotificationGateway } from '@/services/notification.gateway';
 import { PushNotiService } from '@/services/push-noti.service';
@@ -16,6 +17,6 @@ import { TypeOrmModule } from '@nestjs/typeorm';
     TypeOrmModule.forFeature([Notification, Receiver, Subscriber]),
   ],
   controllers: [PushNotiController],
-  providers: [PushNotiService, NotificationGateway],
+  providers: [PushNotiService, NotificationGateway, PushNotificationConsumer],
 })
 export class AppModule {}
