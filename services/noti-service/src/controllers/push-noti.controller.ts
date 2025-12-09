@@ -18,8 +18,8 @@ export class PushNotiController {
   }
 
   @Post('protected/subscribe/ios')
-  async subscribeIOS(@Headers('x-user-id') userId: string, @Body() data: SubscribeDto) {
-    return this.pushNotiService.subscribeIOS(userId, data);
+  async subscribeIOS(@Headers('x-user-id') userId: string) {
+    return this.pushNotiService.subscribeIOS(userId);
   }
 
   @Post('protected/unsubscribe/web')
@@ -60,5 +60,32 @@ export class PushNotiController {
   @Get('protected/validate')
   async me(@Headers('x-user-id') userId: string, @Query('platform') platform: string) {
     return await this.pushNotiService.isSubcribed(userId, platform);
+  }
+
+  @Get('public/pull/ios')
+  async pullNotifications(@Query('user_id') userId: string, @Query('limit') limit?: number) {
+    return await this.pushNotiService.pullNotifications(userId, limit ? +limit : 10);
+  }
+
+  @Post('protected/mark-read')
+  async markAsRead(@Body('receiverIds') receiverIds: string[]) {
+    return await this.pushNotiService.markAsRead(receiverIds);
+  }
+
+  @Get('protected/notifications')
+  async getAllNotifications(
+    @Headers('x-user-id') userId: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('status') status?: string,
+    @Query('platform') platform?: string,
+  ) {
+    return await this.pushNotiService.getAllNotifications(
+      userId,
+      page ? +page : 1,
+      limit ? +limit : 20,
+      status,
+      platform,
+    );
   }
 }

@@ -28,16 +28,17 @@ const (
 type PolicyStatus string
 
 const (
-	PolicyDraft          PolicyStatus = "draft"
-	PolicyPendingReview  PolicyStatus = "pending_review"
-	PolicyPendingPayment PolicyStatus = "pending_payment"
-	PolicyActive         PolicyStatus = "active"
-	PolicyPayout         PolicyStatus = "payout"
-	PolicyExpired        PolicyStatus = "expired"
-	PolicyPendingCancel  PolicyStatus = "pending_cancel"
-	PolicyCancelled      PolicyStatus = "cancelled"
-	PolicyRejected       PolicyStatus = "rejected"
-	PolicyDispute        PolicyStatus = "dispute"
+	PolicyDraft                   PolicyStatus = "draft"
+	PolicyPendingReview           PolicyStatus = "pending_review"
+	PolicyPendingPayment          PolicyStatus = "pending_payment"
+	PolicyActive                  PolicyStatus = "active"
+	PolicyPayout                  PolicyStatus = "payout"
+	PolicyExpired                 PolicyStatus = "expired"
+	PolicyPendingCancel           PolicyStatus = "pending_cancel"
+	PolicyCancelled               PolicyStatus = "cancelled"
+	PolicyRejected                PolicyStatus = "rejected"
+	PolicyDispute                 PolicyStatus = "dispute"
+	PolicyCancelledPendingPayment PolicyStatus = "cancelled_pending_payment"
 )
 
 type UnderwritingStatus string
@@ -177,6 +178,8 @@ const (
 	CancelRequestStatusLitigation    CancelRequestStatus = "litigation"
 	CancelRequestStatusDenied        CancelRequestStatus = "denied"
 	CancelRequestStatusPendingReview CancelRequestStatus = "pending_review"
+	CancelRequestStatusCancelled     CancelRequestStatus = "cancelled"
+	CancelRequestPaymentFailed       CancelRequestStatus = "payment_failed"
 )
 
 type ClaimRejectionType string

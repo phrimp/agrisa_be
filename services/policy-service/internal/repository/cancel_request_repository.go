@@ -69,11 +69,13 @@ func (r *CancelRequestRepository) CreateNewCancelRequest(cancelRequest models.Ca
 		INSERT INTO cancel_request (
 			id, registered_policy_id, cancel_request_type, reason, evidence,
 			status, requested_by, requested_at, compensate_amount,
-			reviewed_by, reviewed_at, review_notes
+			reviewed_by, reviewed_at, review_notes,
+            paid, paid_at, during_notice_period
 		) VALUES (
 			:id, :registered_policy_id, :cancel_request_type, :reason, :evidence,
 			:status, :requested_by, :requested_at, :compensate_amount,
-			:reviewed_by, :reviewed_at, :review_notes
+			:reviewed_by, :reviewed_at, :review_notes,
+            :paid, :paid_at, :during_notice_period
 		)
 	`
 	_, err := r.db.NamedExec(query, cancelRequest)
@@ -89,16 +91,19 @@ func (r *CancelRequestRepository) CreateNewCancelRequestTx(tx *sqlx.Tx, cancelRe
 	}
 
 	cancelRequest.CreatedAt = time.Now()
+	cancelRequest.UpdatedAt = time.Now()
 
 	query := `
 		INSERT INTO cancel_request (
 			id, registered_policy_id, cancel_request_type, reason, evidence,
 			status, requested_by, requested_at, compensate_amount,
-			reviewed_by, reviewed_at, review_notes
+			reviewed_by, reviewed_at, review_notes,
+            paid, paid_at, during_notice_period
 		) VALUES (
 			:id, :registered_policy_id, :cancel_request_type, :reason, :evidence,
 			:status, :requested_by, :requested_at, :compensate_amount,
-			:reviewed_by, :reviewed_at, :review_notes
+			:reviewed_by, :reviewed_at, :review_notes,
+            :paid, :paid_at, :during_notice_period
 		)
 	`
 	_, err := tx.NamedExec(query, cancelRequest)
@@ -121,7 +126,10 @@ func (r *CancelRequestRepository) UpdateCancelRequest(cancelRequest models.Cance
 			compensate_amount = :compensate_amount,
 			reviewed_by = :reviewed_by,
 			reviewed_at = :reviewed_at,
-			review_notes = :review_notes
+			review_notes = :review_notes,
+            paid = :paid,
+            paid_at = :paid_at,
+            during_notice_period = :during_notice_period
 		WHERE id = :id
 	`
 	_, err := r.db.NamedExec(query, cancelRequest)
@@ -144,7 +152,10 @@ func (r *CancelRequestRepository) UpdateCancelRequestTx(tx *sqlx.Tx, cancelReque
 			compensate_amount = :compensate_amount,
 			reviewed_by = :reviewed_by,
 			reviewed_at = :reviewed_at,
-			review_notes = :review_notes
+			review_notes = :review_notes,
+            paid = :paid,
+            paid_at = :paid_at,
+            during_notice_period = :during_notice_period
 		WHERE id = :id
 	`
 	_, err := tx.NamedExec(query, cancelRequest)
@@ -165,18 +176,20 @@ func (r *CancelRequestRepository) DeleteCancelRequestByID(id uuid.UUID) error {
 
 func (r *CancelRequestRepository) GetAllRequestsByFarmerID(ctx context.Context, farmerID string) ([]models.CancelRequest, error) {
 	var requests []models.CancelRequest
-	query := `SELECT cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, cr.created_at, cr.updated_at
+	query := `SELECT cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, 
+	paid, paid_at, during_notice_period, -- Added missing fields
+	cr.created_at, cr.updated_at
 FROM public.cancel_request cr
-JOIN 
-    registered_policy rp ON cr.registered_policy_id = rp.id
-WHERE 
-    rp.farmer_id = $1
-ORDER BY 
-    cr.requested_at DESC;`
+JOIN
+    registered_policy rp ON cr.registered_policy_id = rp.id
+WHERE
+    rp.farmer_id = $1
+ORDER BY
+    cr.requested_at DESC;`
 
 	err := r.db.SelectContext(ctx, &requests, query, farmerID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list payouts: %w", err)
+		return nil, fmt.Errorf("failed to list cancel requests by farmer ID: %w", err)
 	}
 
 	return requests, nil
@@ -184,18 +197,20 @@ ORDER BY
 
 func (r *CancelRequestRepository) GetAllRequestsByProviderID(ctx context.Context, providerID string) ([]models.CancelRequest, error) {
 	var requests []models.CancelRequest
-	query := `SELECT cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, cr.created_at, cr.updated_at
+	query := `SELECT cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, 
+	paid, paid_at, during_notice_period, -- Added missing fields
+	cr.created_at, cr.updated_at
 FROM public.cancel_request cr
-JOIN 
-    registered_policy rp ON cr.registered_policy_id = rp.id
-WHERE 
-    rp.insurance_provider_id = $1
-ORDER BY 
-    cr.requested_at DESC;`
+JOIN
+    registered_policy rp ON cr.registered_policy_id = rp.id
+WHERE
+    rp.insurance_provider_id = $1
+ORDER BY
+    cr.requested_at DESC;`
 
 	err := r.db.SelectContext(ctx, &requests, query, providerID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list payouts: %w", err)
+		return nil, fmt.Errorf("failed to list cancel requests by provider ID: %w", err)
 	}
 
 	return requests, nil

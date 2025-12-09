@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"time"
-
+	"log/slog"
 	"notification-service/internal/google"
+	"notification-service/internal/phone"
+	"time"
 
 	"github.com/streadway/amqp"
 )
@@ -17,6 +18,7 @@ type QueueConsumer struct {
 	channel         *amqp.Channel
 	firebaseService *google.FirebaseService
 	emailService    *google.EmailService
+	phoneService    *phone.PhoneService
 	queueName       string
 	deadLetterQueue string
 }
@@ -28,7 +30,7 @@ type ConsumerConfig struct {
 	PrefetchCount   int
 }
 
-func NewQueueConsumer(cfg *ConsumerConfig, firebase *google.FirebaseService, email *google.EmailService) (*QueueConsumer, error) {
+func NewQueueConsumer(cfg *ConsumerConfig, email *google.EmailService, phoneService *phone.PhoneService) (*QueueConsumer, error) {
 	conn, err := amqp.Dial(cfg.RabbitMQURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to RabbitMQ: %v", err)
@@ -50,11 +52,6 @@ func NewQueueConsumer(cfg *ConsumerConfig, firebase *google.FirebaseService, ema
 	}
 
 	// Declare main queue with DLX
-	args := amqp.Table{
-		"x-dead-letter-exchange":    "",
-		"x-dead-letter-routing-key": cfg.DeadLetterQueue,
-		"x-message-ttl":             300000, // 5 minutes
-	}
 
 	_, err = ch.QueueDeclare(
 		cfg.QueueName,
@@ -62,7 +59,7 @@ func NewQueueConsumer(cfg *ConsumerConfig, firebase *google.FirebaseService, ema
 		false, // delete when unused
 		false, // exclusive
 		false, // no-wait
-		args,
+		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to declare queue: %v", err)
@@ -84,8 +81,8 @@ func NewQueueConsumer(cfg *ConsumerConfig, firebase *google.FirebaseService, ema
 	return &QueueConsumer{
 		conn:            conn,
 		channel:         ch,
-		firebaseService: firebase,
 		emailService:    email,
+		phoneService:    phoneService,
 		queueName:       cfg.QueueName,
 		deadLetterQueue: cfg.DeadLetterQueue,
 	}, nil
@@ -142,13 +139,30 @@ func (q *QueueConsumer) processMessage(ctx context.Context, msg amqp.Delivery) e
 	}
 
 	switch notification.Type {
-	case TypePush:
-		return q.processPushNotification(ctx, &notification)
+	case TypeSMS:
+		return q.processSMS(ctx, &notification)
 		//	case TypeEmail:
 		//		return q.processEmailNotification(ctx, &notification)
 	default:
 		return fmt.Errorf("unsupported notification type: %s", notification.Type)
 	}
+}
+
+func (q *QueueConsumer) processSMS(ctx context.Context, notif *NotificationMessage) error {
+	payloadBytes, err := json.Marshal(notif.Payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %v", err)
+	}
+	var smsPayload NotificationEventPushModelPayload
+	if err := json.Unmarshal(payloadBytes, &smsPayload); err != nil {
+		return fmt.Errorf("failed to unmarshal push payload: %v", err)
+	}
+	slog.Info("SMS event receive", "payload", smsPayload)
+	err = q.phoneService.SendSMS(smsPayload.Payload.Notification.Title, smsPayload.Payload.Notification.Body, smsPayload.Payload.Destinations)
+	if err != nil {
+		return fmt.Errorf("failed to send notification: %w", err)
+	}
+	return nil
 }
 
 func (q *QueueConsumer) processPushNotification(ctx context.Context, notif *NotificationMessage) error {

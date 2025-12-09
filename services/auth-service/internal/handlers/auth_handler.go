@@ -34,6 +34,8 @@ func (a *AuthHandler) RegisterRoutes(router *gin.Engine) {
 
 	// Public routes
 	authGrPub.POST("/register", a.Register)
+	authGrPub.POST("/phone-otp/generate/:phone_number", a.GeneratePhoneOTP)
+	authGrPub.POST("/phone-otp/validate/:phone_number", a.ValidatePhoneOTP)
 	authGrPub.POST("/login", a.Login)
 	authGrPub.POST("/verify-identifier", a.VerifyIdentifier)
 
@@ -318,7 +320,7 @@ func (a *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// Attempt registration
-	user, err := a.userService.RegisterNewUser(req.Phone, req.Email, req.Password, req.NationalID, false, false)
+	user, err := a.userService.RegisterNewUser(req.Phone, req.Email, req.Password, req.NationalID, true, false)
 	if err != nil {
 		log.Printf("Registration failed for user %s/%s: %v", req.Email, req.Phone, err)
 
@@ -368,6 +370,40 @@ func (a *AuthHandler) Register(c *gin.Context) {
 			Timestamp: time.Now(),
 		},
 	})
+}
+
+func (a *AuthHandler) GeneratePhoneOTP(c *gin.Context) {
+	phoneNumber := c.Param("phone_number")
+	if phoneNumber == "" {
+		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "phone_number is required"))
+		return
+	}
+	err := a.userService.GeneratePhoneOTP(c, phoneNumber)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("INTERNAL_ERROR", fmt.Sprintf("error generating otp code, err=%w", err)))
+		return
+	}
+	c.JSON(http.StatusCreated, utils.CreateSuccessResponse("phone otp generated"))
+}
+
+func (a *AuthHandler) ValidatePhoneOTP(c *gin.Context) {
+	phoneNumber := c.Param("phone_number")
+	if phoneNumber == "" {
+		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "phone_number is required"))
+		return
+	}
+	otp := c.Query("otp")
+	if otp == "" {
+		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "otp is required"))
+		return
+	}
+
+	err := a.userService.ValidatePhoneOTP(c, phoneNumber, otp)
+	if err != nil {
+		c.JSON(http.StatusForbidden, utils.CreateErrorResponse("ACTION_FORBIDDEN", "incorrect otp"))
+		return
+	}
+	c.JSON(http.StatusOK, utils.CreateSuccessResponse("phone validated"))
 }
 
 func (a *AuthHandler) GetMySession(c *gin.Context) {

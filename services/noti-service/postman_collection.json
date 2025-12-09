@@ -241,6 +241,160 @@
           }
         }
       ]
+    },
+    {
+      "name": "Notifications",
+      "item": [
+        {
+          "name": "Get All Notifications",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/protected/notifications?page=1&limit=20&status=sent&platform=web",
+              "host": ["{{base_url}}"],
+              "path": ["protected", "notifications"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1",
+                  "description": "Page number (default: 1)"
+                },
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "description": "Items per page (default: 20)"
+                },
+                {
+                  "key": "status",
+                  "value": "sent",
+                  "description": "Filter by status: sent or read (optional)",
+                  "disabled": true
+                },
+                {
+                  "key": "platform",
+                  "value": "web",
+                  "description": "Filter by platform: web, android, or ios (optional)",
+                  "disabled": true
+                }
+              ]
+            },
+            "response": [
+              {
+                "name": "Success Response",
+                "originalRequest": {
+                  "method": "GET",
+                  "header": [
+                    {
+                      "key": "x-user-id",
+                      "value": "{{user_id}}"
+                    }
+                  ],
+                  "url": {
+                    "raw": "{{base_url}}/protected/notifications?page=1&limit=20",
+                    "host": ["{{base_url}}"],
+                    "path": ["protected", "notifications"],
+                    "query": [
+                      {
+                        "key": "page",
+                        "value": "1"
+                      },
+                      {
+                        "key": "limit",
+                        "value": "20"
+                      }
+                    ]
+                  }
+                },
+                "status": "OK",
+                "code": 200,
+                "_postman_previewlanguage": "json",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "body": "{\n  \"data\": [\n    {\n      \"id\": \"receiver-id\",\n      \"notificationId\": \"notification-id\",\n      \"title\": \"Test Notification\",\n      \"body\": \"This is a test message\",\n      \"data\": null,\n      \"platform\": \"web\",\n      \"status\": \"sent\",\n      \"createdAt\": \"2025-12-08T00:00:00.000Z\"\n    }\n  ],\n  \"unread\": 5,\n  \"pagination\": {\n    \"page\": 1,\n    \"limit\": 20,\n    \"total\": 100,\n    \"totalPages\": 5\n  }\n}"
+              }
+            ]
+          }
+        },
+        {
+          "name": "Pull Notifications (iOS)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/public/pull/ios?user_id={{user_id}}&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["public", "pull", "ios"],
+              "query": [
+                {
+                  "key": "user_id",
+                  "value": "{{user_id}}",
+                  "description": "User ID (required)"
+                },
+                {
+                  "key": "limit",
+                  "value": "10",
+                  "description": "Number of notifications to pull (default: 10)"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark As Read",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"receiverIds\": [\"receiver-id-1\", \"receiver-id-2\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/protected/mark-read",
+              "host": ["{{base_url}}"],
+              "path": ["protected", "mark-read"]
+            }
+          }
+        },
+        {
+          "name": "Validate Subscription",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-user-id",
+                "value": "{{user_id}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/protected/validate?platform=web",
+              "host": ["{{base_url}}"],
+              "path": ["protected", "validate"],
+              "query": [
+                {
+                  "key": "platform",
+                  "value": "web",
+                  "description": "Platform: web, android, or ios"
+                }
+              ]
+            }
+          }
+        }
+      ]
     }
   ]
 }

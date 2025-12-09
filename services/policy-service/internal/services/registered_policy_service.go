@@ -940,6 +940,10 @@ func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[
 		slog.Error("insurance partner profile not found", "status_code", resp.StatusCode, "body", string(body))
 		return nil, fmt.Errorf("insurance partner profile not found %d, body: %s", resp.StatusCode, string(body))
 	}
+	if resp.StatusCode == http.StatusForbidden {
+		slog.Error("insurance partner profile not found", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("insurance partner profile not found %d, body: %s", resp.StatusCode, string(body))
+	}
 
 	if resp.StatusCode != http.StatusOK {
 		slog.Error("Unexpected status code for insurance partner profile", "status_code", resp.StatusCode, "body", string(body))

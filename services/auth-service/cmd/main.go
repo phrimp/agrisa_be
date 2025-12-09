@@ -5,6 +5,7 @@ import (
 	"auth-service/internal/database/minio"
 	"auth-service/internal/database/postgres"
 	"auth-service/internal/database/redis"
+	"auth-service/internal/event"
 	"auth-service/internal/handlers"
 	"auth-service/internal/repository"
 	"auth-service/internal/services"
@@ -100,6 +101,13 @@ func main() {
 		log.Fatalf("Failed to initialize Redis client: %v", err)
 	}
 
+	rabbitConn, err := event.ConnectRabbitMQ(cfg.RabbitMQCfg)
+	if err != nil {
+		log.Fatalf("CRITICAL: Cannot start policy service without RabbitMQ connection: %v", err)
+	}
+	defer rabbitConn.Close()
+
+	notificationPublisher := event.NewNotificationPublisher(rabbitConn)
 	// repositories
 	userRepo := repository.NewUserRepository(db)
 	userCardRepo := repository.NewUserCardRepository(db)
@@ -111,7 +119,7 @@ func main() {
 	jwtService := services.NewJWTService(cfg.AuthCfg.JWTSecret)
 	roleService := services.NewRoleService(roleRepo)
 	sessionService := services.NewSessionService(sessionRepo)
-	userService := services.NewUserService(userRepo, mc, cfg, utils, userCardRepo, ekycProgressRepo, sessionService, jwtService, roleService)
+	userService := services.NewUserService(userRepo, mc, cfg, utils, userCardRepo, ekycProgressRepo, sessionService, jwtService, roleService, notificationPublisher)
 	// handlers
 	userHandler := handlers.NewUserHandler(userService)
 	authHandler := handlers.NewAuthHandler(userService, roleService)

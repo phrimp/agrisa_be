@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"notification-service/internal/config"
+	"notification-service/internal/event"
+	"notification-service/internal/google"
+	"notification-service/internal/handlers"
+	"notification-service/internal/phone"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
-
-	"notification-service/internal/config"
-	"notification-service/internal/event"
-	"notification-service/internal/google"
-	"notification-service/internal/handlers"
 
 	"github.com/gofiber/fiber/v3"
 )
@@ -78,16 +78,7 @@ func main() {
 
 	emailHandler.Register(app)
 
-	firebaseConfig := &google.FirebaseConfig{
-		CredentialsPath: cfg.GoogleConfig.FirebaseCredentials,
-		ProjectID:       cfg.GoogleConfig.FirebaseProjectID,
-		BatchSize:       500,
-	}
-
-	firebaseService, err := google.NewFirebaseService(firebaseConfig)
-	if err != nil {
-		log.Fatalf("Failed to initialize Firebase: %v", err)
-	}
+	phoneService := phone.NewPhoneService(cfg.PhoneServerConfig.Host, cfg.PhoneServerConfig.Port, cfg.PhoneServerConfig.Username, cfg.PhoneServerConfig.Password)
 
 	// Setup queue consumer
 	consumerConfig := &event.ConsumerConfig{
@@ -100,7 +91,7 @@ func main() {
 		PrefetchCount:   10,
 	}
 
-	consumer, err := event.NewQueueConsumer(consumerConfig, firebaseService, emailService)
+	consumer, err := event.NewQueueConsumer(consumerConfig, emailService, phoneService)
 	if err != nil {
 		log.Fatalf("Failed to setup queue consumer: %v", err)
 	}

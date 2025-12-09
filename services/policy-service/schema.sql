@@ -13,7 +13,7 @@ CREATE EXTENSION IF NOT EXISTS "postgis";
 CREATE TYPE data_source_type AS ENUM ('weather', 'satellite', 'derived');
 CREATE TYPE parameter_type AS ENUM ('numeric', 'boolean', 'categorical');
 CREATE TYPE base_policy_status AS ENUM ('draft', 'active', 'closed', 'archived');
-CREATE TYPE policy_status AS ENUM ('draft', 'pending_review', 'pending_payment','payout', 'active', 'expired','pending_cancel', 'cancelled', 'rejected', 'dispute');
+CREATE TYPE policy_status AS ENUM ('draft', 'pending_review', 'pending_payment','payout', 'active', 'expired','pending_cancel', 'cancelled', 'rejected', 'dispute', 'cancelled_pending_payment');
 CREATE TYPE underwriting_status AS ENUM ('pending', 'approved', 'rejected');
 CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'overdue', 'cancelled', 'refunded');
 CREATE TYPE validation_status AS ENUM ('pending', 'passed', 'passed_ai', 'failed', 'warning');
@@ -27,7 +27,7 @@ CREATE TYPE farm_status AS ENUM ('active', 'inactive', 'archived');
 CREATE TYPE photo_type AS ENUM ('crop', 'boundary', 'land_certificate', 'other', 'satellite');
 CREATE TYPE monitor_frequency AS ENUM ('hour', 'day', 'week', 'month', 'year');
 CREATE TYPE cancel_request_type as ENUM ('contract_violation', 'other', 'non_payment', 'policyholder_request', 'regulatory_change');
-CREATE TYPE cancel_request_status as ENUM ('approved', 'litigation', 'denied', 'pending_review');
+CREATE TYPE cancel_request_status as ENUM ('approved', 'litigation', 'denied', 'pending_review', 'cancelled', 'payment_failed');
 CREATE TYPE claim_rejection_type as ENUM ('claim_data_incorrect', 'trigger_not_met', 'policy_not_active', 'location_mismatch', 'duplicate_claim', 'suspected_fraud', 'other');
 CREATE TYPE risk_analysis_type AS ENUM ('ai_model', 'document_validation', 'cross_reference', 'manual');
 CREATE TYPE risk_level AS ENUM ('low', 'medium', 'high', 'critical');
@@ -518,16 +518,13 @@ CREATE TABLE cancel_request (
     review_notes TEXT,
     -- 
     compensate_amount INT NOT NULL DEFAULT 0,
+    paid boolean,
+    paid_at TIMESTAMP, 
+    during_notice_period boolean,
     
     -- Audit trail
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    
-    CONSTRAINT review_consistency CHECK (
-        (status = 'denied' AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
-        (status = 'approved' AND reviewed_by IS NOT NULL AND reviewed_at IS NOT NULL) OR
-        (status = 'litigation')
-    )
 );
 
 -- Cancel request indexes for performance

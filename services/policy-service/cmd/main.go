@@ -161,13 +161,14 @@ func main() {
 	farmService := services.NewFarmService(farmRepo, cfg, minioClient, workerManager)
 	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
 	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, notificationHelper, geminiSelector)
-	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient, registeredPolicyRepo, basePolicyRepo, notificationHelper, workerManager)
+	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient, registeredPolicyRepo, basePolicyRepo, notificationHelper, workerManager, cancelRepo)
 	basePolicyTriggerService := services.NewBasePolicyTriggerService(basePolicyTriggerRepo)
 	riskAnalysisService := services.NewRiskAnalysisCRUDService(registeredPolicyRepo)
 	claimService := services.NewClaimService(claimRepo, registeredPolicyRepo, farmRepo, payoutRepo, notificationHelper)
 	claimRejectionService := services.NewClaimRejectionService(registeredPolicyRepo, claimRepo, claimRejectionRepo)
 	dashboardService := services.NewDashboardService(registeredPolicyRepo)
 	payoutServie := services.NewPayoutService(payoutRepo, registeredPolicyRepo, farmRepo)
+	cancelRequestService := services.NewCancelRequestService(registeredPolicyRepo, cancelRepo, notificationHelper, redisClient)
 
 	// Expiration Listener
 	ctx, cancel := context.WithCancel(context.Background())
@@ -244,6 +245,7 @@ func main() {
 	claimRejectionHandler := handlers.NewClaimRejectionHandler(claimRejectionService, registeredPolicyService)
 	dashboardHandler := handlers.NewDashboardHandler(dashboardService)
 	payoutHandler := handlers.NewPayoutHandler(payoutServie, registeredPolicyService)
+	cancelRequestHandler := handlers.NewCancelRequestHandler(registeredPolicyService, cancelRequestService)
 
 	// Register routes
 	dataTierHandler.Register(app)
@@ -257,6 +259,7 @@ func main() {
 	claimRejectionHandler.Register(app)
 	dashboardHandler.Register(app)
 	payoutHandler.Register(app)
+	cancelRequestHandler.Register(app)
 
 	// Register payment consumer health check endpoint
 	app.Get("/health/payment-consumer", paymentConsumerHealthHandler)

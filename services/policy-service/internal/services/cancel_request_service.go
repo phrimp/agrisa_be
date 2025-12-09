@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"policy-service/internal/database/redis"
 	"policy-service/internal/event"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
@@ -16,26 +17,30 @@ type CancelRequestService struct {
 	policyRepo        *repository.RegisteredPolicyRepository
 	cancelRequestRepo *repository.CancelRequestRepository
 	notievent         *event.NotificationHelper
+	redisClient       *redis.Client
 }
 
 func NewCancelRequestService(
 	policyRepo *repository.RegisteredPolicyRepository,
 	cancelRequestRepo *repository.CancelRequestRepository,
 	notievent *event.NotificationHelper,
+	redisClient *redis.Client,
 ) *CancelRequestService {
 	return &CancelRequestService{
 		cancelRequestRepo: cancelRequestRepo,
 		policyRepo:        policyRepo,
 		notievent:         notievent,
+		redisClient:       redisClient,
 	}
 }
 
-func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID uuid.UUID, createdBy string, request models.CancelRequest) (*models.CreateCancelRequestResponse, error) {
+func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID uuid.UUID, createdBy string, req models.CreateCancelRequestRequest) (*models.CreateCancelRequestResponse, error) {
 	policy, err := c.policyRepo.GetByID(policyID)
 	if err != nil {
 		slog.Error("error retriving policy", "error", err)
-		return nil, fmt.Errorf("error retriving policy by id err=%w", "err")
+		return nil, fmt.Errorf("error retriving policy by id err=%w", err)
 	}
+
 	allowedStatus := map[models.PolicyStatus]bool{
 		models.PolicyActive:         true,
 		models.PolicyPendingPayment: true,
@@ -61,6 +66,20 @@ func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID
 			tx.Rollback()
 		}
 	}()
+
+	compensationAmount, err := c.policyRepo.GetCompensationAmount(policy.ID, createdBy, req.CancelRequestType)
+	if err != nil {
+		return nil, fmt.Errorf("error calculating compensation amount: %w", err)
+	}
+	request := models.CancelRequest{
+		RegisteredPolicyID: policy.ID,
+		CancelRequestType:  req.CancelRequestType,
+		Reason:             req.Reason,
+		Evidence:           req.Evidence,
+		CompensateAmount:   int(compensationAmount),
+		RequestedBy:        createdBy,
+		RequestedAt:        time.Now(),
+	}
 
 	if policy.Status == models.PolicyPendingReview || policy.Status == models.PolicyPendingPayment {
 		slog.Info("Policy has not activated change status to cancelled", "policy_id", policyID, "status", policy.Status)
@@ -115,7 +134,8 @@ func (c *CancelRequestService) GetAllProviderCancelRequests(ctx context.Context,
 	return c.cancelRequestRepo.GetAllRequestsByProviderID(ctx, providerID)
 }
 
-func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review models.ReviewCancelRequestReq, compensationAmount float64) (string, error) {
+// confirm the decision, update the request, start the notice period, and flag the payment process
+func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review models.ReviewCancelRequestReq) (string, error) {
 	request, err := c.cancelRequestRepo.GetCancelRequestByID(review.RequestID)
 	if err != nil {
 		slog.Error("error retriving cancel request", "error", err)
@@ -123,6 +143,9 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 	}
 	if request.Status != models.CancelRequestStatusPendingReview {
 		return "", fmt.Errorf("cancel request status invalid")
+	}
+	if request.RequestedBy == review.ReviewedBy {
+		return "", fmt.Errorf("cannot review your own request")
 	}
 
 	tx, err := c.policyRepo.BeginTransaction()
@@ -143,21 +166,22 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 		return "", fmt.Errorf("error retriving policy by id err=%w", err)
 
 	}
+
 	now := time.Now()
 	request.ReviewedBy = &review.ReviewedBy
 	request.ReviewedAt = &now
 	request.ReviewNotes = &review.ReviewNote
 
+	if policy.Status != models.PolicyPendingCancel {
+		return "", fmt.Errorf("policy status invalid for review: expected PendingCancel, got %s", policy.Status)
+	}
+
+	if policy.InsuranceProviderID != review.ReviewedBy && policy.FarmerID != review.ReviewedBy {
+		return "", fmt.Errorf("reviewer cannot review cancel request of this policy")
+	}
+
 	if review.Approved {
 		request.Status = models.CancelRequestStatusApproved
-		if compensationAmount == 0 {
-			policy.Status = models.PolicyCancelled
-			err := c.policyRepo.UpdateTx(tx, policy)
-			if err != nil {
-				slog.Error("error updating policy", "error", err)
-				return "", err
-			}
-		}
 	} else {
 		policy.Status = models.PolicyDispute
 		request.Status = models.CancelRequestStatusLitigation
@@ -177,6 +201,11 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 	if err := tx.Commit(); err != nil {
 		slog.Error("error commiting transaction", "error", err)
 		return "", fmt.Errorf("error commiting transaction=%w", err)
+	}
+
+	if review.Approved {
+		key := request.ID.String() + "--CancelRequest--NoticePeriod"
+		c.redisClient.GetClient().Set(ctx, key, "", models.NoticePeriod)
 	}
 
 	return "Cancel Request Reviewed", nil
@@ -244,16 +273,36 @@ func (c *CancelRequestService) ResolveConflict(ctx context.Context, review model
 		slog.Error("error commiting transaction", "error", err)
 		return "", fmt.Errorf("error commiting transaction=%w", err)
 	}
+	if request.Status == models.CancelRequestStatusApproved {
+		// start notice period
+	}
 	return "Cancel Request Reviewed", nil
 }
 
-func (s *CancelRequestService) GetCompensationAmount(ctx context.Context, requestID, policyID uuid.UUID, isFarmer bool) (float64, error) {
+func (s *CancelRequestService) GetCompensationAmount(ctx context.Context, requestID, policyID uuid.UUID) (float64, error) {
 	request, err := s.cancelRequestRepo.GetCancelRequestByID(requestID)
 	if err != nil {
 		return 0, err
 	}
-	if isFarmer {
-		return s.policyRepo.GetCompensationAmount(policyID, request.RequestedBy, "", request.CancelRequestType)
+	return s.policyRepo.GetCompensationAmount(policyID, request.RequestedBy, request.CancelRequestType)
+}
+
+func (s *CancelRequestService) RevokeRequest(ctx context.Context, requestID uuid.UUID) error {
+	request, err := s.cancelRequestRepo.GetCancelRequestByID(requestID)
+	if err != nil {
+		return err
 	}
-	return s.policyRepo.GetCompensationAmount(policyID, "", request.RequestedBy, request.CancelRequestType)
+	if request.Status != models.CancelRequestStatusPendingReview {
+		return fmt.Errorf("invalid request status")
+	}
+	policy, err := s.policyRepo.GetByID(request.RegisteredPolicyID)
+	if err != nil {
+		return err
+	}
+	if policy.Status != models.PolicyPendingCancel {
+		return fmt.Errorf("invalid policy status")
+	}
+	request.Status = models.CancelRequestStatusCancelled
+
+	return nil
 }

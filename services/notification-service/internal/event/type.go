@@ -6,7 +6,6 @@ type NotificationType string
 
 const (
 	TypeEmail NotificationType = "email"
-	TypePush  NotificationType = "push"
 	TypeSMS   NotificationType = "sms"
 	TypeInApp NotificationType = "in_app"
 )
@@ -29,4 +28,18 @@ type NotificationMessage struct {
 	MaxRetries   int                  `json:"max_retries"`
 	CreatedAt    time.Time            `json:"created_at"`
 	ScheduledFor *time.Time           `json:"scheduled_for,omitempty"`
+}
+
+type NotificationEventPushModelPayload struct {
+	Payload NotificationEventPushModel `json:"payload"`
+}
+
+type NotificationEventPushModel struct {
+	Notification Notification `json:"notification"`
+	Destinations []string     `json:"destinations"`
+}
+
+type Notification struct {
+	Title string `json:"title"`
+	Body  string `json:"body"`
 }

@@ -4,6 +4,7 @@ import (
 	agrisa_utils "agrisa_utils"
 	"auth-service/internal/config"
 	"auth-service/internal/database/minio"
+	"auth-service/internal/event"
 	"auth-service/internal/models"
 	"auth-service/internal/repository"
 	"auth-service/utils"
@@ -44,6 +45,8 @@ type IUserService interface {
 	GetUserCardByUserID(userID string) (*models.UserCard, error)
 	ResetEkycData(userID string) error
 	UpdateUserCardByUserID(userID string, req models.UpdateUserCardRequest) error
+	GeneratePhoneOTP(ctx context.Context, phoneNumber string) error
+	ValidatePhoneOTP(ctx context.Context, phoneNumber, otp string) error
 }
 
 type UserService struct {
@@ -56,13 +59,14 @@ type UserService struct {
 	sessionService   *SessionService
 	roleService      *RoleService
 	jwtService       *JWTService
+	eventPublisher   *event.NotificationPublisher
 
 	globalLoginAttempt map[string]int
 	mu                 *sync.Mutex
 	redisClient        *redis.Client
 }
 
-func NewUserService(userRepo repository.IUserRepository, minioClient *minio.MinioClient, cfg *config.AuthServiceConfig, utils *utils.Utils, userCardRepo repository.IUserCardRepository, ekycProgressRepo repository.IUserEkycProgressRepository, sessionService *SessionService, jwtService *JWTService, roleService *RoleService) IUserService {
+func NewUserService(userRepo repository.IUserRepository, minioClient *minio.MinioClient, cfg *config.AuthServiceConfig, utils *utils.Utils, userCardRepo repository.IUserCardRepository, ekycProgressRepo repository.IUserEkycProgressRepository, sessionService *SessionService, jwtService *JWTService, roleService *RoleService, eventPublisher *event.NotificationPublisher) IUserService {
 	// Initialize Redis client
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     fmt.Sprintf("%s:%s", cfg.RedisCfg.Host, cfg.RedisCfg.Port),
@@ -90,6 +94,7 @@ func NewUserService(userRepo repository.IUserRepository, minioClient *minio.Mini
 		globalLoginAttempt: make(map[string]int),
 		mu:                 &sync.Mutex{},
 		redisClient:        rdb,
+		eventPublisher:     eventPublisher,
 	}
 }
 
@@ -1351,4 +1356,42 @@ func (s *UserService) UpdateUserCardByUserID(userID string, req models.UpdateUse
 	}
 
 	return s.userCardRepo.UpdateUserCardByUserID(userID, req)
+}
+
+func (s *UserService) GeneratePhoneOTP(ctx context.Context, phoneNumber string) error {
+	otp := agrisa_utils.GenerateRandomStringWithLength(6)
+	err := s.redisClient.Set(ctx, phoneNumber, otp, 5*time.Minute).Err()
+	if err != nil {
+		return fmt.Errorf("error generating otp=%w", err)
+	}
+	go func() {
+		event := event.NotificationEventPushModel{
+			Notification: event.Notification{
+				Title: "Xac Thuc So Dien Thoai",
+				Body:  fmt.Sprintf("Ma xac thuc OTP: %s", otp),
+			},
+			Destinations: []string{phoneNumber},
+		}
+
+		for {
+			err := s.eventPublisher.PublishNotification(context.Background(), event)
+			if err == nil {
+				slog.Info("phone number verification sent", "phone_number", phoneNumber)
+				return
+			}
+			slog.Error("error sending phone number verification ", "error", err)
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
+	return nil
+}
+
+func (s *UserService) ValidatePhoneOTP(ctx context.Context, phoneNumber, otp string) error {
+	generatedOTP := s.redisClient.Get(ctx, phoneNumber).Val()
+	if otp != generatedOTP {
+		slog.Info("incorrect otp", "actual otp", generatedOTP)
+		return fmt.Errorf("incorrect otp")
+	}
+	return nil
 }

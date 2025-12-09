@@ -24,19 +24,19 @@ func (s *RegisteredPolicyService) RecoverPolicies(ctx context.Context) error {
 	slog.Info("Recovering active policy worker infrastructure")
 
 	// Load active policy IDs from database
-	activePolicyIDs, err := s.workerManager.GetPersistor().LoadActiveWorkerInfrastructure(ctx)
+	activePolicies, err := s.registeredPolicyRepo.GetByStatus(models.PolicyActive)
 	if err != nil {
 		return fmt.Errorf("failed to load active policies: %w", err)
 	}
 
-	slog.Info("Found active policies to recover", "count", len(activePolicyIDs))
+	slog.Info("Found active policies to recover", "count", len(activePolicies))
 
 	// Recover each policy's infrastructure
 	successCount := 0
-	for _, policyID := range activePolicyIDs {
-		if err := s.recoverPolicyInfrastructure(ctx, policyID); err != nil {
+	for _, policy := range activePolicies {
+		if err := s.recoverPolicyInfrastructure(ctx, &policy); err != nil {
 			slog.Error("Failed to recover policy infrastructure",
-				"policy_id", policyID,
+				"policy_id", policy.ID,
 				"error", err)
 			continue
 		}
@@ -44,21 +44,47 @@ func (s *RegisteredPolicyService) RecoverPolicies(ctx context.Context) error {
 	}
 
 	slog.Info("Worker infrastructure recovery completed",
-		"total", len(activePolicyIDs),
+		"total", len(activePolicies),
 		"successful", successCount,
-		"failed", len(activePolicyIDs)-successCount)
+		"failed", len(activePolicies)-successCount)
+
+	return nil
+}
+
+func (s *RegisteredPolicyService) RecoverPolicy(ctx context.Context, policyID uuid.UUID) error {
+	slog.Info("Recovering active policy worker infrastructure")
+	policy, err := s.registeredPolicyRepo.GetByID(policyID)
+	if err != nil {
+		return fmt.Errorf("failed to load policy: %w", err)
+	}
+	if policy.Status != models.PolicyActive {
+		return fmt.Errorf("invalid operation: invalid policy status")
+	}
+
+	err = s.recoverPolicyInfrastructure(ctx, policy)
+	if err != nil {
+		return fmt.Errorf("failed to recover policy infrastructure")
+	}
+
+	slog.Info("Worker infrastructure recovery completed")
 
 	return nil
 }
 
 // recoverPolicyInfrastructure recovers worker infrastructure for a single policy
-func (s *RegisteredPolicyService) recoverPolicyInfrastructure(ctx context.Context, policyID uuid.UUID) error {
-	slog.Info("Recovering policy infrastructure", "policy_id", policyID)
+func (s *RegisteredPolicyService) recoverPolicyInfrastructure(ctx context.Context, policy *models.RegisteredPolicy) error {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("CRITICAL: Panic recovery", "panic", r)
+		}
+	}()
 
-	// 1. Load registered policy
-	policy, err := s.registeredPolicyRepo.GetByID(policyID)
-	if err != nil {
-		return fmt.Errorf("failed to load registered policy: %w", err)
+	slog.Info("Recovering policy infrastructure", "policy_id", policy.ID)
+
+	scheduler, ok := s.workerManager.GetSchedulerByPolicyID(policy.ID)
+	if ok {
+		slog.Info("policy infrastructure already exist")
+		return nil
 	}
 
 	// 2. Load base policy
@@ -90,11 +116,32 @@ func (s *RegisteredPolicyService) recoverPolicyInfrastructure(ctx context.Contex
 	}
 
 	// 5. Start worker infrastructure
-	if err := s.workerManager.StartPolicyWorkerInfrastructure(ctx, policyID); err != nil {
+	if err := s.workerManager.StartPolicyWorkerInfrastructure(ctx, policy.ID); err != nil {
 		return fmt.Errorf("failed to start worker infrastructure: %w", err)
 	}
 
-	slog.Info("Successfully recovered policy infrastructure", "policy_id", policyID)
+	scheduler, ok = s.workerManager.GetSchedulerByPolicyID(policy.ID)
+	if !ok {
+		slog.Info("scheduler double check failed")
+		return fmt.Errorf("scheduler double check failed")
+
+	}
+	dailyJob := worker.JobPayload{
+		JobID: uuid.NewString(),
+		Type:  "fetch-farm-monitoring-data",
+		Params: map[string]any{
+			"policy_id":    policy.ID,
+			"start_date":   0,
+			"end_date":     0,
+			"check_policy": true,
+		},
+		MaxRetries: 5,
+		RunNow:     false,
+	}
+
+	scheduler.AddJob(dailyJob)
+
+	slog.Info("Successfully recovered policy infrastructure", "policy_id", policy.ID)
 	return nil
 }
 
@@ -232,11 +279,10 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		"base_policy_id", policy.BasePolicyID)
 
 	blockedStatus := map[models.PolicyStatus]bool{
-		models.PolicyPayout:        true,
-		models.PolicyCancelled:     true,
-		models.PolicyRejected:      true,
-		models.PolicyExpired:       true,
-		models.PolicyPendingCancel: true,
+		models.PolicyPayout:    true,
+		models.PolicyCancelled: true,
+		models.PolicyRejected:  true,
+		models.PolicyExpired:   true,
 	}
 	if blockedStatus[policy.Status] {
 		slog.Warn("Job blocked by policy status",
@@ -1943,7 +1989,7 @@ func fetchSatelliteData(
 	}
 
 	// Execute request with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Second)
 	defer cancel()
 	httpReq = httpReq.WithContext(ctx)
 
