@@ -179,13 +179,8 @@ func (r *CancelRequestRepository) GetAllRequestsByFarmerID(ctx context.Context, 
 	query := `SELECT cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, 
 	paid, paid_at, during_notice_period, -- Added missing fields
 	cr.created_at, cr.updated_at
-FROM public.cancel_request cr
-JOIN
-    registered_policy rp ON cr.registered_policy_id = rp.id
-WHERE
-    rp.farmer_id = $1
-ORDER BY
-    cr.requested_at DESC;`
+FROM cancel_request cr join registered_policy rp ON cr.registered_policy_id = rp.id
+where rp.farmer_id = $1 ORDER by cr.requested_at DESC`
 
 	err := r.db.SelectContext(ctx, &requests, query, farmerID)
 	if err != nil {
@@ -200,13 +195,8 @@ func (r *CancelRequestRepository) GetAllRequestsByProviderID(ctx context.Context
 	query := `SELECT cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, 
 	paid, paid_at, during_notice_period, -- Added missing fields
 	cr.created_at, cr.updated_at
-FROM public.cancel_request cr
-JOIN
-    registered_policy rp ON cr.registered_policy_id = rp.id
-WHERE
-    rp.insurance_provider_id = $1
-ORDER BY
-    cr.requested_at DESC;`
+FROM cancel_request cr join registered_policy rp ON cr.registered_policy_id = rp.id
+where rp.insurance_provider_id = $1 ORDER by cr.requested_at DESC`
 
 	err := r.db.SelectContext(ctx, &requests, query, providerID)
 	if err != nil {
