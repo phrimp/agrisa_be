@@ -39,7 +39,11 @@ export class PushNotiService {
 
     await this.createReceivers(notification.id, data.lstUserIds || []);
 
-    await Promise.all([this.sendWeb(data), this.sendAndroid(data), this.sendIOS(data)]);
+    await Promise.all([
+      this.sendWeb(data),
+      this.sendAndroid(data),
+      this.sendIOS(data, notification.id),
+    ]);
 
     return {
       message: 'Notification đã được gửi',
@@ -179,12 +183,14 @@ export class PushNotiService {
     };
   }
 
-  async sendIOS(data: SendPayloadDto) {
-    const notification = await this.notificationRepository.save({
-      title: data.title,
-      body: data.body,
-      data: data.data ?? null,
-    });
+  async sendIOS(data: SendPayloadDto, notificationId?: string) {
+    const notification = notificationId
+      ? { id: notificationId, created_at: new Date() }
+      : await this.notificationRepository.save({
+          title: data.title,
+          body: data.body,
+          data: data.data ?? null,
+        });
 
     const where: any = { platform: ePlatform.ios };
     if (data.lstUserIds && data.lstUserIds.length > 0) {
@@ -195,15 +201,17 @@ export class PushNotiService {
       where,
     });
 
-    const receivers = subscribers.map(sub => ({
-      notification_id: notification.id,
-      user_id: sub.user_id,
-      platform: ePlatform.ios,
-      status: 'sent',
-    }));
+    if (!notificationId) {
+      const receivers = subscribers.map(sub => ({
+        notification_id: notification.id,
+        user_id: sub.user_id,
+        platform: ePlatform.ios,
+        status: 'sent',
+      }));
 
-    if (receivers.length > 0) {
-      await this.receiverRepository.save(receivers);
+      if (receivers.length > 0) {
+        await this.receiverRepository.save(receivers);
+      }
     }
 
     const payload = {
@@ -384,7 +392,13 @@ export class PushNotiService {
     };
   }
 
-  async getAllNotifications(userId: string, page: number = 1, limit: number = 20, status?: string) {
+  async getAllNotifications(
+    userId: string,
+    page: number = 1,
+    limit: number = 20,
+    status?: string,
+    platform?: string,
+  ) {
     const skip = (page - 1) * limit;
 
     const where: any = {
@@ -393,6 +407,10 @@ export class PushNotiService {
 
     if (status) {
       where.status = status;
+    }
+
+    if (platform) {
+      where.platform = platform;
     }
 
     const [receivers, total] = await this.receiverRepository.findAndCount({
@@ -405,11 +423,17 @@ export class PushNotiService {
       take: limit,
     });
 
+    const unreadWhere: any = {
+      user_id: userId,
+      status: 'sent',
+    };
+
+    if (platform) {
+      unreadWhere.platform = platform;
+    }
+
     const unread = await this.receiverRepository.count({
-      where: {
-        user_id: userId,
-        status: 'sent',
-      },
+      where: unreadWhere,
     });
 
     const notifications = receivers.map(r => ({

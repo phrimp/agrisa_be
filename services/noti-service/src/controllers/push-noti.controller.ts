@@ -78,12 +78,14 @@ export class PushNotiController {
     @Query('page') page?: number,
     @Query('limit') limit?: number,
     @Query('status') status?: string,
+    @Query('platform') platform?: string,
   ) {
     return await this.pushNotiService.getAllNotifications(
       userId,
       page ? +page : 1,
       limit ? +limit : 20,
       status,
+      platform,
     );
   }
 }
