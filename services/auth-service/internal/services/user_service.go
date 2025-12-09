@@ -1295,6 +1295,8 @@ func (s *UserService) VerifyLandCertificate(userID string, NationalIDInput strin
 		return false, err
 	}
 
+	log.Printf("Comparing National IDs: userCard.NationalID=%s, NationalIDInput=%s", userCard.NationalID, NationalIDInput)
+
 	if userCard.NationalID != NationalIDInput {
 		isNationalIDMatch = false
 		return result, fmt.Errorf("bad_request: National ID does not match")

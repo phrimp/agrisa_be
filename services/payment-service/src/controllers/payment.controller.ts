@@ -270,7 +270,7 @@ export class PaymentController {
   }
 
   @Get('protected/orders')
-  getAllOrders(
+  async getAllOrders(
     @Headers('x-user-id') user_id: string,
     @Headers('x-user-permissions') user_permissions: string,
     @Query('page') page = '1',
@@ -281,38 +281,50 @@ export class PaymentController {
     const limit_num = Math.max(parseInt(limit, 10) || 10, 1);
     const permissions = user_permissions ? user_permissions.split(',') : [];
 
-    const orders_result = checkPermissions(permissions, ['view_all_orders'])
-      ? this.paymentService.find(page_num, limit_num, status?.split(','))
-      : this.paymentService.findByUserId(
-          user_id,
-          page_num,
-          limit_num,
-          status?.split(','),
-        );
+    try {
+      // Lấy payments
+      const payments_result = checkPermissions(permissions, ['view_all_orders'])
+        ? await this.paymentService.find(
+            page_num,
+            limit_num,
+            status?.split(','),
+          )
+        : await this.paymentService.findByUserId(
+            user_id,
+            page_num,
+            limit_num,
+            status?.split(','),
+          );
 
-    return orders_result
-      .then((result) => {
-        const { items, total } = result;
-        const total_pages = Math.ceil(total / limit_num);
-        return {
-          items: z.array(paymentViewSchema).parse(items),
-          metadata: {
-            page: page_num,
-            limit: limit_num,
-            total_items: total,
-            total_pages,
-            next: page_num < total_pages,
-            previous: page_num > 1,
-          },
-        };
-      })
-      .catch((error) => {
-        this.logger.error('Failed to get orders', error);
-        throw new HttpException(
-          'Lỗi khi lấy danh sách đơn hàng',
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      });
+      // Lấy payouts của user
+      const payouts_result = await this.payoutService.findByUserId(
+        user_id,
+        page_num,
+        limit_num,
+      );
+
+      const total = payments_result.total + payouts_result.total;
+      const total_pages = Math.ceil(total / limit_num);
+
+      return {
+        payments: z.array(paymentViewSchema).parse(payments_result.items),
+        payouts: z.array(payoutViewSchema).parse(payouts_result.items),
+        metadata: {
+          page: page_num,
+          limit: limit_num,
+          total_items: total,
+          total_pages,
+          next: page_num < total_pages,
+          previous: page_num > 1,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Failed to get orders', error);
+      throw new HttpException(
+        'Lỗi khi lấy danh sách đơn hàng',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('protected/order/:id')

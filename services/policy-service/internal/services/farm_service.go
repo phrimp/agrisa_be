@@ -486,7 +486,7 @@ func (s *FarmService) GetFarmPhotoJob(params map[string]any) error {
 	q.Add("start_date", startDate)
 	q.Add("end_date", endDate)
 	q.Add("max_cloud_cover", "100.0")
-	q.Add("buffer_meters", "250") // 250m buffer for better farm visibility in photos
+	q.Add("buffer_meters", "700") // 250m buffer for better farm visibility in photos
 	req.URL.RawQuery = q.Encode()
 
 	slog.Info("GetFarmPhotoJob: calling satellite service with 250m buffer", "farm_id", farmID, "url", req.URL.String())
@@ -877,9 +877,9 @@ func ValidateCroptype(cropType string) bool {
 }
 
 var riceSoilTypes = map[string]bool{
-	"Đất chuyên trồng lúa nước (LUC)":  true,
-	"Đất trồng lúa nước còn lại (LUK)": true,
-	"Đất lúa nương (LUN)":              true,
+	"Đất chuyên trồng lúa (LUC)":  true,
+	"Đất trồng lúa còn lại (LUK)": true,
+	"Đất lúa nương (LUN)":         true,
 }
 
 var coffeeSoilTypes = map[string]bool{

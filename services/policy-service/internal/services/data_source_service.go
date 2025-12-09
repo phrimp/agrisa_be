@@ -45,19 +45,20 @@ func (s *DataSourceService) CreateDataSource(dataSource *models.DataSource) erro
 	// Set default values
 	dataSource.IsActive = true
 
+	var url string
 	if dataSource.DataSource == models.DataSourceSatellite {
-		var url string
 		if dataSource.ParameterName == models.NDVI {
 			url = s.config.SatelliteDataServiceURL + string(models.SatelliteNDVI)
 		}
 		if dataSource.ParameterName == models.NDMI {
 			url = s.config.SatelliteDataServiceURL + string(models.SatelliteNDMI)
 		}
+	} else if dataSource.DataSource == models.DataSourceWeather {
 		if dataSource.ParameterName == models.RainFall {
 			url = s.config.WeatherDataServiceURL + string(models.WeatherRainFall)
 		}
-		dataSource.APIEndpoint = &url
 	}
+	dataSource.APIEndpoint = &url
 	return s.repo.CreateDataSource(dataSource)
 }
 

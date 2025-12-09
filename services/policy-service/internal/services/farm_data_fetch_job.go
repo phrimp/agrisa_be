@@ -278,6 +278,14 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		"farm_id", policy.FarmID,
 		"base_policy_id", policy.BasePolicyID)
 
+	now := time.Now()
+	if now.Unix() < policy.CoverageStartDate || now.Unix() > policy.CoverageEndDate {
+		slog.Warn("Job blocked coverage date",
+			"policy_id", policyID,
+			"policy_status", policy.Status,
+			"reason", "Policy is not yet coveraged")
+		return fmt.Errorf("fetch farm monitoring data job blocked by policy coverage period: %v", policy.Status)
+	}
 	blockedStatus := map[models.PolicyStatus]bool{
 		models.PolicyPayout:    true,
 		models.PolicyCancelled: true,
