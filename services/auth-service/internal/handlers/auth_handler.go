@@ -461,6 +461,9 @@ func (a *AuthHandler) VerifyLandCertificate(c *gin.Context) {
 		return
 	}
 
+	log.Printf("National ID input value: %s", natinonalIDInput)
+	log.Printf("User ID: %s", userID)
+
 	isValid, err := a.userService.VerifyLandCertificate(userID, natinonalIDInput)
 	if err != nil {
 		log.Printf("Land certificate verification failed for user %s: %v", userID, err)
