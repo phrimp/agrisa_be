@@ -30,6 +30,9 @@ services:
             - "traefik.http.middlewares.cors.headers.accesscontrolalloworiginlist=*"
             - "traefik.http.middlewares.cors.headers.accesscontrolmaxage=86400"
             - "traefik.http.middlewares.cors.headers.addvaryheader=true"
+            - "traefik.http.middlewares.auth-middleware.forwardauth.address=http://auth-service:8083/auth/validate"
+            - "traefik.http.middlewares.auth-middleware.forwardauth.authResponseHeaders=X-User-ID,X-User-Name,X-User-Email,X-User-Role"
+            - "traefik.http.middlewares.auth-middleware.forwardauth.trustForwardHeader=true"
 
     # RabbitMQ Message Broker
     rabbitmq:
