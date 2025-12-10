@@ -1000,7 +1000,7 @@ func (s *RegisteredPolicyService) calculateClaimPayouts(
 	triggeredConditions []TriggeredCondition,
 ) (fixPayout float64, thresholdPayout float64, totalPayout float64, overThresholdValue *float64) {
 	// Calculate fix payout (base payout amount)
-	fixPayout = float64(basePolicy.FixPayoutAmount) * basePolicy.PayoutBaseRate
+	fixPayout = policy.CoverageAmount
 
 	// Calculate over-threshold payout based on how much the condition exceeded the threshold
 	var maxOverThreshold float64
@@ -1041,14 +1041,6 @@ func (s *RegisteredPolicyService) calculateClaimPayouts(
 			"original_total", fixPayout+thresholdPayout,
 			"capped_total", totalPayout,
 			"payout_cap", *basePolicy.PayoutCap)
-	}
-
-	// Ensure payout doesn't exceed coverage amount
-	if totalPayout > policy.CoverageAmount {
-		totalPayout = policy.CoverageAmount
-		slog.Info("Payout limited to coverage amount",
-			"calculated_total", fixPayout+thresholdPayout,
-			"coverage_amount", policy.CoverageAmount)
 	}
 
 	return fixPayout, thresholdPayout, totalPayout, overThresholdValue
