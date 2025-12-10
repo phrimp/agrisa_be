@@ -38,7 +38,7 @@ func (p *PhoneService) SendSMS(title, content string, phoneNumbers []string) err
 	const op = "PhoneService.SendSMS"
 	log := slog.With("operation", op)
 
-	url := fmt.Sprintf("http://%s:%s/message", p.Host, p.Port)
+	url := fmt.Sprintf("%s:%s/message", p.Host, p.Port)
 	log.Info("Starting SMS delivery process",
 		"target_url", url,
 		"recipients_count", len(phoneNumbers),
