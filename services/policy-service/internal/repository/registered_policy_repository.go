@@ -186,7 +186,7 @@ func (r *RegisteredPolicyRepository) GetAllPoliciesAndStatus() (map[uuid.UUID]mo
 }
 
 func (r *RegisteredPolicyRepository) GetCompensationAmount(id uuid.UUID, requestedBy string, compensationType models.CancelRequestType) (float64, error) {
-	now := time.Now().Unix()
+	now := time.Now()
 	compensationAmount := 0.0
 	coveragePercentage := 0.0
 
@@ -194,12 +194,31 @@ func (r *RegisteredPolicyRepository) GetCompensationAmount(id uuid.UUID, request
 	if err != nil {
 		return 0, err
 	}
+	var earlyCancelRate float32
+	query := `SELECT cancel_premium_rate FROM base_policy bp join registered_policy rp on rp.base_policy_id = bp.id where rp.id = $1`
+	err = r.db.GetContext(
+		context.Background(),
+		&earlyCancelRate,
+		query,
+		policy.ID,
+	)
+	if err != nil {
+		slog.Error("Failed to retrieve base policy early cancel rate", "error", err)
+		return 0, err
+	}
+	secondsSinceStart := now.Unix() - policy.CoverageStartDate
 
-	if now < policy.CoverageStartDate {
+	if secondsSinceStart >= 0 && secondsSinceStart <= 7*24*60*60 {
+		compensationAmount = policy.TotalFarmerPremium * float64(earlyCancelRate)
+		slog.Info("Policy is within early state, apply early cancel rate", "rate", earlyCancelRate, "amount", compensationAmount)
+		return compensationAmount, nil
+	}
+
+	if now.Unix() < policy.CoverageStartDate {
 		return 0, fmt.Errorf("policy haven't started")
 	}
 
-	coveragePercentage = float64((now - policy.CoverageStartDate) * 100 / (policy.CoverageEndDate - policy.CoverageStartDate))
+	coveragePercentage = float64((now.Unix() - policy.CoverageStartDate) * 100 / (policy.CoverageEndDate - policy.CoverageStartDate))
 
 	if policy.FarmerID == requestedBy {
 		if compensationType == models.CancelRequestTypeContractViolation {
