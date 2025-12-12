@@ -47,6 +47,7 @@ type IUserService interface {
 	UpdateUserCardByUserID(userID string, req models.UpdateUserCardRequest) error
 	GeneratePhoneOTP(ctx context.Context, phoneNumber string) error
 	ValidatePhoneOTP(ctx context.Context, phoneNumber, otp string) error
+	UpdatePassword(ctx context.Context, userID, otp, newPassword string) error
 }
 
 type UserService struct {
@@ -1394,6 +1395,24 @@ func (s *UserService) ValidatePhoneOTP(ctx context.Context, phoneNumber, otp str
 	if otp != generatedOTP {
 		slog.Info("incorrect otp", "actual otp", generatedOTP)
 		return fmt.Errorf("incorrect otp")
+	}
+	return nil
+}
+
+func (s *UserService) UpdatePassword(ctx context.Context, userID, otp, newPassword string) error {
+	user, err := s.userRepo.GetUserByID(userID)
+	if err != nil {
+		slog.Info("error get user by id", "user_id", userID)
+		return fmt.Errorf("error get user by id error=%w", err)
+	}
+	generatedOTP := s.redisClient.Get(ctx, user.PhoneNumber).Val()
+	if otp != generatedOTP {
+		slog.Info("incorrect otp", "actual otp", generatedOTP)
+		return fmt.Errorf("incorrect otp")
+	}
+	err = s.userRepo.UpdatePassword(userID, newPassword)
+	if err != nil {
+		return fmt.Errorf("error updating user password error=%w", err)
 	}
 	return nil
 }
