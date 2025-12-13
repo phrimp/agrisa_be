@@ -21,6 +21,7 @@ import (
 )
 
 func setupLogging() (*os.File, error) {
+	// test
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Printf("Recovered from panic: %v\n", r)
