@@ -1395,5 +1395,6 @@ func (s *UserService) ValidatePhoneOTP(ctx context.Context, phoneNumber, otp str
 		slog.Info("incorrect otp", "actual otp", generatedOTP)
 		return fmt.Errorf("incorrect otp")
 	}
+	s.redisClient.Del(ctx, phoneNumber)
 	return nil
 }

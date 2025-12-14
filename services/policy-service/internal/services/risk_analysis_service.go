@@ -93,9 +93,7 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 	var mu sync.Mutex
 
 	// Fetch farm data
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		farmData, err := s.farmService.GetByFarmID(ctx, policy.FarmID.String())
 		mu.Lock()
 		defer mu.Unlock()
@@ -104,15 +102,13 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 			return
 		}
 		farm = farmData
-	}()
+	})
 
 	// Fetch farm photos (will be fetched after farm data is available)
 	// Photos are stored in the farm struct, so we'll extract them after farm fetch
 
 	// Fetch 1-year historical monitoring data
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		endTimestamp := time.Now().Unix()
 		startTimestamp := endTimestamp - (365 * 24 * 60 * 60) // 1 year ago
 
@@ -127,12 +123,10 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 			return
 		}
 		monitoringData = data
-	}()
+	})
 
 	// Fetch trigger configuration
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		triggers, err := s.basePolicyRepo.GetBasePolicyTriggersByPolicyID(policy.BasePolicyID)
 		mu.Lock()
 		defer mu.Unlock()
@@ -153,7 +147,7 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 			return
 		}
 		conditions = conds
-	}()
+	})
 
 	wg.Wait()
 
@@ -326,20 +320,6 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 	if err := s.registeredPolicyRepo.CreateRiskAnalysis(&riskAnalysis); err != nil {
 		slog.Error("Failed to persist risk analysis", "error", err)
 		return fmt.Errorf("failed to persist risk analysis: %w", err)
-	}
-
-	// 11. Update underwriting status based on risk assessment
-	newStatus := s.determineUnderwritingStatus(riskAnalysis)
-	if err := s.registeredPolicyRepo.UpdateUnderwritingStatus(policyID, newStatus); err != nil {
-		slog.Error("Failed to update underwriting status",
-			"policy_id", policyIDStr,
-			"new_status", newStatus,
-			"error", err)
-		// Don't fail the job, risk analysis is already saved
-	} else {
-		slog.Info("Updated underwriting status",
-			"policy_id", policyIDStr,
-			"new_status", newStatus)
 	}
 
 	slog.Info("Risk analysis job completed successfully",
