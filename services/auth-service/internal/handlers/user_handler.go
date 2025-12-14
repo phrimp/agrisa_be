@@ -36,6 +36,8 @@ func (u *UserHandler) RegisterRoutes(router *gin.Engine, userHandler *UserHandle
 
 	// Add the ping route
 	userAuthGrPro := router.Group("/auth/protected/api/v2/")
+	userAuthGrPro.PUT("/update/password", userHandler.UpdatePassword)
+
 	// Add the session init route
 	userAuthGrPro.POST("/ocridcard", userHandler.OCRNationalIDCardHandler)
 	userAuthGrPro.GET("/ekyc-progress/:i", userHandler.GetUserEkycProgressByUserID)
@@ -111,6 +113,31 @@ func (h *UserHandler) UploadMultipleFilesTestHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, uploadFiles)
+}
+
+func (h *UserHandler) UpdatePassword(c *gin.Context) {
+	userID := c.GetHeader("X-User-ID")
+	if userID == "" {
+		c.JSON(http.StatusUnauthorized, utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+		return
+	}
+
+	otp := c.Query("otp")
+	if otp == "" {
+		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "otp is required"))
+		return
+	}
+	newPwd := c.Query("new_password")
+	if otp == "" {
+		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "new password is required"))
+		return
+	}
+	err := h.userService.UpdatePassword(c, userID, otp, newPwd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("INTERNAL_ERROR", "failed to update new password"))
+		return
+	}
+	c.JSON(http.StatusOK, utils.CreateSuccessResponse("password updated"))
 }
 
 func (h *UserHandler) OCRNationalIDCardHandler(c *gin.Context) {

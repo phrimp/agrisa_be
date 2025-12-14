@@ -6,6 +6,9 @@ import { PayoutService } from './payout.service';
 @Injectable()
 export class ImplPayoutService implements PayoutService {
   constructor(private readonly payoutRepository: PayoutRepository) {}
+  // getTotalPayoutAmountByTypeAndUserId(type: string, user_id: string): Promise<number> {
+  //   throw new Error('Method not implemented.');
+  // }
 
   async create(payout: Partial<Payout>): Promise<Payout> {
     return this.payoutRepository.create(payout);
@@ -30,4 +33,18 @@ export class ImplPayoutService implements PayoutService {
   async findByIdAndUserId(id: string, user_id: string): Promise<Payout | null> {
     return this.payoutRepository.findByIdAndUserId(id, user_id);
   }
+
+  async findByItemIds(item_ids: string[]): Promise<Payout[]> {
+    return this.payoutRepository.findByItemIds(item_ids);
+  }
+
+  // async getTotalPayoutAmountByTypeAndUserId(
+  //   type: string,
+  //   user_id: string,
+  // ): Promise<number> {
+  //   return this.payoutRepository.getTotalPayoutAmountByTypeAndUserId(
+  //     type,
+  //     user_id,
+  //   );
+  // }
 }

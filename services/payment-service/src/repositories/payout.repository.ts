@@ -65,4 +65,20 @@ export class PayoutRepository {
       relations: ['payment', 'payment.items'],
     });
   }
+
+  // async getTotalPayoutAmountByTypeAndUserId(
+  //   type: string,
+  //   user_id: string,
+  // ): Promise<number> {
+  //   const all = await this.payoutRepo.find({
+  //     where: { type, user_id, status: 'completed' },
+  //     select: ['amount'],
+  //   });
+  //   let total = 0;
+  //   all.forEach((payout) => {
+  //     total += Number(payout.amount) || 0;
+  //   });
+
+  //   return total;
+  // }
 }
