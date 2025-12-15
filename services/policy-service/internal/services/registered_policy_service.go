@@ -474,7 +474,7 @@ func (s *RegisteredPolicyService) calculateFarmerPremium(areasqm, basePremiumRat
 }
 
 // GetPolicyStats retrieves policy statistics (optionally filtered by provider)
-func (s *RegisteredPolicyService) GetPolicyStats(providerID string) (map[string]interface{}, error) {
+func (s *RegisteredPolicyService) GetPolicyStats(providerID string) (map[string]any, error) {
 	return s.registeredPolicyRepo.GetPolicyStats(providerID)
 }
 
@@ -956,7 +956,7 @@ func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		slog.Error("Error parsing JSON for insurance partner profile", "error", err)
 		return nil, fmt.Errorf("error parsing JSON: %v", err)
@@ -969,9 +969,9 @@ func (s *RegisteredPolicyService) UpdateRegisteredPolicy(policy *models.Register
 	return s.registeredPolicyRepo.Update(policy)
 }
 
-func (s *RegisteredPolicyService) GetPartnerID(result map[string]interface{}) (string, error) {
+func (s *RegisteredPolicyService) GetPartnerID(result map[string]any) (string, error) {
 	// Lấy object "data"
-	data, ok := result["data"].(map[string]interface{})
+	data, ok := result["data"].(map[string]any)
 	if !ok {
 		return "", fmt.Errorf("data field not found or invalid")
 	}
@@ -1063,7 +1063,7 @@ func (s *RegisteredPolicyService) GetAllUserIDsFromInsuranceProvider(providerID 
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		slog.Error("Error parsing JSON for insurance partner profile", "error", err)
 		return nil, fmt.Errorf("error parsing JSON: %v", err)

@@ -149,8 +149,8 @@ func (p *NotificationPublisher) PublishNotificationBatch(ctx context.Context, ev
 }
 
 // GetMetrics returns publisher metrics
-func (p *NotificationPublisher) GetMetrics() map[string]interface{} {
-	return map[string]interface{}{
+func (p *NotificationPublisher) GetMetrics() map[string]any {
+	return map[string]any{
 		"messages_published": p.messagesPublished,
 		"messages_failed":    p.messagesFailed,
 		"last_publish_time":  p.lastPublishTime,

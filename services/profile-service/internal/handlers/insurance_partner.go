@@ -166,7 +166,7 @@ func (h *InsurancePartnerHandler) GetInsurancePartnerPrivateByID(c *gin.Context)
 
 func (h *InsurancePartnerHandler) UpdateInsurancePartnerProfile(c *gin.Context) {
 	updateBy := c.GetHeader("X-User-ID")
-	var requestBody map[string]interface{}
+	var requestBody map[string]any
 	log.Printf("request go hereeeeee")
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
 		log.Printf("Error binding JSON for UpdateInsurancePartnerProfile: %s", err.Error())

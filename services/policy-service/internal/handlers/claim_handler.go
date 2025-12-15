@@ -81,7 +81,7 @@ func (h *ClaimHandler) GetFarmerOwnClaims(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claims"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claims":    claims,
 		"count":     len(claims),
 		"farmer_id": userID,
@@ -151,7 +151,7 @@ func (h *ClaimHandler) GetFarmerClaimsByPolicy(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claims"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claims":    claims,
 		"count":     len(claims),
 		"policy_id": policyID,
@@ -188,7 +188,7 @@ func (h *ClaimHandler) GetFarmerClaimsByFarm(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claims"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claims":  claims,
 		"count":   len(claims),
 		"farm_id": farmID,
@@ -221,7 +221,7 @@ func (h *ClaimHandler) GetPartnerClaims(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claims"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claims":     claims,
 		"count":      len(claims),
 		"partner_id": partnerID,
@@ -305,7 +305,7 @@ func (h *ClaimHandler) GetPartnerClaimsByPolicy(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claims"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claims":    claims,
 		"count":     len(claims),
 		"policy_id": policyID,
@@ -370,7 +370,7 @@ func (h *ClaimHandler) GetAllClaimsAdmin(c fiber.Ctx) error {
 	}
 
 	// Parse optional filters
-	filters := make(map[string]interface{})
+	filters := make(map[string]any)
 
 	if statusParam := c.Query("status"); statusParam != "" {
 		filters["status"] = models.ClaimStatus(statusParam)
@@ -397,7 +397,7 @@ func (h *ClaimHandler) GetAllClaimsAdmin(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claims"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claims":       claims,
 		"count":        len(claims),
 		"requested_by": userID,
@@ -459,7 +459,7 @@ func (h *ClaimHandler) GetClaimsByPolicyAdmin(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claims"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claims":    claims,
 		"count":     len(claims),
 		"policy_id": policyID,
@@ -492,7 +492,7 @@ func (h *ClaimHandler) GetClaimsByFarmAdmin(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claims"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claims":  claims,
 		"count":   len(claims),
 		"farm_id": farmID,
@@ -527,7 +527,7 @@ func (h *ClaimHandler) DeleteClaimAdmin(c fiber.Ctx) error {
 
 	slog.Info("Claim deleted successfully", "claim_id", claimID, "deleted_by", userID)
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"message":    "Claim deleted successfully",
 		"claim_id":   claimID,
 		"deleted_by": userID,

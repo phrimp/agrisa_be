@@ -43,7 +43,7 @@ func (u *UserCardRepository) GetUserCardByUserID(userID string) (*models.UserCar
 }
 
 func (u *UserCardRepository) UpdateUserCardByUserID(userID string, req models.UpdateUserCardRequest) error {
-	updates := make(map[string]interface{})
+	updates := make(map[string]any)
 
 	if req.NationalID != nil {
 		updates["national_id"] = *req.NationalID
@@ -97,7 +97,7 @@ func (u *UserCardRepository) UpdateUserCardByUserID(userID string, req models.Up
 	}
 
 	setClauses := make([]string, 0, len(updates))
-	args := make(map[string]interface{})
+	args := make(map[string]any)
 
 	for column, value := range updates {
 		setClauses = append(setClauses, fmt.Sprintf("%s = :%s", column, column))

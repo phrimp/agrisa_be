@@ -14,7 +14,7 @@ const (
 	ExecDelete
 )
 
-func ExecWithCheck(db *sqlx.DB, query string, execType ExecType, args ...interface{}) error {
+func ExecWithCheck(db *sqlx.DB, query string, execType ExecType, args ...any) error {
 	result, err := db.Exec(query, args...)
 	if err != nil {
 		return fmt.Errorf("failed to execute query: %w", err)

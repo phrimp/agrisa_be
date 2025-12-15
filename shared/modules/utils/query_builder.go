@@ -11,7 +11,7 @@ import (
 
 type QueryBuildResult struct {
 	Query string
-	Args  []interface{}
+	Args  []any
 }
 
 // FieldTransformer defines how to transform a special field
@@ -19,12 +19,12 @@ type FieldTransformer struct {
 	// SQLFunc is the SQL function to wrap the value, e.g., "ST_GeomFromText"
 	SQLFunc string
 	// ConvertValue is a function to convert the value before passing to SQL
-	ConvertValue func(value interface{}) (interface{}, error)
+	ConvertValue func(value any) (any, error)
 }
 
 // GeoJSONToWKT converts GeoJSON object to WKT (Well-Known Text) string
-func GeoJSONToWKT(geoJSON interface{}) (string, error) {
-	geoMap, ok := geoJSON.(map[string]interface{})
+func GeoJSONToWKT(geoJSON any) (string, error) {
+	geoMap, ok := geoJSON.(map[string]any)
 	if !ok {
 		return "", fmt.Errorf("invalid GeoJSON format")
 	}
@@ -38,28 +38,28 @@ func GeoJSONToWKT(geoJSON interface{}) (string, error) {
 
 	switch geoType {
 	case "Point":
-		coords, ok := coordinates.([]interface{})
+		coords, ok := coordinates.([]any)
 		if !ok || len(coords) != 2 {
 			return "", fmt.Errorf("invalid Point coordinates")
 		}
 		return fmt.Sprintf("POINT(%v %v)", coords[0], coords[1]), nil
 
 	case "Polygon":
-		rings, ok := coordinates.([]interface{})
+		rings, ok := coordinates.([]any)
 		if !ok || len(rings) == 0 {
 			return "", fmt.Errorf("invalid Polygon coordinates")
 		}
 
 		var ringStrings []string
 		for _, ring := range rings {
-			points, ok := ring.([]interface{})
+			points, ok := ring.([]any)
 			if !ok {
 				return "", fmt.Errorf("invalid ring in Polygon")
 			}
 
 			var pointStrings []string
 			for _, point := range points {
-				coords, ok := point.([]interface{})
+				coords, ok := point.([]any)
 				if !ok || len(coords) != 2 {
 					return "", fmt.Errorf("invalid point coordinates in Polygon")
 				}
@@ -70,14 +70,14 @@ func GeoJSONToWKT(geoJSON interface{}) (string, error) {
 		return fmt.Sprintf("POLYGON(%s)", strings.Join(ringStrings, ", ")), nil
 
 	case "LineString":
-		points, ok := coordinates.([]interface{})
+		points, ok := coordinates.([]any)
 		if !ok {
 			return "", fmt.Errorf("invalid LineString coordinates")
 		}
 
 		var pointStrings []string
 		for _, point := range points {
-			coords, ok := point.([]interface{})
+			coords, ok := point.([]any)
 			if !ok || len(coords) != 2 {
 				return "", fmt.Errorf("invalid point coordinates in LineString")
 			}
@@ -102,18 +102,18 @@ func GeoJSONToWKT(geoJSON interface{}) (string, error) {
 //   - autoAddUpdatedAt: automatically adds updated_at if true
 func BuildDynamicUpdateQuery(
 	tableName string,
-	updateData map[string]interface{},
+	updateData map[string]any,
 	allowedFields map[string]bool,
 	arrayFields map[string]bool,
 	specialFields map[string]*FieldTransformer,
 	whereField string,
-	whereValue interface{},
+	whereValue any,
 	autoAddUpdatedAt bool,
 	updatedBy string,
 	updatedByFieldName string,
 ) (*QueryBuildResult, error) {
 	setClauses := []string{}
-	args := []interface{}{}
+	args := []any{}
 	argPosition := 1
 
 	// Iterate through fields to update
@@ -126,7 +126,7 @@ func BuildDynamicUpdateQuery(
 
 		// Handle special fields (PostGIS, JSON functions, etc.)
 		if transformer, isSpecial := specialFields[field]; isSpecial {
-			var processedValue interface{}
+			var processedValue any
 			var err error
 
 			// If there is a convert function, use it
@@ -152,8 +152,8 @@ func BuildDynamicUpdateQuery(
 
 		// handle array fields
 		if arrayFields[field] {
-			// Convert slice of interface{} to []string
-			if arr, ok := value.([]interface{}); ok {
+			// Convert slice of any to []string
+			if arr, ok := value.([]any); ok {
 				strArr := make([]string, len(arr))
 				for i, v := range arr {
 					strArr[i] = fmt.Sprintf("%v", v)
@@ -221,10 +221,10 @@ func BuildDynamicUpdateQuery(
 
 // BuildDinamicFilter
 type Condition struct {
-	Field    string      // Column name
-	Operator string      // Operator: =, !=, >, <, >=, <=, LIKE, IN, BETWEEN, is_null, is_not_null
-	Value    interface{} // Value (can be single value, slice for IN, or []interface{}{min, max} for BETWEEN)
-	Logic    string      // AND or OR (used to connect to the next condition)
+	Field    string // Column name
+	Operator string // Operator: =, !=, >, <, >=, <=, LIKE, IN, BETWEEN, is_null, is_not_null
+	Value    any    // Value (can be single value, slice for IN, or []any{min, max} for BETWEEN)
+	Logic    string // AND or OR (used to connect to the next condition)
 }
 
 // OrderBy represents sorting
@@ -241,13 +241,13 @@ type QueryBuilder struct {
 }
 
 // BuildQueryDynamicFilter creates a dynamic query with parameterized placeholders
-func (qb *QueryBuilder) BuildQueryDynamicFilter() (string, []interface{}, error) {
+func (qb *QueryBuilder) BuildQueryDynamicFilter() (string, []any, error) {
 	if qb.TemplateQuery == "" {
 		return "", nil, fmt.Errorf("template query is required")
 	}
 
 	query := qb.TemplateQuery
-	args := []interface{}{}
+	args := []any{}
 	paramIndex := 1
 
 	// Build WHERE clause
@@ -270,9 +270,9 @@ func (qb *QueryBuilder) BuildQueryDynamicFilter() (string, []interface{}, error)
 				paramIndex++
 
 			case "IN":
-				values, ok := cond.Value.([]interface{})
+				values, ok := cond.Value.([]any)
 				if !ok {
-					return "", nil, fmt.Errorf("IN operator requires []interface{} value for field %s", cond.Field)
+					return "", nil, fmt.Errorf("IN operator requires []any value for field %s", cond.Field)
 				}
 				if len(values) == 0 {
 					return "", nil, fmt.Errorf("IN operator requires at least one value for field %s", cond.Field)
@@ -287,9 +287,9 @@ func (qb *QueryBuilder) BuildQueryDynamicFilter() (string, []interface{}, error)
 				condStr = fmt.Sprintf("%s IN (%s)", cond.Field, strings.Join(placeholders, ", "))
 
 			case "BETWEEN":
-				values, ok := cond.Value.([]interface{})
+				values, ok := cond.Value.([]any)
 				if !ok || len(values) != 2 {
-					return "", nil, fmt.Errorf("BETWEEN operator requires []interface{}{min, max} for field %s", cond.Field)
+					return "", nil, fmt.Errorf("BETWEEN operator requires []any{min, max} for field %s", cond.Field)
 				}
 				condStr = fmt.Sprintf("%s BETWEEN $%d AND $%d", cond.Field, paramIndex, paramIndex+1)
 				args = append(args, values[0], values[1])
@@ -357,14 +357,14 @@ func (qb *QueryBuilder) BuildQueryDynamicFilter() (string, []interface{}, error)
 }
 
 // func BuildUpdateQuery(
-// 	updateProfileRequestBody map[string]interface{},
+// 	updateProfileRequestBody map[string]any,
 // 	allowedUpdateInsuranceProfileFields map[string]bool,
 // 	arrayInsuranceProfileFields map[string]bool,
 // 	criteriaField string,
 // 	table string,
-// ) (string, []interface{}, error) {
+// ) (string, []any, error) {
 // 	setClauses := []string{}
-// 	args := []interface{}{}
+// 	args := []any{}
 // 	argPosition := 1
 
 // 	for field, value := range updateProfileRequestBody {
@@ -376,7 +376,7 @@ func (qb *QueryBuilder) BuildQueryDynamicFilter() (string, []interface{}, error)
 
 // 		if arrayInsuranceProfileFields[field] {
 
-// 			if arr, ok := value.([]interface{}); ok {
+// 			if arr, ok := value.([]any); ok {
 // 				strArr := make([]string, len(arr))
 // 				for i, v := range arr {
 // 					strArr[i] = fmt.Sprintf("%v", v)

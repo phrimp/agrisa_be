@@ -81,7 +81,7 @@ func (h *PayoutHandler) GetFarmerOwnPayouts(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve payouts"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"payouts":   payouts,
 		"count":     len(payouts),
 		"farmer_id": userID,
@@ -187,7 +187,7 @@ func (h *PayoutHandler) GetFarmerPayoutsByPolicy(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve payouts"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"payouts":   payouts,
 		"count":     len(payouts),
 		"policy_id": policyID,
@@ -224,7 +224,7 @@ func (h *PayoutHandler) GetFarmerPayoutsByFarm(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve payouts"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"payouts": payouts,
 		"count":   len(payouts),
 		"farm_id": farmID,
@@ -338,7 +338,7 @@ func (h *PayoutHandler) GetPartnerPayoutsByPolicy(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve payouts"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"payouts":   payouts,
 		"count":     len(payouts),
 		"policy_id": policyID,
@@ -382,7 +382,7 @@ func (h *PayoutHandler) GetPartnerPayoutsByFarm(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve payouts"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"payouts": payouts,
 		"count":   len(payouts),
 		"farm_id": farmID,
@@ -477,7 +477,7 @@ func (h *PayoutHandler) GetPayoutsByPolicyAdmin(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve payouts"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"payouts":   payouts,
 		"count":     len(payouts),
 		"policy_id": policyID,
@@ -510,7 +510,7 @@ func (h *PayoutHandler) GetPayoutsByFarmAdmin(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve payouts"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"payouts": payouts,
 		"count":   len(payouts),
 		"farm_id": farmID,
@@ -538,7 +538,7 @@ func (h *PayoutHandler) GetPayoutsByFarmerAdmin(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve payouts"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"payouts":   payouts,
 		"count":     len(payouts),
 		"farmer_id": farmerID,

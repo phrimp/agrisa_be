@@ -64,7 +64,7 @@ func (h *ClaimRejectionHandler) GetAllClaimRejections(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claim rejections"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claim_rejections": claimRejections,
 		"count":            len(claimRejections),
 	}))
@@ -86,7 +86,7 @@ func (h *ClaimRejectionHandler) GetClaimRejectionByID(c fiber.Ctx) error {
 			utils.CreateErrorResponse("NOT_FOUND", "Claim rejection not found"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claim_rejection": claimRejection,
 	}))
 }
@@ -107,7 +107,7 @@ func (h *ClaimRejectionHandler) GetByClaimID(c fiber.Ctx) error {
 			utils.CreateErrorResponse("NOT_FOUND", "Claim rejection not found for this claim"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claim_rejection": claimRejection,
 	}))
 }
@@ -119,7 +119,7 @@ func (h *ClaimRejectionHandler) CreateClaimRejection(c fiber.Ctx) error {
 		ValidationTimestamp int64                     `json:"validation_timestamp"`
 		ClaimRejectionType  models.ClaimRejectionType `json:"claim_rejection_type"`
 		Reason              *string                   `json:"reason,omitempty"`
-		ReasonEvidence      map[string]interface{}    `json:"reason_evidence,omitempty"`
+		ReasonEvidence      map[string]any            `json:"reason_evidence,omitempty"`
 		ValidatedBy         *string                   `json:"validated_by,omitempty"`
 		ValidationNotes     *string                   `json:"validation_notes,omitempty"`
 	}
@@ -159,7 +159,7 @@ func (h *ClaimRejectionHandler) CreateClaimRejection(c fiber.Ctx) error {
 			utils.CreateErrorResponse("CREATION_FAILED", "Failed to create claim rejection"))
 	}
 
-	return c.Status(http.StatusCreated).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusCreated).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claim_rejection_id": response.ClaimRejectionID,
 		"message":            "Claim rejection created successfully",
 	}))
@@ -179,7 +179,7 @@ func (h *ClaimRejectionHandler) UpdateClaimRejection(c fiber.Ctx) error {
 		ValidationTimestamp int64                     `json:"validation_timestamp"`
 		ClaimRejectionType  models.ClaimRejectionType `json:"claim_rejection_type"`
 		Reason              *string                   `json:"reason,omitempty"`
-		ReasonEvidence      map[string]interface{}    `json:"reason_evidence,omitempty"`
+		ReasonEvidence      map[string]any            `json:"reason_evidence,omitempty"`
 		ValidatedBy         *string                   `json:"validated_by,omitempty"`
 		ValidationNotes     *string                   `json:"validation_notes,omitempty"`
 	}
@@ -213,7 +213,7 @@ func (h *ClaimRejectionHandler) UpdateClaimRejection(c fiber.Ctx) error {
 			utils.CreateErrorResponse("UPDATE_FAILED", "Failed to update claim rejection"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"message": "Claim rejection updated successfully",
 	}))
 }
@@ -234,7 +234,7 @@ func (h *ClaimRejectionHandler) DeleteClaimRejection(c fiber.Ctx) error {
 			utils.CreateErrorResponse("DELETE_FAILED", "Failed to delete claim rejection"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"message": "Claim rejection deleted successfully",
 	}))
 }
@@ -265,7 +265,7 @@ func (h *ClaimRejectionHandler) GetPartnerClaimRejections(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claim rejections"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claim_rejections": claimRejections,
 		"count":            len(claimRejections),
 		"partner_id":       partnerID,
@@ -309,7 +309,7 @@ func (h *ClaimRejectionHandler) GetPartnerClaimRejectionByID(c fiber.Ctx) error 
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claim rejection"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claim_rejection": claimRejection,
 	}))
 }
@@ -351,7 +351,7 @@ func (h *ClaimRejectionHandler) GetPartnerByClaimID(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve claim rejection"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claim_rejection": claimRejection,
 	}))
 }
@@ -381,7 +381,7 @@ func (h *ClaimRejectionHandler) CreatePartnerClaimRejection(c fiber.Ctx) error {
 		ValidationTimestamp int64                     `json:"validation_timestamp"`
 		ClaimRejectionType  models.ClaimRejectionType `json:"claim_rejection_type"`
 		Reason              *string                   `json:"reason,omitempty"`
-		ReasonEvidence      map[string]interface{}    `json:"reason_evidence,omitempty"`
+		ReasonEvidence      map[string]any            `json:"reason_evidence,omitempty"`
 		ValidatedBy         *string                   `json:"validated_by,omitempty"`
 		ValidationNotes     *string                   `json:"validation_notes,omitempty"`
 	}
@@ -434,7 +434,7 @@ func (h *ClaimRejectionHandler) CreatePartnerClaimRejection(c fiber.Ctx) error {
 			utils.CreateErrorResponse("CREATION_FAILED", "Failed to create claim rejection"))
 	}
 
-	return c.Status(http.StatusCreated).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusCreated).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claim_rejection_id": response.ClaimRejectionID,
 		"claim_id":           claimID,
 		"message":            "Claim rejection created successfully and claim status updated to rejected",

@@ -88,7 +88,7 @@ func (h *UserProfileHandler) CreateFarmerProfile(c *gin.Context) {
 }
 
 func (h *UserProfileHandler) UpdateUserProfile(c *gin.Context) {
-	var updateProfileRequestBody map[string]interface{}
+	var updateProfileRequestBody map[string]any
 	if err := c.ShouldBindJSON(&updateProfileRequestBody); err != nil {
 		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
 		c.JSON(400, errorResponse)
@@ -150,7 +150,7 @@ func (h *UserProfileHandler) UpdateUserProfileByAdmin(c *gin.Context) {
 		return
 	}
 
-	var updateProfileRequestBody map[string]interface{}
+	var updateProfileRequestBody map[string]any
 	if err := c.ShouldBindJSON(&updateProfileRequestBody); err != nil {
 		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")
 		c.JSON(400, errorResponse)

@@ -79,13 +79,13 @@ func NewMinioClient(cfg config.MinioConfig) (*MinioClient, error) {
 
 func SetPublicBucketPolicy(minioClient *minio.Client, bucketName string) error {
 	// JSON policy cho public read-only (allow GetObject cho everyone)
-	policy := map[string]interface{}{
+	policy := map[string]any{
 		"Version": "2012-10-17",
-		"Statement": []map[string]interface{}{
+		"Statement": []map[string]any{
 			{
 				"Action":    []string{"s3:GetObject"},
 				"Effect":    "Allow",
-				"Principal": map[string]interface{}{"AWS": []string{"*"}},
+				"Principal": map[string]any{"AWS": []string{"*"}},
 				"Resource":  []string{fmt.Sprintf("arn:aws:s3:::%s/*", bucketName)},
 			},
 		},

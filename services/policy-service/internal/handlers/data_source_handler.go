@@ -129,7 +129,7 @@ func (dsh *DataSourceHandler) CreateDataSourcesBatch(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BATCH_CREATION_FAILED", err.Error()))
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"message":      "Data sources created successfully",
 		"count":        len(dataSources),
 		"data_sources": dataSources,
@@ -343,7 +343,7 @@ func (dsh *DataSourceHandler) ActivateDataSource(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("ACTIVATION_FAILED", err.Error()))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"message":        "Data source activated successfully",
 		"data_source_id": id,
 		"is_active":      true,
@@ -362,7 +362,7 @@ func (dsh *DataSourceHandler) DeactivateDataSource(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("DEACTIVATION_FAILED", err.Error()))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"message":        "Data source deactivated successfully",
 		"data_source_id": id,
 		"is_active":      false,
@@ -406,7 +406,7 @@ func (dsh *DataSourceHandler) CheckDataSourceExists(c fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("CHECK_FAILED", err.Error()))
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"data_source_id": id,
 		"exists":         exists,
 	}
@@ -420,7 +420,7 @@ func (dsh *DataSourceHandler) GetDataSourceCount(c fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("COUNT_FAILED", err.Error()))
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"total_count": count,
 	}
 
@@ -433,7 +433,7 @@ func (dsh *DataSourceHandler) GetActiveDataSourceCount(c fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("COUNT_FAILED", err.Error()))
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"active_count": count,
 	}
 
@@ -449,7 +449,7 @@ func (dsh *DataSourceHandler) GetDataSourceCountByType(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("COUNT_FAILED", err.Error()))
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"data_source_type": dataSourceType,
 		"count":            count,
 	}
@@ -469,7 +469,7 @@ func (dsh *DataSourceHandler) GetDataSourceCountByTier(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("COUNT_FAILED", err.Error()))
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tier_id": tierId,
 		"count":   count,
 	}

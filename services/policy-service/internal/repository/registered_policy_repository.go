@@ -756,7 +756,7 @@ func (r *RegisteredPolicyRepository) GetWithFilters(filter models.RegisteredPoli
 	slog.Info("Querying registered policies with filters", "filter", filter)
 
 	query := `SELECT * FROM registered_policy WHERE 1=1`
-	args := []interface{}{}
+	args := []any{}
 	argIndex := 1
 
 	if filter.PolicyID != nil {
@@ -825,12 +825,12 @@ func (r *RegisteredPolicyRepository) GetByInsuranceProviderID(providerID string)
 }
 
 // GetPolicyStats retrieves aggregated statistics for policies
-func (r *RegisteredPolicyRepository) GetPolicyStats(providerID string) (map[string]interface{}, error) {
-	stats := make(map[string]interface{})
+func (r *RegisteredPolicyRepository) GetPolicyStats(providerID string) (map[string]any, error) {
+	stats := make(map[string]any)
 
 	// Base query with optional provider filter
 	whereClause := ""
-	args := []interface{}{}
+	args := []any{}
 	if providerID != "" {
 		whereClause = " WHERE insurance_provider_id = $1"
 		args = append(args, providerID)

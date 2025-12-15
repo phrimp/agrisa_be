@@ -17,7 +17,7 @@ func GenerateRandomStringWithLength(n int) string {
 }
 
 // TrimAllStringFields iterates over all fields of the input and trims any string fields.
-// Input: any (interface{}) - can be a struct, pointer to struct, slice, map, etc.
+// Input: any (any) - can be a struct, pointer to struct, slice, map, etc.
 // Output: same type as input but with all string fields trimmed.
 func TrimAllStringFields(input any) any {
 	if input == nil {
@@ -38,7 +38,7 @@ func trimValue(v reflect.Value) reflect.Value {
 		// Create a new pointer with the trimmed value
 		elem := v.Elem()
 		newElem := trimValue(elem)
-		
+
 		// Create a new pointer pointing to the trimmed value
 		newPtr := reflect.New(newElem.Type())
 		newPtr.Elem().Set(newElem)
@@ -48,16 +48,16 @@ func trimValue(v reflect.Value) reflect.Value {
 	// Handle struct
 	if v.Kind() == reflect.Struct {
 		newStruct := reflect.New(v.Type()).Elem()
-		
+
 		for i := 0; i < v.NumField(); i++ {
 			field := v.Field(i)
 			fieldType := v.Type().Field(i)
-			
+
 			// Skip unexported (private) fields
 			if !fieldType.IsExported() {
 				continue
 			}
-			
+
 			// If the field is settable
 			if newStruct.Field(i).CanSet() {
 				trimmedField := trimValue(field)
@@ -90,7 +90,7 @@ func trimValue(v reflect.Value) reflect.Value {
 		for iter.Next() {
 			key := iter.Key()
 			val := iter.Value()
-			
+
 			// Trim both key and value if they are strings
 			trimmedKey := trimValue(key)
 			trimmedVal := trimValue(val)

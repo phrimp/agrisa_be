@@ -95,7 +95,7 @@ func (s *ClaimService) GetClaimsByProviderID(ctx context.Context, providerID str
 }
 
 // GetAllClaims retrieves all claims with optional filters (admin only)
-func (s *ClaimService) GetAllClaims(ctx context.Context, filters map[string]interface{}) ([]models.Claim, error) {
+func (s *ClaimService) GetAllClaims(ctx context.Context, filters map[string]any) ([]models.Claim, error) {
 	claims, err := s.claimRepo.GetAll(ctx, filters)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get claims: %w", err)

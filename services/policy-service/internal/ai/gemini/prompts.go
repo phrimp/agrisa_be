@@ -1458,7 +1458,7 @@ func formatGeoJSONPolygon(polygon *models.GeoJSONPolygon) string {
 	return string(b)
 }
 
-func formatJSONMap(m map[string]interface{}) string {
+func formatJSONMap(m map[string]any) string {
 	if m == nil || len(m) == 0 {
 		return "{}"
 	}

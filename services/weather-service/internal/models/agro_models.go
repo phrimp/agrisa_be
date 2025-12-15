@@ -2,17 +2,17 @@ package models
 
 // AgroPolygonRequest represents the request to create a polygon in Agro API
 type AgroPolygonRequest struct {
-	Name    string                 `json:"name"`
-	GeoJSON map[string]interface{} `json:"geo_json"`
+	Name    string         `json:"name"`
+	GeoJSON map[string]any `json:"geo_json"`
 }
 
 // AgroPolygonResponse represents the response from Agro API polygon creation
 type AgroPolygonResponse struct {
-	ID      string                 `json:"id"`
-	GeoJSON map[string]interface{} `json:"geo_json"`
-	Name    string                 `json:"name"`
-	Center  []float64              `json:"center"`
-	Area    float64                `json:"area"`
+	ID      string         `json:"id"`
+	GeoJSON map[string]any `json:"geo_json"`
+	Name    string         `json:"name"`
+	Center  []float64      `json:"center"`
+	Area    float64        `json:"area"`
 }
 
 // PrecipitationDataPoint represents a single precipitation measurement

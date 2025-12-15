@@ -163,7 +163,7 @@ func (bph *BasePolicyHandler) GetDraftPoliciesByProvider(c fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("RETRIEVAL_FAILED", err.Error()))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"policies":       policies,
 		"count":          len(policies),
 		"provider_id":    providerID,
@@ -257,7 +257,7 @@ func (bph *BasePolicyHandler) GetBasePolicyCount(c fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("COUNT_FAILED", err.Error()))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"total_count": count,
 	}))
 }
@@ -275,7 +275,7 @@ func (bph *BasePolicyHandler) GetBasePolicyCountByStatus(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("COUNT_FAILED", err.Error()))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"status": status,
 		"count":  count,
 	}))
@@ -308,7 +308,7 @@ func (bph *BasePolicyHandler) UpdateBasePolicyValidationStatus(c fiber.Ctx) erro
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("UPDATE_FAILED", err.Error()))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"base_policy_id":    basePolicyID,
 		"validation_status": updateReq.ValidationStatus,
 		"validation_score":  updateReq.ValidationScore,

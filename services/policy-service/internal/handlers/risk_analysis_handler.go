@@ -96,7 +96,7 @@ func (h *RiskAnalysisHandler) GetByPolicyIDOwn(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve risk analyses"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"risk_analyses":        analyses,
 		"count":                len(analyses),
 		"registered_policy_id": policyID,
@@ -199,7 +199,7 @@ func (h *RiskAnalysisHandler) GetByPolicyID(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve risk analyses"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"risk_analyses":        analyses,
 		"count":                len(analyses),
 		"registered_policy_id": policyID,
@@ -266,7 +266,7 @@ func (h *RiskAnalysisHandler) GetAll(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve risk analyses"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"risk_analyses": analyses,
 		"count":         len(analyses),
 		"limit":         limit,
@@ -300,7 +300,7 @@ func (h *RiskAnalysisHandler) Delete(c fiber.Ctx) error {
 			utils.CreateErrorResponse("DELETE_FAILED", "Failed to delete risk analysis"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"message":    "Risk analysis deleted successfully",
 		"deleted_id": id,
 	}))
@@ -316,16 +316,16 @@ func (h *RiskAnalysisHandler) Create(c fiber.Ctx) error {
 
 	// Parse request body
 	var req struct {
-		RegisteredPolicyID uuid.UUID                `json:"registered_policy_id" binding:"required"`
-		AnalysisStatus     string                   `json:"analysis_status" binding:"required"`
-		AnalysisType       string                   `json:"analysis_type" binding:"required"`
-		AnalysisSource     *string                  `json:"analysis_source,omitempty"`
-		OverallRiskScore   *float64                 `json:"overall_risk_score,omitempty"`
-		OverallRiskLevel   *string                  `json:"overall_risk_level,omitempty"`
-		IdentifiedRisks    map[string]interface{}   `json:"identified_risks,omitempty"`
-		Recommendations    map[string]interface{}   `json:"recommendations,omitempty"`
-		RawOutput          map[string]interface{}   `json:"raw_output,omitempty"`
-		AnalysisNotes      *string                  `json:"analysis_notes,omitempty"`
+		RegisteredPolicyID uuid.UUID      `json:"registered_policy_id" binding:"required"`
+		AnalysisStatus     string         `json:"analysis_status" binding:"required"`
+		AnalysisType       string         `json:"analysis_type" binding:"required"`
+		AnalysisSource     *string        `json:"analysis_source,omitempty"`
+		OverallRiskScore   *float64       `json:"overall_risk_score,omitempty"`
+		OverallRiskLevel   *string        `json:"overall_risk_level,omitempty"`
+		IdentifiedRisks    map[string]any `json:"identified_risks,omitempty"`
+		Recommendations    map[string]any `json:"recommendations,omitempty"`
+		RawOutput          map[string]any `json:"raw_output,omitempty"`
+		AnalysisNotes      *string        `json:"analysis_notes,omitempty"`
 	}
 
 	if err := c.Bind().JSON(&req); err != nil {
@@ -385,8 +385,8 @@ func (h *RiskAnalysisHandler) Create(c fiber.Ctx) error {
 
 	slog.Info("Risk analysis created successfully", "id", analysis.ID, "policy_id", req.RegisteredPolicyID, "user_id", userID)
 
-	return c.Status(http.StatusCreated).JSON(utils.CreateSuccessResponse(map[string]interface{}{
-		"message":         "Risk analysis created successfully",
-		"risk_analysis":   analysis,
+	return c.Status(http.StatusCreated).JSON(utils.CreateSuccessResponse(map[string]any{
+		"message":       "Risk analysis created successfully",
+		"risk_analysis": analysis,
 	}))
 }

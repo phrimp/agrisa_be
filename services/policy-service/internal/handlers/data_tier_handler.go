@@ -226,7 +226,7 @@ func (dth *DataTierHandler) GetDataTierWithCategory(c fiber.Ctx) error {
 		return c.Status(http.StatusNotFound).JSON(utils.CreateErrorResponse("NOT_FOUND", err.Error()))
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tier":     tier,
 		"category": category,
 	}
@@ -246,7 +246,7 @@ func (dth *DataTierHandler) CalculateTotalMultiplier(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("CALCULATION_FAILED", err.Error()))
 	}
 
-	response := map[string]interface{}{
+	response := map[string]any{
 		"tier_id":          id,
 		"total_multiplier": multiplier,
 	}

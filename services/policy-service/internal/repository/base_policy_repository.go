@@ -1401,7 +1401,7 @@ func (r *BasePolicyRepository) GetCompletePolicyByFilter(
 		FROM base_policy
 		WHERE 1=1`
 
-	args := []interface{}{}
+	args := []any{}
 	argPos := 1
 
 	if filter.ID != nil {

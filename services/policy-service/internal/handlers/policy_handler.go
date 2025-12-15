@@ -293,7 +293,7 @@ func (h *PolicyHandler) GetFarmerOwnPolicies(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve policies"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"policies":  policies,
 		"count":     len(policies),
 		"farmer_id": userID,
@@ -386,7 +386,7 @@ func (h *PolicyHandler) GetPartnerPolicies(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve policies"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"policies":    policies,
 		"count":       len(policies),
 		"provider_id": partnerID,
@@ -514,7 +514,7 @@ func (h *PolicyHandler) GetPartnerMonitoringData(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve monitoring data"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"monitoring_data": data,
 		"count":           len(data),
 		"farm_id":         farmID,
@@ -721,7 +721,7 @@ func (h *PolicyHandler) GetAllPoliciesAdmin(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve policies"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"policies":     policies,
 		"count":        len(policies),
 		"requested_by": userID,
@@ -827,7 +827,7 @@ func (h *PolicyHandler) UpdatePolicyStatusAdmin(c fiber.Ctx) error {
 			utils.CreateErrorResponse("UPDATE_FAILED", "Failed to update policy status"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"policy_id":  policyID,
 		"status":     req.Status,
 		"updated_by": userID,
@@ -869,7 +869,7 @@ func (h *PolicyHandler) UpdatePolicyUnderwritingAdmin(c fiber.Ctx) error {
 			utils.CreateErrorResponse("UPDATE_FAILED", "Failed to update underwriting status"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"policy_id":           policyID,
 		"underwriting_status": req.UnderwritingStatus,
 		"updated_by":          userID,
@@ -939,7 +939,7 @@ func (h *PolicyHandler) GetFarmerMonitoringData(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve monitoring data"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"monitoring_data": data,
 		"count":           len(data),
 		"farm_id":         farmID,
@@ -1002,7 +1002,7 @@ func (h *PolicyHandler) GetFarmerMonitoringDataByParameter(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve monitoring data"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"monitoring_data": data,
 		"count":           len(data),
 		"farm_id":         farmID,
@@ -1070,7 +1070,7 @@ func (h *PolicyHandler) GetAllMonitoringData(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve monitoring data"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"monitoring_data": data,
 		"count":           len(data),
 		"requested_by":    userID,
@@ -1118,7 +1118,7 @@ func (h *PolicyHandler) GetMonitoringDataByFarm(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve monitoring data"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"monitoring_data": data,
 		"count":           len(data),
 		"farm_id":         farmID,
@@ -1219,8 +1219,8 @@ func (h *PolicyHandler) TestTriggerClaim(c fiber.Ctx) error {
 
 	// Parse request body
 	var req struct {
-		MonitoringData []map[string]interface{} `json:"monitoring_data" binding:"required"`
-		CheckPolicy    bool                     `json:"check_policy"`
+		MonitoringData []map[string]any `json:"monitoring_data" binding:"required"`
+		CheckPolicy    bool             `json:"check_policy"`
 	}
 
 	if err := c.Bind().JSON(&req); err != nil {
@@ -1265,7 +1265,7 @@ func (h *PolicyHandler) TestTriggerClaim(c fiber.Ctx) error {
 		"policy_id", policyID,
 		"user_id", userID)
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"message":           "Test claim trigger executed successfully",
 		"policy_id":         policyID,
 		"test_data_count":   len(req.MonitoringData),
@@ -1274,9 +1274,9 @@ func (h *PolicyHandler) TestTriggerClaim(c fiber.Ctx) error {
 	}))
 }
 
-// Helper function to convert []map[string]interface{} to []interface{}
-func convertToInterfaceSlice(data []map[string]interface{}) []interface{} {
-	result := make([]interface{}, len(data))
+// Helper function to convert []map[string]any to []any
+func convertToInterfaceSlice(data []map[string]any) []any {
+	result := make([]any, len(data))
 	for i, item := range data {
 		result[i] = item
 	}
