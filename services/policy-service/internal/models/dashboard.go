@@ -10,10 +10,10 @@ type MonthlyRevenue struct {
 }
 
 type MonthlyRevenueOptions struct {
-	Year               int
-	Month              int
-	Status             []string
-	UnderwritingStatus []string
+	Year               int      `json:"year"`
+	Month              int      `json:"month"`
+	Status             []string `json:"status"`
+	UnderwritingStatus []string `json:"underwriting_status"`
 }
 
 type AdminRevenueOverview struct {
