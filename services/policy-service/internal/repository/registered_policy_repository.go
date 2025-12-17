@@ -1433,8 +1433,8 @@ func (r *RegisteredPolicyRepository) GetTotalMonthlyRevenue(year int, month int,
 		query,
 		year,
 		month,
-		status,
-		underwritingStatus,
+		pq.Array(status),
+		pq.Array(underwritingStatus),
 	)
 	if err != nil {
 		slog.Error("Failed to calculate total monthly revenue", "error", err)
