@@ -1513,8 +1513,8 @@ func (r *RegisteredPolicyRepository) GetTotalProvidersByMonth(year int, month in
 		query,
 		year,
 		month,
-		status,
-		underwritingStatus,
+		pq.Array(status),
+		pq.Array(underwritingStatus),
 	)
 	if err != nil {
 		slog.Error("Failed to count total providers by month", "error", err)
