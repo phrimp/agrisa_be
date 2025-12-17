@@ -1223,7 +1223,7 @@ func (r *RegisteredPolicyRepository) GetTotalFilterStatusProviders(status []stri
 	`
 
 	var count int64
-	err := r.db.GetContext(context.Background(), &count, query, status, underwritingStatus)
+	err := r.db.GetContext(context.Background(), &count, query, pq.Array(status), pq.Array(underwritingStatus))
 	if err != nil {
 		slog.Error("Failed to count active approved providers", "error", err)
 		return 0, fmt.Errorf("failed to count active approved providers: %w", err)
