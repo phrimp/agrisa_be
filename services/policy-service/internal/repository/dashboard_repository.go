@@ -124,7 +124,7 @@ func (r *DashboardRepository) GetPremiumGrowthMoM(partnerID string, startDate, e
 				TO_CHAR(TO_TIMESTAMP(rp.premium_paid_at), 'YYYY-MM') AS month,
 				SUM(rp.total_farmer_premium) AS total_premium
 			FROM registered_policy rp
-			JOIN base_policy bp ON rp.base_policy_id = bp.base_policy_id
+			JOIN base_policy bp ON rp.base_policy_id = bp.id
 			WHERE bp.insurance_provider_id = $1
 				AND rp.premium_paid_at IS NOT NULL
 				AND rp.premium_paid_by_farmer = true
@@ -170,7 +170,7 @@ func (r *DashboardRepository) GetPremiumGrowthYoY(partnerID string, startDate, e
 				TO_CHAR(TO_TIMESTAMP(rp.premium_paid_at), 'YYYY-MM') AS month,
 				SUM(rp.total_farmer_premium) AS total_premium
 			FROM registered_policy rp
-			JOIN base_policy bp ON rp.base_policy_id = bp.base_policy_id
+			JOIN base_policy bp ON rp.base_policy_id = bp.id
 			WHERE bp.insurance_provider_id = $1
 				AND rp.premium_paid_at IS NOT NULL
 				AND rp.premium_paid_by_farmer = true
