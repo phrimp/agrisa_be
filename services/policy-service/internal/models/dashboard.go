@@ -32,17 +32,17 @@ type MonthlyLossRatio struct {
 }
 
 type PremiumGrowthMoM struct {
-	Month                string  `json:"month" db:"month"`
-	CurrentMonthPremium  float64 `json:"current_month_premium" db:"current_month_premium"`
-	PreviousMonthPremium float64 `json:"previous_month_premium" db:"previous_month_premium"`
-	MoMGrowthRatePercent float64 `json:"mom_growth_rate_percent" db:"mom_growth_rate_percent"`
+	Month                string   `json:"month" db:"month"`
+	CurrentMonthPremium  float64  `json:"current_month_premium" db:"current_month_premium"`
+	PreviousMonthPremium float64  `json:"previous_month_premium" db:"previous_month_premium"`
+	MoMGrowthRatePercent *float64 `json:"mom_growth_rate_percent" db:"mom_growth_rate_percent"`
 }
 
 type PremiumGrowthYoY struct {
-	Month                string  `json:"month" db:"month"`
-	CurrentMonthPremium  float64 `json:"current_month_premium" db:"current_month_premium"`
-	SameMonthLastYear    float64 `json:"same_month_last_year" db:"same_month_last_year"`
-	YoYGrowthRatePercent float64 `json:"yoy_growth_rate_percent" db:"yoy_growth_rate_percent"`
+	Month                string   `json:"month" db:"month"`
+	CurrentMonthPremium  float64  `json:"current_month_premium" db:"current_month_premium"`
+	SameMonthLastYear    float64  `json:"same_month_last_year" db:"same_month_last_year"`
+	YoYGrowthRatePercent *float64 `json:"yoy_growth_rate_percent" db:"yoy_growth_rate_percent"`
 }
 
 type MonthlyPayoutPerClaim struct {
