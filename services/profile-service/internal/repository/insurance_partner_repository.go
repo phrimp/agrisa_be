@@ -220,7 +220,7 @@ func (r *InsurancePartnerRepository) CreateInsurancePartner(req models.CreateIns
 		req.CoverageAreas,
 		createdByID,
 		createdByName,
-		"pending",
+		"active",
 	)
 
 	if err != nil {
