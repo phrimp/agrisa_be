@@ -291,6 +291,12 @@ func (h *InsurancePartnerHandler) RevokePartnerDeletionRequest(c *gin.Context) {
 }
 
 func (h *InsurancePartnerHandler) GetAllPartnerDeletionRequest(c *gin.Context) {
+	user_id := c.GetHeader("X-User-ID")
+	if user_id == "" {
+		errorResponse := utils.CreateErrorResponse("UNAUTHORIZED", "Tính năng chỉ dành cho quản trị viên")
+		c.JSON(http.StatusUnauthorized, errorResponse)
+		return
+	}
 	result, err := h.InsurancePartnerService.GetAllPartnerDeletionRequests()
 	if err != nil {
 		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
