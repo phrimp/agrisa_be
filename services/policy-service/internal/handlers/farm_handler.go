@@ -37,9 +37,31 @@ func (h *FarmHandler) RegisterRoutes(app *fiber.App) {
 	protectedGr.Get("/farms", h.GetAllFarms)
 }
 
+// func (h *FarmHandler) GetFarmByOwner(c fiber.Ctx) error {
+// 	// get farm id from params
+// 	userID := c.Get("X-User-ID")
+
+// 	farms, err := h.farmService.GetFarmByOwnerID(c.Context(), userID)
+// 	if err != nil {
+// 		if strings.Contains(err.Error(), "unauthorized") {
+// 			return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("UNAUTHORIZED", err.Error()))
+// 		}
+// 		if strings.Contains(err.Error(), "not found") {
+// 			return c.Status(http.StatusNotFound).JSON(utils.CreateErrorResponse("NOT_FOUND", err.Error()))
+// 		}
+// 		if strings.Contains(err.Error(), "invalid") {
+// 			return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", err.Error()))
+// 		}
+// 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", err.Error()))
+// 	}
+// 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(farms))
+// }
+
 func (h *FarmHandler) GetFarmByOwner(c fiber.Ctx) error {
 	// get farm id from params
 	userID := c.Get("X-User-ID")
+
+	cropType := c.Query("crop_type")
 
 	farms, err := h.farmService.GetFarmByOwnerID(c.Context(), userID)
 	if err != nil {
@@ -54,6 +76,16 @@ func (h *FarmHandler) GetFarmByOwner(c fiber.Ctx) error {
 		}
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", err.Error()))
 	}
+
+	filter := []models.Farm{}
+	for _, farm := range farms {
+		if cropType == "" || strings.EqualFold(farm.CropType, cropType) {
+			filter = append(filter, farm)
+		}
+	}
+
+	farms = filter
+
 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(farms))
 }
 
