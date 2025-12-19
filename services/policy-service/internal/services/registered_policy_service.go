@@ -271,7 +271,8 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 		existingPolicy, err := s.registeredPolicyRepo.GetByBasePolicyIDAndFarmID(request.RegisteredPolicy.BasePolicyID, farmID)
 		if existingPolicy != nil {
 			allowedStatus := map[models.PolicyStatus]bool{
-				models.PolicyRejected: true,
+				models.PolicyRejected:  true,
+				models.PolicyCancelled: true,
 			}
 			if !allowedStatus[existingPolicy.Status] {
 				slog.Error("farm already registered to this base policy, additional error", "error", err)
@@ -284,6 +285,10 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 			slog.Error("error getting farm by id", "id", request.FarmID, "error", err)
 			return nil, fmt.Errorf("error getting farm by ID: %w", err)
 		}
+		if len(farm.FarmPhotos) == 0 {
+			slog.Error("farm invalid", "id", request.FarmID, "farm photos length", len(farm.FarmPhotos))
+			return nil, fmt.Errorf("farm invalid: farm photos not found")
+		}
 		// verify ownership
 	}
 	// log current farm
@@ -293,6 +298,11 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 	if err != nil {
 		slog.Error("error processing base policy for registered policy", "error", err)
 		return nil, fmt.Errorf("error processing base policy for registered policy: %w", err)
+	}
+
+	if completeBasePolicy.BasePolicy.CropType != farm.CropType {
+		slog.Error("crop type mismatch", "base policy crop type", completeBasePolicy.BasePolicy.CropType, "farm crop type", farm.CropType)
+		return nil, fmt.Errorf("crop type mismatch base policy type - farm type: %s - %s", completeBasePolicy.BasePolicy.CropType, farm.CropType)
 	}
 
 	if completeBasePolicy.BasePolicy.Status != models.BasePolicyActive {
@@ -462,7 +472,7 @@ func (s *RegisteredPolicyService) calculateFarmerPremium(areasqm, basePremiumRat
 }
 
 // GetPolicyStats retrieves policy statistics (optionally filtered by provider)
-func (s *RegisteredPolicyService) GetPolicyStats(providerID string) (map[string]interface{}, error) {
+func (s *RegisteredPolicyService) GetPolicyStats(providerID string) (map[string]any, error) {
 	return s.registeredPolicyRepo.GetPolicyStats(providerID)
 }
 
@@ -944,7 +954,7 @@ func (s *RegisteredPolicyService) GetInsurancePartnerProfile(token string) (map[
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		slog.Error("Error parsing JSON for insurance partner profile", "error", err)
 		return nil, fmt.Errorf("error parsing JSON: %v", err)
@@ -957,9 +967,9 @@ func (s *RegisteredPolicyService) UpdateRegisteredPolicy(policy *models.Register
 	return s.registeredPolicyRepo.Update(policy)
 }
 
-func (s *RegisteredPolicyService) GetPartnerID(result map[string]interface{}) (string, error) {
+func (s *RegisteredPolicyService) GetPartnerID(result map[string]any) (string, error) {
 	// Lấy object "data"
-	data, ok := result["data"].(map[string]interface{})
+	data, ok := result["data"].(map[string]any)
 	if !ok {
 		return "", fmt.Errorf("data field not found or invalid")
 	}
@@ -1051,7 +1061,7 @@ func (s *RegisteredPolicyService) GetAllUserIDsFromInsuranceProvider(providerID 
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(body, &result); err != nil {
 		slog.Error("Error parsing JSON for insurance partner profile", "error", err)
 		return nil, fmt.Errorf("error parsing JSON: %v", err)

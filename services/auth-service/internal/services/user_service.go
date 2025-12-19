@@ -38,8 +38,8 @@ type IUserService interface {
 	GetUserEkycProgressByUserID(userID string) (*models.UserEkycProgress, error)
 	UploadToMinIO(c *gin.Context, file io.Reader, header *multipart.FileHeader, serviceName string) error
 	ProcessAndUploadFiles(files map[string][]*multipart.FileHeader, serviceName string, allowedExts []string, maxMB int64) ([]utils.FileInfo, error)
-	OCRNationalIDCard(form *multipart.Form) (interface{}, error)
-	VerifyFaceLiveness(form *multipart.Form) (interface{}, error)
+	OCRNationalIDCard(form *multipart.Form) (any, error)
+	VerifyFaceLiveness(form *multipart.Form) (any, error)
 	VerifyLandCertificate(userID string, NationalIDInput string) (result bool, err error)
 	CheckExistEmailOrPhone(input string) (bool, error)
 	GetUserCardByUserID(userID string) (*models.UserCard, error)
@@ -126,7 +126,7 @@ func (s *UserService) ProcessAndUploadFiles(files map[string][]*multipart.FileHe
 	return s.utils.ProcessFiles(s.minioClient, files, serviceName, allowedExts, maxMB)
 }
 
-func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, error) {
+func (s *UserService) OCRNationalIDCard(form *multipart.Form) (any, error) {
 	userIDs := form.Value["user_id"]
 	if len(userIDs) == 0 {
 		log.Printf("Error: user_id is required in the form data")
@@ -286,7 +286,7 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 	}
 
 	// Step 6: Parse front OCR response
-	var idCardOcrFrontResponse map[string]interface{}
+	var idCardOcrFrontResponse map[string]any
 	if err := json.Unmarshal(respBody, &idCardOcrFrontResponse); err != nil {
 		log.Printf("Error when parsing front OCR response: %v", err)
 		return utils.ErrorResponse{
@@ -298,7 +298,7 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 		}, nil
 	}
 
-	data, ok := idCardOcrFrontResponse["data"].([]interface{})
+	data, ok := idCardOcrFrontResponse["data"].([]any)
 	if !ok || len(data) == 0 {
 		log.Printf("Error: missing or invalid data in front OCR response")
 		return utils.ErrorResponse{
@@ -309,7 +309,7 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 			},
 		}, nil
 	}
-	frontData := data[0].(map[string]interface{})
+	frontData := data[0].(map[string]any)
 	nationalID, ok := frontData["id"].(string)
 	if !ok {
 		log.Printf("Error: missing id in front OCR response")
@@ -416,7 +416,7 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 	}
 
 	// Step 10: Parse back OCR response
-	var idCardOcrBackResponse map[string]interface{}
+	var idCardOcrBackResponse map[string]any
 	if err := json.Unmarshal(respBodyBack, &idCardOcrBackResponse); err != nil {
 		log.Printf("Error when parsing back OCR response: %v", err)
 		return utils.ErrorResponse{
@@ -469,7 +469,7 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 	}
 
 	// Extract front data
-	frontFieldData, ok := idCardOcrFrontResponse["data"].([]interface{})
+	frontFieldData, ok := idCardOcrFrontResponse["data"].([]any)
 	if !ok || len(frontFieldData) == 0 {
 		log.Printf("invalid front OCR response data: %v", idCardOcrFrontResponse)
 		return utils.ErrorResponse{
@@ -480,10 +480,10 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 			},
 		}, nil
 	}
-	front := frontFieldData[0].(map[string]interface{})
+	front := frontFieldData[0].(map[string]any)
 
 	// Extract back data
-	backFieldData, ok := idCardOcrBackResponse["data"].([]interface{})
+	backFieldData, ok := idCardOcrBackResponse["data"].([]any)
 	if !ok || len(backFieldData) == 0 {
 		log.Printf("invalid back OCR response data: %v", idCardOcrBackResponse)
 		return utils.ErrorResponse{
@@ -494,10 +494,10 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 			},
 		}, nil
 	}
-	back := backFieldData[0].(map[string]interface{})
+	back := backFieldData[0].(map[string]any)
 
 	// Convert mrz array to string
-	mrzArray, ok := back["mrz"].([]interface{})
+	mrzArray, ok := back["mrz"].([]any)
 	if !ok {
 		log.Printf("invalid mrz format in back OCR response: %v", back)
 		return utils.ErrorResponse{
@@ -578,7 +578,7 @@ func (s *UserService) OCRNationalIDCard(form *multipart.Form) (interface{}, erro
 	}, nil
 }
 
-func (s *UserService) VerifyFaceLiveness(form *multipart.Form) (interface{}, error) {
+func (s *UserService) VerifyFaceLiveness(form *multipart.Form) (any, error) {
 	userIDs := form.Value["user_id"]
 	if len(userIDs) == 0 {
 		log.Printf("Error: user_id is required in the form data")
@@ -787,7 +787,7 @@ func (s *UserService) VerifyFaceLiveness(form *multipart.Form) (interface{}, err
 		return utils.CreateErrorResponse("INTERNAL_ERROR", "Error when reading response body"), nil
 	}
 
-	var result map[string]interface{}
+	var result map[string]any
 	if err := json.Unmarshal(responseBody, &result); err != nil {
 		log.Printf("Error when parsing response body: %v", err)
 		return utils.CreateErrorResponse("INTERNAL_ERROR", "Error when parsing response body"), nil
@@ -931,7 +931,7 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 }
 
 func (s *UserService) CreateFarmerProfile(userID string, phone string, email string) (bool, error) {
-	payload := map[string]interface{}{
+	payload := map[string]any{
 		"user_id":           userID,
 		"role_id":           "user",
 		"partner_id":        nil,

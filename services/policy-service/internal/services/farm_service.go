@@ -386,7 +386,7 @@ type SatelliteImageryResponse struct {
 			ImagesProcessed int `json:"images_processed"`
 		} `json:"summary"`
 		FarmInfo struct {
-			Boundary interface{} `json:"boundary"`
+			Boundary any `json:"boundary"`
 			Area     struct {
 				Value float64 `json:"value"`
 				Unit  string  `json:"unit"`

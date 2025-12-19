@@ -119,7 +119,7 @@ func (r *roleRepository) GetRoleByName(name string) (*models.Role, error) {
 func (r *roleRepository) GetRoles(active *bool, limit, offset int) ([]*models.Role, error) {
 	var roles []*models.Role
 	var query string
-	var args []interface{}
+	var args []any
 
 	baseQuery := `
 		SELECT id, name, display_name, description, is_active, created_at
@@ -287,7 +287,7 @@ func (r *roleRepository) GetPermissionByID(id int) (*models.Permission, error) {
 func (r *roleRepository) GetPermissions(resource string, limit, offset int) ([]*models.Permission, error) {
 	var permissions []*models.Permission
 	var query string
-	var args []interface{}
+	var args []any
 
 	baseQuery := `
 		SELECT id, name, resource, action, description, created_at

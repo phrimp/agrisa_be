@@ -9,11 +9,13 @@ import (
 
 type DashboardService struct {
 	registeredPolicyRepo *repository.RegisteredPolicyRepository
+	dashboardRepo        *repository.DashboardRepository
 }
 
-func NewDashboardService(registeredPolicyRepo *repository.RegisteredPolicyRepository) *DashboardService {
+func NewDashboardService(registeredPolicyRepo *repository.RegisteredPolicyRepository, dashboardRepo *repository.DashboardRepository) *DashboardService {
 	return &DashboardService{
 		registeredPolicyRepo: registeredPolicyRepo,
+		dashboardRepo:        dashboardRepo,
 	}
 }
 
@@ -133,5 +135,86 @@ func (s *DashboardService) GetAdminRevenueOverview(options models.MonthlyRevenue
 		CurrentMonth:         *currentMonthRevenue,
 		PreviousMonth:        *previousMonthRevenue,
 		MonthlyGrowthRate:    monthlyGrowthRate,
+	}, nil
+}
+
+// GetPartnerDashboardOverview retrieves comprehensive dashboard overview for a partner
+func (s *DashboardService) GetPartnerDashboardOverview(req models.PartnerDashboardRequest) (*models.PartnerDashboardOverview, error) {
+	startDate := time.Unix(req.StartDate, 0)
+	endDate := time.Unix(req.EndDate, 0)
+
+	// 1. Financial Summary (Net Income & Profit Margin)
+	financialSummary, err := s.dashboardRepo.GetFinancialSummary(req.PartnerID, startDate, endDate)
+	if err != nil {
+		slog.Error("failed to get financial summary", "partner_id", req.PartnerID, "error", err)
+		return nil, err
+	}
+
+	// 2. Total Premium Collected
+	totalPremium, err := s.dashboardRepo.GetTotalPremiumCollected(req.PartnerID, startDate, endDate)
+	if err != nil {
+		slog.Error("failed to get total premium collected", "partner_id", req.PartnerID, "error", err)
+		return nil, err
+	}
+
+	// 3. Average Premium per Policy
+	avgPremium, err := s.dashboardRepo.GetAveragePremiumPerPolicy(req.PartnerID, startDate, endDate)
+	if err != nil {
+		slog.Error("failed to get average premium per policy", "partner_id", req.PartnerID, "error", err)
+		return nil, err
+	}
+
+	// 4. Outstanding Premium
+	outstandingPremium, err := s.dashboardRepo.GetOutstandingPremium(req.PartnerID, startDate, endDate)
+	if err != nil {
+		slog.Error("failed to get outstanding premium", "partner_id", req.PartnerID, "error", err)
+		return nil, err
+	}
+
+	// 5. Total Payout Disbursed
+	totalPayout, err := s.dashboardRepo.GetTotalPayoutDisbursed(req.PartnerID, startDate, endDate)
+	if err != nil {
+		slog.Error("failed to get total payout disbursed", "partner_id", req.PartnerID, "error", err)
+		return nil, err
+	}
+
+	// 6. Monthly Loss Ratio Trend
+	lossRatioTrend, err := s.dashboardRepo.GetMonthlyLossRatioTrend(req.PartnerID, startDate, endDate)
+	if err != nil {
+		slog.Error("failed to get monthly loss ratio trend", "partner_id", req.PartnerID, "error", err)
+		return nil, err
+	}
+
+	// 7. Premium Growth MoM
+	premiumGrowthMoM, err := s.dashboardRepo.GetPremiumGrowthMoM(req.PartnerID, startDate, endDate)
+	if err != nil {
+		slog.Error("failed to get premium growth MoM", "partner_id", req.PartnerID, "error", err)
+		return nil, err
+	}
+
+	// 8. Premium Growth YoY
+	premiumGrowthYoY, err := s.dashboardRepo.GetPremiumGrowthYoY(req.PartnerID, startDate, endDate)
+	if err != nil {
+		slog.Error("failed to get premium growth YoY", "partner_id", req.PartnerID, "error", err)
+		return nil, err
+	}
+
+	// 9. Monthly Payout per Claim Trend
+	payoutPerClaimTrend, err := s.dashboardRepo.GetMonthlyPayoutPerClaimTrend(req.PartnerID, startDate, endDate)
+	if err != nil {
+		slog.Error("failed to get monthly payout per claim trend", "partner_id", req.PartnerID, "error", err)
+		return nil, err
+	}
+
+	return &models.PartnerDashboardOverview{
+		FinancialSummary:           *financialSummary,
+		TotalPremiumCollected:      totalPremium,
+		AveragePremiumPerPolicy:    avgPremium,
+		OutstandingPremium:         outstandingPremium,
+		TotalPayoutDisbursed:       totalPayout,
+		MonthlyLossRatioTrend:      lossRatioTrend,
+		PremiumGrowthMoM:           premiumGrowthMoM,
+		PremiumGrowthYoY:           premiumGrowthYoY,
+		MonthlyPayoutPerClaimTrend: payoutPerClaimTrend,
 	}, nil
 }

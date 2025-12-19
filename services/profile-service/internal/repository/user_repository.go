@@ -15,7 +15,7 @@ import (
 type IUserRepository interface {
 	GetUserProfileByUserID(userID string) (*models.UserProfile, error)
 	CreateUserProfile(req *models.CreateUserProfileRequest, createdByID, createdByName string) error
-	UpdateUserProfile(query string, args ...interface{}) error
+	UpdateUserProfile(query string, args ...any) error
 	GetUserProfilesByPartnerID(partnerID string) ([]models.UserProfile, error)
 	GetUserBankInfoByUserIDs(userIDs []string) ([]models.UserBankInfo, error)
 }
@@ -111,7 +111,7 @@ func (r *UserRepository) CreateUserProfile(req *models.CreateUserProfileRequest,
 	return nil
 }
 
-func (r *UserRepository) UpdateUserProfile(query string, args ...interface{}) error {
+func (r *UserRepository) UpdateUserProfile(query string, args ...any) error {
 	if err := utils.ExecWithCheck(r.db, query, utils.ExecUpdate, args...); err != nil {
 		return fmt.Errorf("failed to update insurance partner: %w", err)
 	}

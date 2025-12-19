@@ -236,7 +236,7 @@ type SatelliteAPIResponse struct {
 				Max    *StatValue `json:"max,omitempty"`
 				StdDev *StatValue `json:"std_dev,omitempty"`
 			} `json:"ndvi_statistics,omitempty"`
-			Interpretation interface{}       `json:"interpretation"`
+			Interpretation any               `json:"interpretation"`
 			Outputs        map[string]string `json:"outputs"`
 			ComponentData  *struct {
 				NIR  *float64 `json:"nir,omitempty"`
@@ -316,9 +316,9 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	var testMonitoringData []models.FarmMonitoringData
 	if injectTestRaw, ok := params["inject_test"]; ok {
 		// Parse test data from parameter
-		if testDataArray, ok := injectTestRaw.([]interface{}); ok {
+		if testDataArray, ok := injectTestRaw.([]any); ok {
 			for _, item := range testDataArray {
-				if testDataMap, ok := item.(map[string]interface{}); ok {
+				if testDataMap, ok := item.(map[string]any); ok {
 					// Convert map to FarmMonitoringData
 					testData := parseFarmMonitoringDataFromMap(testDataMap, farmID)
 					testMonitoringData = append(testMonitoringData, testData)
@@ -1054,9 +1054,9 @@ func (s *RegisteredPolicyService) buildEvidenceSummary(triggeredConditions []Tri
 		"generation_method": "automatic",
 	}
 
-	conditions := make([]map[string]interface{}, 0, len(triggeredConditions))
+	conditions := make([]map[string]any, 0, len(triggeredConditions))
 	for _, tc := range triggeredConditions {
-		condEvidence := map[string]interface{}{
+		condEvidence := map[string]any{
 			"condition_id":     tc.ConditionID.String(),
 			"parameter":        string(tc.ParameterName),
 			"measured_value":   tc.MeasuredValue,
@@ -1407,7 +1407,7 @@ func (s *RegisteredPolicyService) isInBlackoutPeriod(blackoutPeriods utils.JSONM
 	}
 
 	// Blackout periods expected format: {"periods": [{"start": "MM-DD", "end": "MM-DD"}, ...]}
-	periods, ok := blackoutPeriods["periods"].([]interface{})
+	periods, ok := blackoutPeriods["periods"].([]any)
 	if !ok {
 		return false
 	}
@@ -1415,7 +1415,7 @@ func (s *RegisteredPolicyService) isInBlackoutPeriod(blackoutPeriods utils.JSONM
 	currentMonthDay := currentTime.Format("01-02")
 
 	for _, p := range periods {
-		period, ok := p.(map[string]interface{})
+		period, ok := p.(map[string]any)
 		if !ok {
 			continue
 		}
@@ -2280,7 +2280,7 @@ func convertToMonitoringData(
 		}
 
 		// Add statistics to component data
-		componentData["statistics"] = map[string]interface{}{
+		componentData["statistics"] = map[string]any{
 			"median": medianValue,
 			"min":    minValue,
 			"max":    maxValue,
@@ -2345,7 +2345,7 @@ func min(a, b int) int {
 }
 
 // parseFarmMonitoringDataFromMap converts a map to FarmMonitoringData for test injection
-func parseFarmMonitoringDataFromMap(dataMap map[string]interface{}, farmID uuid.UUID) models.FarmMonitoringData {
+func parseFarmMonitoringDataFromMap(dataMap map[string]any, farmID uuid.UUID) models.FarmMonitoringData {
 	data := models.FarmMonitoringData{
 		ID:     uuid.New(),
 		FarmID: farmID,
@@ -2382,7 +2382,7 @@ func parseFarmMonitoringDataFromMap(dataMap map[string]interface{}, farmID uuid.
 	}
 
 	// Parse ComponentData (optional)
-	if componentData, ok := dataMap["component_data"].(map[string]interface{}); ok {
+	if componentData, ok := dataMap["component_data"].(map[string]any); ok {
 		data.ComponentData = componentData
 	}
 

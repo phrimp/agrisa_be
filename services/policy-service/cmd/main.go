@@ -147,6 +147,7 @@ func main() {
 	claimRejectionRepo := repository.NewClaimRejectionRepository(db)
 	payoutRepo := repository.NewPayoutRepository(db)
 	cancelRepo := repository.NewCancelRequestRepository(db)
+	dashboardRepo := repository.NewDashboardRepository(db)
 
 	// Initialize WorkerManagerV2
 	workerManager := worker.NewWorkerManagerV2(db, redisClient)
@@ -166,7 +167,7 @@ func main() {
 	riskAnalysisService := services.NewRiskAnalysisCRUDService(registeredPolicyRepo)
 	claimService := services.NewClaimService(claimRepo, registeredPolicyRepo, farmRepo, payoutRepo, notificationHelper)
 	claimRejectionService := services.NewClaimRejectionService(registeredPolicyRepo, claimRepo, claimRejectionRepo)
-	dashboardService := services.NewDashboardService(registeredPolicyRepo)
+	dashboardService := services.NewDashboardService(registeredPolicyRepo, dashboardRepo)
 	payoutServie := services.NewPayoutService(payoutRepo, registeredPolicyRepo, farmRepo)
 	cancelRequestService := services.NewCancelRequestService(registeredPolicyRepo, cancelRepo, notificationHelper, redisClient)
 

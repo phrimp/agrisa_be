@@ -118,8 +118,8 @@ func (a *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// Prepare successful login response
-	responseData := map[string]interface{}{
-		"user": map[string]interface{}{
+	responseData := map[string]any{
+		"user": map[string]any{
 			"id":             user.ID,
 			"email":          user.Email,
 			"phone_number":   user.PhoneNumber,
@@ -127,7 +127,7 @@ func (a *AuthHandler) Login(c *gin.Context) {
 			"phone_verified": user.PhoneVerified,
 			"kyc_verified":   user.KYCVerified,
 		},
-		"session": map[string]interface{}{
+		"session": map[string]any{
 			"session_id":  session.ID,
 			"expires_at":  session.ExpiresAt,
 			"device_info": session.DeviceInfo,
@@ -361,8 +361,8 @@ func (a *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// Prepare successful registration response
-	responseData := map[string]interface{}{
-		"user": map[string]interface{}{
+	responseData := map[string]any{
+		"user": map[string]any{
 			"id":             user.ID,
 			"email":          user.Email,
 			"phone_number":   user.PhoneNumber,
@@ -445,7 +445,7 @@ func (a *AuthHandler) VerifyLandCertificate(c *gin.Context) {
 		return
 	}
 
-	var requestBody map[string]interface{}
+	var requestBody map[string]any
 	if err := c.ShouldBindJSON(&requestBody); err != nil {
 		log.Printf("Error binding JSON for VerifyLandCertificate: %s", err.Error())
 		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "Invalid request payload")

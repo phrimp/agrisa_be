@@ -21,7 +21,7 @@ type IInsurancePartnerRepository interface {
 	CreateInsurancePartner(req models.CreateInsurancePartnerRequest, createdByID, createdByName string) error
 	GetPublicProfile(partnerID string) (*models.PublicPartnerProfile, error)
 	GetPrivateProfile(partnerID string) (*models.PrivatePartnerProfile, error)
-	UpdateInsurancePartner(query string, args ...interface{}) error
+	UpdateInsurancePartner(query string, args ...any) error
 	GetAllPublicProfiles() ([]models.PublicPartnerProfile, error)
 	SearchDeletionRequestsByRequesterName(ctx context.Context, searchTerm string) ([]models.PartnerDeletionRequest, error)
 	CreateDeletionRequest(ctx context.Context, req *models.PartnerDeletionRequest) (*models.PartnerDeletionRequest, error)
@@ -220,7 +220,7 @@ func (r *InsurancePartnerRepository) CreateInsurancePartner(req models.CreateIns
 		req.CoverageAreas,
 		createdByID,
 		createdByName,
-		"pending",
+		"active",
 	)
 
 	if err != nil {
@@ -426,7 +426,7 @@ func (r *InsurancePartnerRepository) GetPrivateProfile(partnerID string) (*model
 	return &profile, nil
 }
 
-func (r *InsurancePartnerRepository) UpdateInsurancePartner(query string, args ...interface{}) error {
+func (r *InsurancePartnerRepository) UpdateInsurancePartner(query string, args ...any) error {
 	if err := utils.ExecWithCheck(r.db, query, utils.ExecUpdate, args...); err != nil {
 		return fmt.Errorf("failed to update insurance partner: %w", err)
 	}

@@ -13,7 +13,7 @@ type UserService struct {
 type IUserService interface {
 	GetUserProfileByUserID(userID string) (*models.UserProfile, error)
 	CreateUserProfile(req *models.CreateUserProfileRequest, createdByID, createdByName string) error
-	UpdateUserProfile(updateProfileRequestBody map[string]interface{}, userID, updatedByName string) (*models.UserProfile, error)
+	UpdateUserProfile(updateProfileRequestBody map[string]any, userID, updatedByName string) (*models.UserProfile, error)
 	GetUserProfilesByPartnerID(partnerID string) ([]models.UserProfile, error)
 	GetUserBankInfoByUserIDs(userIDs []string) ([]models.UserBankInfo, error)
 }
@@ -57,7 +57,7 @@ var allowedUpdateUserProfileFields = map[string]bool{
 
 var arrayUserProfileFields = map[string]bool{}
 
-func (s *UserService) UpdateUserProfile(updateProfileRequestBody map[string]interface{}, userID, updatedByName string) (*models.UserProfile, error) {
+func (s *UserService) UpdateUserProfile(updateProfileRequestBody map[string]any, userID, updatedByName string) (*models.UserProfile, error) {
 	// check if insurance partner profile exists
 	_, err := s.repo.GetUserProfileByUserID(userID)
 	if err != nil {

@@ -743,7 +743,7 @@ func (h *DefaultPaymentEventHandler) processPolicyPayment(
 		return &PaymentValidationError{
 			PaymentID: event.ID,
 			Reason:    "payment amount mismatch",
-			Details: map[string]interface{}{
+			Details: map[string]any{
 				"expected":  expectedAmount,
 				"received":  orderItem.Price,
 				"policy_id": registeredPolicyID,
@@ -834,7 +834,7 @@ func (h *DefaultPaymentEventHandler) startPolicyMonitoring(
 type PaymentValidationError struct {
 	PaymentID string
 	Reason    string
-	Details   map[string]interface{}
+	Details   map[string]any
 }
 
 func (e *PaymentValidationError) Error() string {
@@ -919,8 +919,8 @@ func (c *PaymentConsumer) HealthCheck() ConsumerHealthStatus {
 }
 
 // GetMetrics returns consumer metrics
-func (c *PaymentConsumer) GetMetrics() map[string]interface{} {
-	return map[string]interface{}{
+func (c *PaymentConsumer) GetMetrics() map[string]any {
+	return map[string]any{
 		"messages_processed":  c.messagesProcessed,
 		"messages_failed":     c.messagesFailed,
 		"last_message_time":   c.lastMessageTime,

@@ -73,7 +73,7 @@ func (r *ClaimRepository) GetByPolicyID(ctx context.Context, policyID uuid.UUID)
 }
 
 // GetAll retrieves all claims with optional filters
-func (r *ClaimRepository) GetAll(ctx context.Context, filters map[string]interface{}) ([]models.Claim, error) {
+func (r *ClaimRepository) GetAll(ctx context.Context, filters map[string]any) ([]models.Claim, error) {
 	var claims []models.Claim
 	query := `
 		SELECT id, claim_number, registered_policy_id, base_policy_id, farm_id,
@@ -86,7 +86,7 @@ func (r *ClaimRepository) GetAll(ctx context.Context, filters map[string]interfa
 		WHERE 1=1
 	`
 
-	args := []interface{}{}
+	args := []any{}
 	argCount := 1
 
 	// Add filters dynamically

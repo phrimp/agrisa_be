@@ -60,7 +60,7 @@ func (g *GeoJSONPolygon) Value() (driver.Value, error) {
 
 // Scan implements the sql.Scanner interface for GeoJSONPolygon
 // Converts PostGIS GEOMETRY to GeoJSON
-func (g *GeoJSONPolygon) Scan(value interface{}) error {
+func (g *GeoJSONPolygon) Scan(value any) error {
 	if value == nil {
 		return nil
 	}
@@ -177,7 +177,7 @@ func (g *GeoJSONPoint) Value() (driver.Value, error) {
 
 // Scan implements the sql.Scanner interface for GeoJSONPoint
 // Converts PostGIS GEOGRAPHY to GeoJSON
-func (g *GeoJSONPoint) Scan(value interface{}) error {
+func (g *GeoJSONPoint) Scan(value any) error {
 	if value == nil {
 		return nil
 	}

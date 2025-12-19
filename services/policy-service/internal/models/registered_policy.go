@@ -204,15 +204,15 @@ func (r *RegisteredPolicyFilterRequest) Validate() error {
 
 // MinimalFarmInfo contains essential farm information
 type MinimalFarmInfo struct {
-	ID             uuid.UUID   `json:"id"`
-	FarmName       *string     `json:"farm_name,omitempty"`
-	FarmCode       *string     `json:"farm_code,omitempty"`
-	AreaSqm        float64     `json:"area_sqm"`
-	Province       *string     `json:"province,omitempty"`
-	District       *string     `json:"district,omitempty"`
-	Commune        *string     `json:"commune,omitempty"`
-	CropType       string      `json:"crop_type"`
-	CenterLocation interface{} `json:"center_location,omitempty"`
+	ID             uuid.UUID `json:"id"`
+	FarmName       *string   `json:"farm_name,omitempty"`
+	FarmCode       *string   `json:"farm_code,omitempty"`
+	AreaSqm        float64   `json:"area_sqm"`
+	Province       *string   `json:"province,omitempty"`
+	District       *string   `json:"district,omitempty"`
+	Commune        *string   `json:"commune,omitempty"`
+	CropType       string    `json:"crop_type"`
+	CenterLocation any       `json:"center_location,omitempty"`
 }
 
 // MinimalBasePolicyInfo contains essential base policy information

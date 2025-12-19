@@ -55,7 +55,7 @@ func (h *CancelRequestHandler) GetAllMyRequests(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve requests"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claims":    requests,
 		"count":     len(requests),
 		"farmer_id": userID,
@@ -241,7 +241,7 @@ func (h *CancelRequestHandler) GetAllPartnerRequest(c fiber.Ctx) error {
 			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve requests"))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]interface{}{
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
 		"claims":      requests,
 		"count":       len(requests),
 		"provider_id": providerID,

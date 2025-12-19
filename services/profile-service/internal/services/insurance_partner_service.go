@@ -27,7 +27,7 @@ type IInsurancePartnerService interface {
 	GetPartnerReviews(partnerID string, sortBy string, sortDirection string, limit int, offset int) ([]models.PartnerReview, error)
 	CreateInsurancePartner(req *models.CreateInsurancePartnerRequest, userID string) CreateInsurancePartnerResult
 	GetPrivateProfile(userID string) (*models.PrivatePartnerProfile, error)
-	UpdateInsurancePartner(updateProfileRequestBody map[string]interface{}, updateByID, updateByName string) (*models.PrivatePartnerProfile, error)
+	UpdateInsurancePartner(updateProfileRequestBody map[string]any, updateByID, updateByName string) (*models.PrivatePartnerProfile, error)
 	GetAllPartnersPublicProfiles() ([]models.PublicPartnerProfile, error)
 	GetPrivateProfileByPartnerID(partnerID string) (*models.PrivatePartnerProfile, error)
 	CreatePartnerDeletionRequest(req *models.PartnerDeletionRequest, partnerAdminID string) (result *models.PartnerDeletionRequest, err error)
@@ -220,7 +220,7 @@ var arrayInsuranceProfileFields = map[string]bool{
 	"legal_document_urls":        true,
 }
 
-func (s *InsurancePartnerService) UpdateInsurancePartner(updateProfileRequestBody map[string]interface{}, updateByID, updateByName string) (*models.PrivatePartnerProfile, error) {
+func (s *InsurancePartnerService) UpdateInsurancePartner(updateProfileRequestBody map[string]any, updateByID, updateByName string) (*models.PrivatePartnerProfile, error) {
 	// check if insurance partner profile exists
 	var privateProfile *models.PrivatePartnerProfile
 	partnerID := updateProfileRequestBody["partner_id"].(string)
@@ -257,7 +257,7 @@ func (s *InsurancePartnerService) UpdateInsurancePartner(updateProfileRequestBod
 
 	// Build dynamic UPDATE query
 	setClauses := []string{}
-	args := []interface{}{}
+	args := []any{}
 	argPosition := 1
 
 	for field, value := range updateProfileRequestBody {
@@ -269,8 +269,8 @@ func (s *InsurancePartnerService) UpdateInsurancePartner(updateProfileRequestBod
 
 		// Xử lý các field có kiểu array
 		if arrayInsuranceProfileFields[field] {
-			// Chuyển đổi slice interface{} thành []string
-			if arr, ok := value.([]interface{}); ok {
+			// Chuyển đổi slice any thành []string
+			if arr, ok := value.([]any); ok {
 				strArr := make([]string, len(arr))
 				for i, v := range arr {
 					strArr[i] = fmt.Sprintf("%v", v)

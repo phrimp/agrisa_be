@@ -560,7 +560,7 @@ func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatus(ctx context.Contex
 		"end_timestamp", endTimestamp)
 
 	var dataList []models.FarmMonitoringDataWithPolicyStatus
-	var args []interface{}
+	var args []any
 	argIndex := 1
 
 	query := `
@@ -619,7 +619,7 @@ func (r *FarmMonitoringDataRepository) GetAllWithPolicyStatusByFarmID(ctx contex
 		"end_timestamp", endTimestamp)
 
 	var dataList []models.FarmMonitoringDataWithPolicyStatus
-	var args []interface{}
+	var args []any
 	args = append(args, farmID)
 	argIndex := 2
 
@@ -689,7 +689,7 @@ func (r *FarmMonitoringDataRepository) GetByFarmIDAndParameterNameWithPolicyStat
 		"end_timestamp", endTimestamp)
 
 	var dataList []models.FarmMonitoringDataWithPolicyStatus
-	var args []interface{}
+	var args []any
 	args = append(args, farmID, parameterName)
 	argIndex := 3
 

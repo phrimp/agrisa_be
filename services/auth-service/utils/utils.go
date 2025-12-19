@@ -218,7 +218,7 @@ func SendError(c *gin.Context, statusCode int, errorMsg, message string) {
 }
 
 // SendSuccess sends a standardized success response
-func SendSuccess(c *gin.Context, statusCode int, data interface{}) {
+func SendSuccess(c *gin.Context, statusCode int, data any) {
 	c.JSON(statusCode, data)
 }
 

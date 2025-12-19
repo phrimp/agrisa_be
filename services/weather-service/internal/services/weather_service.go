@@ -23,15 +23,15 @@ func NewWeatherService(cfg config.WeatherServiceConfig) IWeatherService {
 }
 
 type WeatherResponse struct {
-	Lat            float64                  `json:"lat"`
-	Lon            float64                  `json:"lon"`
-	Timezone       string                   `json:"timezone"`
-	TimezoneOffset int                      `json:"timezone_offset"`
-	Current        map[string]interface{}   `json:"current,omitempty"`
-	Minutely       []map[string]interface{} `json:"minutely,omitempty"`
-	Hourly         []map[string]interface{} `json:"hourly,omitempty"`
-	Daily          []map[string]interface{} `json:"daily,omitempty"`
-	Alerts         []map[string]interface{} `json:"alerts,omitempty"`
+	Lat            float64          `json:"lat"`
+	Lon            float64          `json:"lon"`
+	Timezone       string           `json:"timezone"`
+	TimezoneOffset int              `json:"timezone_offset"`
+	Current        map[string]any   `json:"current,omitempty"`
+	Minutely       []map[string]any `json:"minutely,omitempty"`
+	Hourly         []map[string]any `json:"hourly,omitempty"`
+	Daily          []map[string]any `json:"daily,omitempty"`
+	Alerts         []map[string]any `json:"alerts,omitempty"`
 }
 
 func (w *WeatherService) FetchWeatherData(lat, lon, exclude, units, lang string) (*WeatherResponse, error) {

@@ -756,7 +756,7 @@ func (r *RegisteredPolicyRepository) GetWithFilters(filter models.RegisteredPoli
 	slog.Info("Querying registered policies with filters", "filter", filter)
 
 	query := `SELECT * FROM registered_policy WHERE 1=1`
-	args := []interface{}{}
+	args := []any{}
 	argIndex := 1
 
 	if filter.PolicyID != nil {
@@ -825,12 +825,12 @@ func (r *RegisteredPolicyRepository) GetByInsuranceProviderID(providerID string)
 }
 
 // GetPolicyStats retrieves aggregated statistics for policies
-func (r *RegisteredPolicyRepository) GetPolicyStats(providerID string) (map[string]interface{}, error) {
-	stats := make(map[string]interface{})
+func (r *RegisteredPolicyRepository) GetPolicyStats(providerID string) (map[string]any, error) {
+	stats := make(map[string]any)
 
 	// Base query with optional provider filter
 	whereClause := ""
-	args := []interface{}{}
+	args := []any{}
 	if providerID != "" {
 		whereClause = " WHERE insurance_provider_id = $1"
 		args = append(args, providerID)
@@ -1223,7 +1223,7 @@ func (r *RegisteredPolicyRepository) GetTotalFilterStatusProviders(status []stri
 	`
 
 	var count int64
-	err := r.db.GetContext(context.Background(), &count, query, status, underwritingStatus)
+	err := r.db.GetContext(context.Background(), &count, query, pq.Array(status), pq.Array(underwritingStatus))
 	if err != nil {
 		slog.Error("Failed to count active approved providers", "error", err)
 		return 0, fmt.Errorf("failed to count active approved providers: %w", err)
@@ -1238,7 +1238,7 @@ func (r *RegisteredPolicyRepository) GetTotalFilterStatusPolicies(status []strin
 		WHERE status = any($1) AND underwriting_status = any($2)
 	`
 	var count int64
-	err := r.db.GetContext(context.Background(), &count, query, status, underwritingStatus)
+	err := r.db.GetContext(context.Background(), &count, query, pq.Array(status), pq.Array(underwritingStatus))
 	if err != nil {
 		slog.Error("Failed to count active approved policies", "error", err)
 		return 0, fmt.Errorf("failed to count active approved policies: %w", err)
@@ -1433,8 +1433,8 @@ func (r *RegisteredPolicyRepository) GetTotalMonthlyRevenue(year int, month int,
 		query,
 		year,
 		month,
-		status,
-		underwritingStatus,
+		pq.Array(status),
+		pq.Array(underwritingStatus),
 	)
 	if err != nil {
 		slog.Error("Failed to calculate total monthly revenue", "error", err)
@@ -1513,8 +1513,8 @@ func (r *RegisteredPolicyRepository) GetTotalProvidersByMonth(year int, month in
 		query,
 		year,
 		month,
-		status,
-		underwritingStatus,
+		pq.Array(status),
+		pq.Array(underwritingStatus),
 	)
 	if err != nil {
 		slog.Error("Failed to count total providers by month", "error", err)
