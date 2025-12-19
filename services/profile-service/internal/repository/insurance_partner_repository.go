@@ -30,6 +30,7 @@ type IInsurancePartnerRepository interface {
 	GetDeletionRequestsByRequestID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error)
 	UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string) error
 	GetLatestDeletionRequestByRequesterID(requestedBy string) (*models.PartnerDeletionRequest, error)
+	GetAllDeletionRequests(ctx context.Context) ([]models.PartnerDeletionRequest, error)
 }
 type InsurancePartnerRepository struct {
 	db *sqlx.DB
