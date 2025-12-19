@@ -546,6 +546,7 @@ func (r *InsurancePartnerRepository) GetAllDeletionRequests(
 	var requests []models.PartnerDeletionRequest
 	err := r.db.SelectContext(ctx, &requests, query)
 	if err != nil {
+		log.Printf("Error retrieving all deletion requests: %s", err.Error())
 		return nil, err
 	}
 
