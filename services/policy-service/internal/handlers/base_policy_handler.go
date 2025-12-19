@@ -73,12 +73,32 @@ func (bhp *BasePolicyHandler) GetAllCompletePolicyCreations(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(response))
 }
 
+// func (bph *BasePolicyHandler) GetAllActivePolicy(c fiber.Ctx) error {
+// 	activePolicies, err := bph.basePolicyService.GetActivePolicies(c)
+// 	if err != nil {
+// 		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to retrive active policies"))
+// 	}
+// 	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(activePolicies))
+// }
+
 func (bph *BasePolicyHandler) GetAllActivePolicy(c fiber.Ctx) error {
-	activePolicies, err := bph.basePolicyService.GetActivePolicies(c)
+	providerID := c.Query("provider_id")
+	cropType := c.Query("crop_type")
+
+	activePolicies, err := bph.basePolicyService.GetActivePolicies(c.Context())
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to retrive active policies"))
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to retrieve active policies"))
 	}
-	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(activePolicies))
+
+	// Filter in memory
+	filtered := []models.BasePolicy{}
+	for _, p := range activePolicies {
+		if (providerID == "" || p.InsuranceProviderID == providerID) && (cropType == "" || p.CropType == cropType) {
+			filtered = append(filtered, p)
+		}
+	}
+
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(filtered))
 }
 
 // CreateCompletePolicy creates a complete policy (BasePolicy + Trigger + Conditions) in Redis
