@@ -537,7 +537,10 @@ func (r *InsurancePartnerRepository) GetAllDeletionRequests(
             status,
             requested_at,
             cancellable_until,
-            created_at,
+            reviewed_by_id,
+            reviewed_by_name,
+            reviewed_at,
+            review_note,
             updated_at
         FROM partner_deletion_requests
         ORDER BY requested_at DESC
