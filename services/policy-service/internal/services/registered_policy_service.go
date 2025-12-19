@@ -424,18 +424,6 @@ func (s *RegisteredPolicyService) RegisterAPolicy(request models.RegisterAPolicy
 
 	go func() {
 		for {
-			err := s.notievent.NotifyPolicyRegistered(context.Background(), request.RegisteredPolicy.FarmerID, request.RegisteredPolicy.PolicyNumber)
-			if err == nil {
-				slog.Info("policy registeration notification sent", "policy id", request.RegisteredPolicy.ID)
-				return
-			}
-			slog.Error("error sending policy registeration notification", "error", err)
-			time.Sleep(10 * time.Second)
-		}
-	}()
-
-	go func() {
-		for {
 			err := s.notievent.NotifyPolicyRegisteredPartner(context.Background(), partnerUserIDs, request.RegisteredPolicy.PolicyNumber)
 			if err == nil {
 				slog.Info("policy registeration partner notification sent", "policy id", request.RegisteredPolicy.ID)

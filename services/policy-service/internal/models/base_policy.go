@@ -87,6 +87,14 @@ type BasePolicyTriggerCondition struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
+var CostPerMonitorFrequencyUnit map[MonitorFrequency]float64 = map[MonitorFrequency]float64{
+	MonitorFrequencyHour:  2.0,
+	MonitorFrequencyDay:   1.5,
+	MonitorFrequencyWeek:  1,
+	MonitorFrequencyMonth: 0.8,
+	MonitorFrequencyYear:  0.5,
+}
+
 type BasePolicyDocumentValidation struct {
 	ID                  uuid.UUID        `json:"id" db:"id"`
 	BasePolicyID        uuid.UUID        `json:"base_policy_id" db:"base_policy_id"`

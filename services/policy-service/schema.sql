@@ -19,7 +19,7 @@ CREATE TYPE payment_status AS ENUM ('pending', 'paid', 'overdue', 'cancelled', '
 CREATE TYPE validation_status AS ENUM ('pending', 'passed', 'passed_ai', 'failed', 'warning');
 CREATE TYPE threshold_operator AS ENUM ('<', '>', '<=', '>=', '==', '!=', 'change_gt', 'change_lt');
 CREATE TYPE aggregation_function AS ENUM ('sum', 'avg', 'min', 'max', 'change');
-CREATE TYPE logical_operator AS ENUM ('AND', 'OR');
+CREATE TYPE logical_operator AS ENUM ('AND', 'OR', 'NAND', 'NOR');
 CREATE TYPE claim_status AS ENUM ('generated', 'pending_partner_review', 'approved', 'rejected', 'paid');
 CREATE TYPE payout_status AS ENUM ('pending', 'processing', 'completed', 'failed');
 CREATE TYPE data_quality AS ENUM ('good', 'acceptable', 'poor');
