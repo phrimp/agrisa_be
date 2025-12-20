@@ -45,6 +45,7 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	//admin endpoint
 	partnerAdminGr := insurancePartnerProtectedGrPub.Group("/insurance-partners/admin")
 	partnerAdminGr.POST("/process-request", h.ProcessPartnerDeletionRequestReview)
+	partnerAdminGr.GET("/deletion-requests", h.GetAllPartnerDeletionRequest)
 }
 
 func MapErrorToHTTPStatusExtended(errorString string) (errorCode string, httpStatus int) {
@@ -287,4 +288,27 @@ func (h *InsurancePartnerHandler) RevokePartnerDeletionRequest(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, utils.CreateSuccessResponse("Request revoked successfully"))
+}
+
+func (h *InsurancePartnerHandler) GetAllPartnerDeletionRequest(c *gin.Context) {
+	user_id := c.GetHeader("X-User-ID")
+	if user_id == "" {
+		errorResponse := utils.CreateErrorResponse("UNAUTHORIZED", "Tính năng chỉ dành cho quản trị viên")
+		c.JSON(http.StatusUnauthorized, errorResponse)
+		return
+	}
+	result, err := h.InsurancePartnerService.GetAllPartnerDeletionRequests()
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		if strings.Contains(err.Error(), "no rows in result set") {
+			errorResponse := utils.CreateErrorResponse(errorCode, "Hiện tại chưa có yêu cầu xóa đối tác nào")
+			c.JSON(httpStatus, errorResponse)
+			return
+		}
+		errorResponse := utils.CreateErrorResponse(errorCode, "Đã có lỗi xảy ra")
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	response := utils.CreateSuccessResponse(result)
+	c.JSON(http.StatusOK, response)
 }

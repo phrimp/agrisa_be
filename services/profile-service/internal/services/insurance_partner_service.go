@@ -35,6 +35,7 @@ type IInsurancePartnerService interface {
 	ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.PartnerDeletionRequest, err error)
 	ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO) error
 	RevokePartnerDeletionRequest(requestID uuid.UUID, userID string, reviewNote string) error
+	GetAllPartnerDeletionRequests() ([]models.PartnerDeletionRequest, error)
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
@@ -128,26 +129,26 @@ func ValidateInsurancePartner(req *models.CreateInsurancePartnerRequest) []*util
 		validationErrors = append(validationErrors, err)
 	}
 
-	// Validate Head Office Address
-	if err := ValidateHeadOfficeAddress(req.HeadOfficeAddress); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
-	// Validate Province Code
-	if err := ValidateProvinceCode(req.ProvinceCode); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
-	// Validate Province Name
-	if err := ValidateProvinceName(req.ProvinceCode, req.ProvinceName); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
-	// Validate Ward Code
-	if err := ValidateWardCode(req.ProvinceCode, req.WardCode); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
-	// Validate Ward Name
-	if err := ValidateWardName(req.ProvinceCode, req.WardCode, req.WardName); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
+	// // Validate Head Office Address
+	// if err := ValidateHeadOfficeAddress(req.HeadOfficeAddress); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
+	// // Validate Province Code
+	// if err := ValidateProvinceCode(req.ProvinceCode); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
+	// // Validate Province Name
+	// if err := ValidateProvinceName(req.ProvinceCode, req.ProvinceName); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
+	// // Validate Ward Code
+	// if err := ValidateWardCode(req.ProvinceCode, req.WardCode); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
+	// // Validate Ward Name
+	// if err := ValidateWardName(req.ProvinceCode, req.WardCode, req.WardName); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
 	// Validate Postal Code
 	// if err := ValidatePostalCode(req.PostalCode); err != nil {
 	// 	validationErrors = append(validationErrors, err)
@@ -1167,4 +1168,8 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 
 	return s.repo.ProcessRequestReview(processRequestReview)
 
+}
+
+func (s *InsurancePartnerService) GetAllPartnerDeletionRequests() ([]models.PartnerDeletionRequest, error) {
+	return s.repo.GetAllDeletionRequests(context.Background())
 }

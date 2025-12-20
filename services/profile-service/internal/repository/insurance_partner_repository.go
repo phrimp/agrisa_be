@@ -30,6 +30,7 @@ type IInsurancePartnerRepository interface {
 	GetDeletionRequestsByRequestID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error)
 	UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string) error
 	GetLatestDeletionRequestByRequesterID(requestedBy string) (*models.PartnerDeletionRequest, error)
+	GetAllDeletionRequests(ctx context.Context) ([]models.PartnerDeletionRequest, error)
 }
 type InsurancePartnerRepository struct {
 	db *sqlx.DB
@@ -536,7 +537,10 @@ func (r *InsurancePartnerRepository) GetAllDeletionRequests(
             status,
             requested_at,
             cancellable_until,
-            created_at,
+            reviewed_by_id,
+            reviewed_by_name,
+            reviewed_at,
+            review_note,
             updated_at
         FROM partner_deletion_requests
         ORDER BY requested_at DESC
@@ -545,6 +549,7 @@ func (r *InsurancePartnerRepository) GetAllDeletionRequests(
 	var requests []models.PartnerDeletionRequest
 	err := r.db.SelectContext(ctx, &requests, query)
 	if err != nil {
+		log.Printf("Error retrieving all deletion requests: %s", err.Error())
 		return nil, err
 	}
 
