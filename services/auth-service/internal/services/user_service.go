@@ -907,13 +907,6 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 		return nil, fmt.Errorf("error creating new user: %s", err)
 	}
 
-	// create farmer profile
-	isSuccess, err := s.CreateFarmerProfile(newUser.ID, phone, email, "user_default")
-	if err != nil && !isSuccess {
-		slog.Error("failed to create farmer profile", "error", err)
-		return nil, err
-	}
-
 	// create ekyc progress
 	ekycProgress := models.UserEkycProgress{
 		UserID:         newUser.ID,
