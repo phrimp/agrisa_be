@@ -215,7 +215,8 @@ func (r *RegisteredPolicyRepository) GetCompensationAmount(id uuid.UUID, request
 	}
 
 	if now.Unix() < policy.CoverageStartDate {
-		return 0, fmt.Errorf("policy haven't started")
+		slog.Info("policy haven't started, return full compensation", "policy", policy.ID, "start date", time.Unix(policy.CoverageStartDate, 0))
+		return policy.TotalFarmerPremium, nil
 	}
 
 	coveragePercentage = float64((now.Unix() - policy.CoverageStartDate) * 100 / (policy.CoverageEndDate - policy.CoverageStartDate))
