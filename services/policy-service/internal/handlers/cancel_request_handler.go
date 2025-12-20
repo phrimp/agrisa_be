@@ -119,7 +119,59 @@ func (h *CancelRequestHandler) ReviewCancelRequest(c fiber.Ctx) error {
 }
 
 func (h *CancelRequestHandler) ResolveDispute(c fiber.Ctx) error {
-	return nil
+	var req models.ResolveConflictCancelRequestReq
+	if err := c.Bind().Body(&req); err != nil {
+		slog.Error("error parsing request", "error", err)
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_REQUEST", "Invalid request body: "+err.Error()))
+	}
+
+	requestIDStr := c.Params("id")
+	requestID, err := uuid.Parse(requestIDStr)
+	if err != nil {
+		return c.Status(http.StatusBadRequest).JSON(
+			utils.CreateErrorResponse("INVALID_UUID", "Invalid cancel request ID format"))
+	}
+
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+	requestBy := userID
+	tokenString := c.Get("Authorization")
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
+	partnerFound := true
+	if err != nil {
+		if !strings.Contains(err.Error(), "insurance partner profile not found") {
+			slog.Error("error retriving partner profile", "error", err)
+			return c.Status(http.StatusInternalServerError).JSON(
+				utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+		}
+		partnerFound = false
+	}
+
+	if partnerFound {
+		requestBy, err = h.registeredPolicyService.GetPartnerID(partnerProfileData)
+		if err != nil {
+			slog.Error("error retriving partner id", "error", err)
+			return c.Status(http.StatusInternalServerError).JSON(
+				utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
+		}
+	}
+	req.ReviewedBy = requestBy
+	req.RequestID = requestID
+	res, err := h.cancelRequestService.ResolveConflict(c.Context(), req)
+	if err != nil {
+		slog.Error("error reviewing cancel request", "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to reviewing cancel request"))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(res))
 }
 
 func (h *CancelRequestHandler) GetCompensationAmount(c fiber.Ctx) error {
@@ -151,7 +203,37 @@ func (h *CancelRequestHandler) RevokeRequest(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(
 			utils.CreateErrorResponse("INVALID_UUID", "Invalid cancel request ID format"))
 	}
-	err = h.cancelRequestService.RevokeRequest(c.Context(), requestID)
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+	requestBy := userID
+	tokenString := c.Get("Authorization")
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
+	partnerFound := true
+	if err != nil {
+		if !strings.Contains(err.Error(), "insurance partner profile not found") {
+			slog.Error("error retriving partner profile", "error", err)
+			return c.Status(http.StatusInternalServerError).JSON(
+				utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+		}
+		partnerFound = false
+	}
+
+	if partnerFound {
+		requestBy, err = h.registeredPolicyService.GetPartnerID(partnerProfileData)
+		if err != nil {
+			slog.Error("error retriving partner id", "error", err)
+			return c.Status(http.StatusInternalServerError).JSON(
+				utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
+		}
+	}
+
+	err = h.cancelRequestService.RevokeRequest(c.Context(), requestID, requestBy)
 	if err != nil {
 		slog.Error("revoke cancel request failed", "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(

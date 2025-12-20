@@ -1360,7 +1360,7 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 			conditionResults = append(conditionResults, isSatisfied)
 		}
 
-		// Check logical operator (AND/OR) for trigger
+		// Check logical operator (AND/OR/NAND/NOR) for trigger
 		triggerSatisfied := s.evaluateLogicalOperator(trigger.LogicalOperator, conditionResults)
 
 		slog.Info("  Trigger evaluation result",
@@ -1835,19 +1835,47 @@ func (s *RegisteredPolicyService) evaluateLogicalOperator(
 
 	switch operator {
 	case models.LogicalAND:
+		// All conditions must be true
 		for _, r := range results {
 			if !r {
 				return false
 			}
 		}
 		return true
+
 	case models.LogicalOR:
+		// At least one condition must be true
 		for _, r := range results {
 			if r {
 				return true
 			}
 		}
 		return false
+
+	case models.LogicalNAND:
+		// NOT(AND) - Negates AND result
+		// Useful for window exclusion: NAND(NDVI > 0.5, NDVI < 0.8) blocks range [0.5, 0.8]
+		andResult := true
+		for _, r := range results {
+			if !r {
+				andResult = false
+				break
+			}
+		}
+		return !andResult
+
+	case models.LogicalNOR:
+		// NOT(OR) - Negates OR result
+		// Useful for mandatory range: NOR(NDVI < 0.3, NDVI > 0.8) requires range [0.3, 0.8]
+		orResult := false
+		for _, r := range results {
+			if r {
+				orResult = true
+				break
+			}
+		}
+		return !orResult
+
 	default:
 		return results[0]
 	}

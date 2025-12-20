@@ -82,7 +82,7 @@ func (s *BasePolicyService) CreateDataSelectionGroup(basePolicyTrigger *models.B
 	return nil
 }
 
-func (s *BasePolicyService) DataSelection(selectedTriggerConditions []*models.BasePolicyTriggerCondition) error {
+func (s *BasePolicyService) DataSelection(selectedTriggerConditions []*models.BasePolicyTriggerCondition, trigger *models.BasePolicyTrigger) error {
 	slog.Info("Processing data selection",
 		"condition_count", len(selectedTriggerConditions))
 	start := time.Now()
@@ -99,7 +99,7 @@ func (s *BasePolicyService) DataSelection(selectedTriggerConditions []*models.Ba
 				"error", err)
 			return fmt.Errorf("failed to validate selected Trigger Condition: %w", err)
 		}
-		err := s.validateDataSource(selectedTriggerCondition)
+		err := s.validateDataSource(selectedTriggerCondition, trigger)
 		if err != nil {
 			slog.Error("Data source validation failed",
 				"condition_id", selectedTriggerCondition.ID,
@@ -341,7 +341,7 @@ func (s *BasePolicyService) validateBasePolicyTriggerCondition(condition *models
 	return nil
 }
 
-func (s *BasePolicyService) validateDataSource(condition *models.BasePolicyTriggerCondition) error {
+func (s *BasePolicyService) validateDataSource(condition *models.BasePolicyTriggerCondition, trigger *models.BasePolicyTrigger) error {
 	slog.Info("Validating data source",
 		"condition_id", condition.ID,
 		"data_source_id", condition.DataSourceID)
@@ -375,7 +375,7 @@ func (s *BasePolicyService) validateDataSource(condition *models.BasePolicyTrigg
 	if condition.CategoryMultiplier != dataCategory.CategoryCostMultiplier {
 		return fmt.Errorf("data tier category multiplier mismatch")
 	}
-	totalCost := float64(dataSource.BaseCost) * dataTier.DataTierMultiplier * dataCategory.CategoryCostMultiplier
+	totalCost := float64(dataSource.BaseCost)*dataTier.DataTierMultiplier*dataCategory.CategoryCostMultiplier + (float64(trigger.MonitorInterval) * models.CostPerMonitorFrequencyUnit[trigger.MonitorFrequencyUnit])
 	if condition.CalculatedCost != totalCost {
 		slog.Error("Total cost calculation mismatch",
 			"condition_id", condition.ID,
@@ -454,7 +454,7 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 				"error", err)
 			return nil, fmt.Errorf("condition %d validation: %w", i+1, err)
 		}
-		if err := s.validateDataSource(condition); err != nil {
+		if err := s.validateDataSource(condition, request.Trigger); err != nil {
 			slog.Error("Condition data source validation failed",
 				"condition_id", condition.ID,
 				"condition_index", i+1,

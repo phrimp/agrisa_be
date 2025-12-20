@@ -104,8 +104,10 @@ const (
 type LogicalOperator string
 
 const (
-	LogicalAND LogicalOperator = "AND"
-	LogicalOR  LogicalOperator = "OR"
+	LogicalAND  LogicalOperator = "AND"  // All conditions must be true
+	LogicalOR   LogicalOperator = "OR"   // At least one condition must be true
+	LogicalNAND LogicalOperator = "NAND" // NOT(AND) - Negates AND result (window exclusion)
+	LogicalNOR  LogicalOperator = "NOR"  // NOT(OR) - Negates OR result (mandatory range)
 )
 
 type ClaimStatus string

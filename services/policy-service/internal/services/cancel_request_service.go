@@ -224,6 +224,10 @@ func (c *CancelRequestService) ResolveConflict(ctx context.Context, review model
 		return "", fmt.Errorf("final decision status invalid")
 	}
 
+	if review.ReviewedBy != *request.ReviewedBy {
+		return "", fmt.Errorf("you can not resolve this request")
+	}
+
 	tx, err := c.policyRepo.BeginTransaction()
 	if err != nil {
 		slog.Error("error beginning transaction", "error", err)
@@ -242,10 +246,11 @@ func (c *CancelRequestService) ResolveConflict(ctx context.Context, review model
 		return "", fmt.Errorf("error retriving policy by id err=%w", err)
 	}
 
+	finalNote := "After Resolse: " + review.ReviewNote
 	now := time.Now()
 	request.ReviewedBy = &review.ReviewedBy
 	request.ReviewedAt = &now
-	request.ReviewNotes = &review.ReviewNote
+	request.ReviewNotes = &finalNote
 	request.Status = review.FinalDecision
 
 	if review.FinalDecision == models.CancelRequestStatusApproved {
@@ -275,8 +280,10 @@ func (c *CancelRequestService) ResolveConflict(ctx context.Context, review model
 	}
 	if request.Status == models.CancelRequestStatusApproved {
 		// start notice period
+		key := request.ID.String() + "--CancelRequest--NoticePeriod"
+		c.redisClient.GetClient().Set(ctx, key, "", models.NoticePeriod)
 	}
-	return "Cancel Request Reviewed", nil
+	return "Cancel Request Resolved", nil
 }
 
 func (s *CancelRequestService) GetCompensationAmount(ctx context.Context, requestID, policyID uuid.UUID) (float64, error) {
@@ -287,22 +294,73 @@ func (s *CancelRequestService) GetCompensationAmount(ctx context.Context, reques
 	return s.policyRepo.GetCompensationAmount(policyID, request.RequestedBy, request.CancelRequestType)
 }
 
-func (s *CancelRequestService) RevokeRequest(ctx context.Context, requestID uuid.UUID) error {
+func (s *CancelRequestService) RevokeRequest(ctx context.Context, requestID uuid.UUID, requestBy string) error {
 	request, err := s.cancelRequestRepo.GetCancelRequestByID(requestID)
 	if err != nil {
 		return err
-	}
-	if request.Status != models.CancelRequestStatusPendingReview {
-		return fmt.Errorf("invalid request status")
 	}
 	policy, err := s.policyRepo.GetByID(request.RegisteredPolicyID)
 	if err != nil {
 		return err
 	}
+	if requestBy != request.RequestedBy {
+		return fmt.Errorf("you cannot revoke what is not yours")
+	}
 	if policy.Status != models.PolicyPendingCancel {
 		return fmt.Errorf("invalid policy status")
 	}
-	request.Status = models.CancelRequestStatusCancelled
+	if request.Status == models.CancelRequestPaymentFailed {
+		return fmt.Errorf("invalid request status")
+	}
 
+	if request.Status == models.CancelRequestStatusApproved {
+		key := request.ID.String() + "--CancelRequest--NoticePeriod"
+		remainTime, err := s.redisClient.GetClient().TTL(ctx, key).Result()
+		if err != nil {
+			slog.Error("remaining notice period time failed to retrive", "error", err)
+			return fmt.Errorf("remaining notice period time failed to retrive: err=%w", err)
+		}
+		if models.NoticePeriod.Hours()-remainTime.Hours() > models.RevokeDeadline*24 {
+			slog.Error("cannot cancel the request", "detail", fmt.Sprintf("%v day revoke deadline passed", models.RevokeDeadline))
+			return fmt.Errorf("cannot cancel the request: err= %v day revoke deadline passed", models.RevokeDeadline)
+		}
+		err = s.redisClient.GetClient().Del(ctx, key).Err()
+		if err != nil {
+			slog.Error("error remove notice period", "request", request.ID)
+			return fmt.Errorf("error remove notice period for request %s : err=%w", requestID, err)
+		}
+	}
+
+	request.Status = models.CancelRequestStatusCancelled
+	policy.Status = models.PolicyActive
+
+	tx, err := s.policyRepo.BeginTransaction()
+	if err != nil {
+		slog.Error("error beginning transaction", "error", err)
+		return fmt.Errorf("error beginning transaction error=%w", err)
+	}
+
+	defer func() {
+		if r := recover(); r != nil || err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	err = s.policyRepo.UpdateTx(tx, policy)
+	if err != nil {
+		slog.Error("error updating policy", "error", err)
+		return err
+	}
+
+	err = s.cancelRequestRepo.UpdateCancelRequestTx(tx, *request)
+	if err != nil {
+		slog.Error("error updating cancel request", "error", err)
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("error commiting transaction", "error", err)
+		return fmt.Errorf("error commiting transaction=%w", err)
+	}
 	return nil
 }
