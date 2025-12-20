@@ -129,26 +129,26 @@ func ValidateInsurancePartner(req *models.CreateInsurancePartnerRequest) []*util
 		validationErrors = append(validationErrors, err)
 	}
 
-	// Validate Head Office Address
-	if err := ValidateHeadOfficeAddress(req.HeadOfficeAddress); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
-	// Validate Province Code
-	if err := ValidateProvinceCode(req.ProvinceCode); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
-	// Validate Province Name
-	if err := ValidateProvinceName(req.ProvinceCode, req.ProvinceName); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
-	// Validate Ward Code
-	if err := ValidateWardCode(req.ProvinceCode, req.WardCode); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
-	// Validate Ward Name
-	if err := ValidateWardName(req.ProvinceCode, req.WardCode, req.WardName); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
+	// // Validate Head Office Address
+	// if err := ValidateHeadOfficeAddress(req.HeadOfficeAddress); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
+	// // Validate Province Code
+	// if err := ValidateProvinceCode(req.ProvinceCode); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
+	// // Validate Province Name
+	// if err := ValidateProvinceName(req.ProvinceCode, req.ProvinceName); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
+	// // Validate Ward Code
+	// if err := ValidateWardCode(req.ProvinceCode, req.WardCode); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
+	// // Validate Ward Name
+	// if err := ValidateWardName(req.ProvinceCode, req.WardCode, req.WardName); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
 	// Validate Postal Code
 	// if err := ValidatePostalCode(req.PostalCode); err != nil {
 	// 	validationErrors = append(validationErrors, err)
