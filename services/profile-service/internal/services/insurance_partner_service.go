@@ -570,11 +570,11 @@ func ValidatePartnerPhone(partnerPhoneInput string, fieldName string) *utils.Val
 
 	// 3. Check Format: Must follow Vietnamese phone format with +84 prefix
 	// Pattern: +84 followed by 9 or 10 digits
-	phoneRegex := regexp.MustCompile(`^\+84\d{9,10}$`)
+	phoneRegex := regexp.MustCompile(`^0\d{9,10}$`)
 	if !phoneRegex.MatchString(trimmed) {
 		return &utils.ValidationError{
 			Field:   fieldName,
-			Message: "Số điện thoại/fax phải có định dạng +84 theo sau bởi 9-10 chữ số (ví dụ: +84865921357)",
+			Message: "Số điện thoại/fax phải có số 0 đầu tiên và theo sau bởi 9 chữ số (ví dụ: 0865921357)",
 		}
 	}
 
