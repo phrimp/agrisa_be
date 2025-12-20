@@ -240,6 +240,7 @@ type DefaultPaymentEventHandler struct {
 	workerManager        *worker.WorkerManagerV2
 	claimRepo            *repository.ClaimRepository
 	payoutRepo           *repository.PayoutRepository
+	cancelRequestRepo    *repository.CancelRequestRepository
 	notievent            *NotificationHelper
 }
 
@@ -251,6 +252,7 @@ func NewDefaultPaymentEventHandler(
 	claimRepo *repository.ClaimRepository,
 	payoutRepo *repository.PayoutRepository,
 	notievent *NotificationHelper,
+	cancelRequestRepo *repository.CancelRequestRepository,
 ) *DefaultPaymentEventHandler {
 	return &DefaultPaymentEventHandler{
 		registeredPolicyRepo: registeredPolicyRepo,
@@ -259,6 +261,7 @@ func NewDefaultPaymentEventHandler(
 		claimRepo:            claimRepo,
 		payoutRepo:           payoutRepo,
 		notievent:            notievent,
+		cancelRequestRepo:    cancelRequestRepo,
 	}
 }
 
@@ -483,6 +486,79 @@ func (h *DefaultPaymentEventHandler) processPolicyCompensationPayment(ctx contex
 		return fmt.Errorf("invalid policy status")
 
 	}
+	requests, err := h.cancelRequestRepo.GetCancelRequestByPolicyID(registeredPolicyID)
+	if err != nil {
+		slog.Error("error retrieving cancel request",
+			"policy_id", registeredPolicyID,
+			"error", err)
+		return fmt.Errorf("error retrieving cancel request err=%w", err)
+	}
+	latest := requests[0]
+
+	allowedStatus := map[models.CancelRequestStatus]bool{
+		models.CancelRequestStatusApproved: true,
+		models.CancelRequestPaymentFailed:  true,
+	}
+
+	if !allowedStatus[latest.Status] {
+		slog.Error("error: cancel request status invalid", "current status", latest.Status)
+		return fmt.Errorf("error: cancel request status invalid")
+	}
+
+	if latest.CompensateAmount != int(event.Amount) {
+		slog.Error("compensation amount payment mismatch")
+		return err
+	}
+
+	tx, err := h.registeredPolicyRepo.BeginTransaction()
+	if err != nil {
+		slog.Error("failed to begin transaction", "error", err)
+		return err
+	}
+	defer func() {
+		if p := recover(); p != nil {
+			tx.Rollback()
+			panic(p) // Re-panic after rollback
+		}
+	}()
+	payAtTime := time.Unix(paidAt, 0)
+	latest.Paid = true
+	latest.PaidAt = &payAtTime
+
+	err = h.cancelRequestRepo.UpdateCancelRequestTx(tx, latest)
+	if err != nil {
+		slog.Error("error updating cancel request", "error", err)
+		return err
+	}
+
+	if latest.Status == models.CancelRequestPaymentFailed {
+		registeredPolicy.Status = models.PolicyCancelled
+		err = h.registeredPolicyRepo.UpdateTx(tx, registeredPolicy)
+		if err != nil {
+			slog.Error("error updating policy", "error", err)
+			return err
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("failed to commit transaction",
+			"policy_id", registeredPolicyID,
+			"error", err)
+		return err
+	}
+
+	go func() {
+		for {
+			err := h.notievent.NotifyCompensationCompleted(ctx, registeredPolicy.FarmerID, registeredPolicy.PolicyNumber, float64(latest.CompensateAmount))
+			if err == nil {
+				slog.Info("payout completed notification sent", "policy id", registeredPolicy.PolicyNumber)
+				return
+			}
+			slog.Error("error sending payout completed notification", "error", err)
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
 	return nil
 }
 

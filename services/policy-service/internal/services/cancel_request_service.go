@@ -82,6 +82,10 @@ func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID
 	}
 
 	if policy.Status == models.PolicyPendingReview || policy.Status == models.PolicyPendingPayment {
+		if policy.FarmerID != createdBy {
+			slog.Error("cannot direct cancel others policy", "owner", policy.FarmerID, "requested by", createdBy)
+			return nil, fmt.Errorf("cannot direct cancel others policy")
+		}
 		slog.Info("Policy has not activated change status to cancelled", "policy_id", policyID, "status", policy.Status)
 		policy.Status = models.PolicyCancelled
 		request.Status = models.CancelRequestStatusApproved

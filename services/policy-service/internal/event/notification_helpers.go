@@ -124,6 +124,15 @@ func (h *NotificationHelper) NotifyClaimApproved(ctx context.Context, userID, po
 	return h.publisher.PublishNotification(ctx, event)
 }
 
+func (h *NotificationHelper) NotifyCompensationCompleted(ctx context.Context, userID, policyNumber string, compensationAmount float64) error {
+	event := NotificationEventPushModel{
+		Title:      "Hoàn Tiền Bảo Hiểm",
+		Body:       fmt.Sprintf("Hợp đồng %s đã được hoàn tiền. Số tiền nhận được %v.", policyNumber, compensationAmount),
+		LstUserIds: []string{userID},
+	}
+	return h.publisher.PublishNotification(ctx, event)
+}
+
 func (h *NotificationHelper) NotifyPayoutCompleted(ctx context.Context, userID, policyNumber string, payoutAmount float64) error {
 	event := NotificationEventPushModel{
 		Title:      "Chi Trả Bảo Hiểm",
