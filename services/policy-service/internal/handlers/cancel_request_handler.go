@@ -2,6 +2,7 @@ package handlers
 
 import (
 	utils "agrisa_utils"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"policy-service/internal/models"
@@ -112,7 +113,7 @@ func (h *CancelRequestHandler) ReviewCancelRequest(c fiber.Ctx) error {
 	if err != nil {
 		slog.Error("error reviewing cancel request", "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(
-			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to reviewing cancel request"))
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", fmt.Sprintf("Failed to reviewing cancel request: %s", err)))
 	}
 
 	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(res))
