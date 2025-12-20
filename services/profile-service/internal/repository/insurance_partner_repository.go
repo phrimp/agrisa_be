@@ -31,6 +31,7 @@ type IInsurancePartnerRepository interface {
 	UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string) error
 	GetLatestDeletionRequestByRequesterID(requestedBy string) (*models.PartnerDeletionRequest, error)
 	GetAllDeletionRequests(ctx context.Context) ([]models.PartnerDeletionRequest, error)
+	GetDeletionRequestsByPartnerID(ctx context.Context, partnerID, status string) ([]models.PartnerDeletionRequest, error)
 }
 type InsurancePartnerRepository struct {
 	db *sqlx.DB
@@ -650,4 +651,34 @@ func (r *InsurancePartnerRepository) GetLatestDeletionRequestByRequesterID(reque
 	}
 
 	return &request, nil
+}
+
+func (r *InsurancePartnerRepository) GetDeletionRequestsByPartnerID(ctx context.Context, partnerID, status string) ([]models.PartnerDeletionRequest, error) {
+	var query string = ""
+	var requests []models.PartnerDeletionRequest
+
+	if status != "all" {
+		query = `
+			SELECT * FROM partner_deletion_requests
+			WHERE partner_id = $1
+			ORDER BY requested_at DESC
+		`
+		err := r.db.SelectContext(ctx, &requests, query, partnerID)
+		if err != nil {
+			return nil, err
+		}
+
+	} else {
+		query = `
+			SELECT * FROM partner_deletion_requests
+			WHERE partner_id = $1 AND status = $2
+			ORDER BY requested_at DESC
+		`
+		err := r.db.SelectContext(ctx, &requests, query, partnerID, status)
+		if err != nil {
+			slog.Error("Error retrieving deletion requests by partner ID and status", "error", err, "partnerID", partnerID, "status", status)
+			return nil, err
+		}
+	}
+	return requests, nil
 }

@@ -36,6 +36,8 @@ type IInsurancePartnerService interface {
 	ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO) error
 	RevokePartnerDeletionRequest(requestID uuid.UUID, userID string, reviewNote string) error
 	GetAllPartnerDeletionRequests() ([]models.PartnerDeletionRequest, error)
+	GetDeletionRequestsByPartnerID(partnerID, status string) ([]models.PartnerDeletionRequest, error)
+	GetPartnerDeletionRequestByID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error)
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
@@ -1172,4 +1174,12 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 
 func (s *InsurancePartnerService) GetAllPartnerDeletionRequests() ([]models.PartnerDeletionRequest, error) {
 	return s.repo.GetAllDeletionRequests(context.Background())
+}
+
+func (s *InsurancePartnerService) GetPartnerDeletionRequestByID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error) {
+	return s.repo.GetDeletionRequestsByRequestID(requestID)
+}
+
+func (s *InsurancePartnerService) GetDeletionRequestsByPartnerID(partnerID, status string) ([]models.PartnerDeletionRequest, error) {
+	return s.repo.GetDeletionRequestsByPartnerID(context.Background(), partnerID, status)
 }
