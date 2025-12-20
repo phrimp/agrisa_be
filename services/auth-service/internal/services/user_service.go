@@ -48,6 +48,7 @@ type IUserService interface {
 	GeneratePhoneOTP(ctx context.Context, phoneNumber string) error
 	ValidatePhoneOTP(ctx context.Context, phoneNumber, otp string) error
 	UpdatePassword(ctx context.Context, userID, otp, newPassword string) error
+	CreateFarmerProfile(userID string, phone string, email string, role string) (bool, error)
 }
 
 type UserService struct {
@@ -907,7 +908,7 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 	}
 
 	// create farmer profile
-	isSuccess, err := s.CreateFarmerProfile(newUser.ID, phone, email)
+	isSuccess, err := s.CreateFarmerProfile(newUser.ID, phone, email, "user_default")
 	if err != nil && !isSuccess {
 		slog.Error("failed to create farmer profile", "error", err)
 		return nil, err
@@ -930,10 +931,10 @@ func (s *UserService) RegisterNewUser(phone, email, password, nationalID string,
 	return &newUser, nil
 }
 
-func (s *UserService) CreateFarmerProfile(userID string, phone string, email string) (bool, error) {
+func (s *UserService) CreateFarmerProfile(userID string, phone string, email string, role string) (bool, error) {
 	payload := map[string]any{
 		"user_id":           userID,
-		"role_id":           "user",
+		"role_id":           role,
 		"partner_id":        nil,
 		"full_name":         "",
 		"display_name":      "",

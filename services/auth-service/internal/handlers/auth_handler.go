@@ -300,7 +300,7 @@ func (a *AuthHandler) Register(c *gin.Context) {
 			Success: false,
 			Error: utils.APIError{
 				Code:    "INVALID_REQUEST_FORMAT",
-				Message: "Invalid request format",
+				Message: "format đăng ký không hợp lệ",
 			},
 		})
 		return
@@ -349,6 +349,21 @@ func (a *AuthHandler) Register(c *gin.Context) {
 	err = a.roleService.AssignRoleToUser(user.ID, roleID, &systemUSER.ID, nil)
 	if err != nil {
 		log.Println("error assigning default role when registering:", err)
+		statusCode, errorCode := a.mapRegisterError(err)
+		c.JSON(statusCode, utils.ErrorResponse{
+			Success: false,
+			Error: utils.APIError{
+				Code:    errorCode,
+				Message: "Registration failed",
+			},
+		})
+		return
+	}
+
+	// create farmer profile
+	isSuccess, err := a.userService.CreateFarmerProfile(user.ID, user.PhoneNumber, user.Email, roleName)
+	if err != nil && !isSuccess {
+		slog.Error("failed to create farmer profile", "error", err)
 		statusCode, errorCode := a.mapRegisterError(err)
 		c.JSON(statusCode, utils.ErrorResponse{
 			Success: false,
