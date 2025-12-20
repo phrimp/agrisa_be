@@ -938,8 +938,8 @@ type ReviewCancelRequestReq struct {
 }
 
 type ResolveConflictCancelRequestReq struct {
-	ReviewNote    string `json:"review_notes"`
-	FinalDecision CancelRequestStatus
+	ReviewNote    string              `json:"review_notes"`
+	FinalDecision CancelRequestStatus `json:"final_decision"`
 	ReviewedBy    string
 	RequestID     uuid.UUID
 }

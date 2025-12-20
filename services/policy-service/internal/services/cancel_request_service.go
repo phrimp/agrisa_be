@@ -224,6 +224,10 @@ func (c *CancelRequestService) ResolveConflict(ctx context.Context, review model
 		return "", fmt.Errorf("final decision status invalid")
 	}
 
+	if review.ReviewedBy != *request.ReviewedBy {
+		return "", fmt.Errorf("you can not resolve this request")
+	}
+
 	tx, err := c.policyRepo.BeginTransaction()
 	if err != nil {
 		slog.Error("error beginning transaction", "error", err)
@@ -242,10 +246,11 @@ func (c *CancelRequestService) ResolveConflict(ctx context.Context, review model
 		return "", fmt.Errorf("error retriving policy by id err=%w", err)
 	}
 
+	finalNote := "After Resolse: " + review.ReviewNote
 	now := time.Now()
 	request.ReviewedBy = &review.ReviewedBy
 	request.ReviewedAt = &now
-	request.ReviewNotes = &review.ReviewNote
+	request.ReviewNotes = &finalNote
 	request.Status = review.FinalDecision
 
 	if review.FinalDecision == models.CancelRequestStatusApproved {
@@ -275,8 +280,10 @@ func (c *CancelRequestService) ResolveConflict(ctx context.Context, review model
 	}
 	if request.Status == models.CancelRequestStatusApproved {
 		// start notice period
+		key := request.ID.String() + "--CancelRequest--NoticePeriod"
+		c.redisClient.GetClient().Set(ctx, key, "", models.NoticePeriod)
 	}
-	return "Cancel Request Reviewed", nil
+	return "Cancel Request Resolved", nil
 }
 
 func (s *CancelRequestService) GetCompensationAmount(ctx context.Context, requestID, policyID uuid.UUID) (float64, error) {
