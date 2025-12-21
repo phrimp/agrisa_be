@@ -47,8 +47,8 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	partnerAdminGr := insurancePartnerProtectedGrPub.Group("/insurance-partners/admin")
 	partnerAdminGr.POST("/process-request", h.ProcessPartnerDeletionRequestReview)
 	partnerAdminGr.GET("/deletion-requests", h.GetAllPartnerDeletionRequest)
-	partnerAdminGr.GET("/:request_id/deletion-request", h.GetPartnerDeletionRequestByID)
-	partnerAdminGr.GET("/:partner_id/deletion-requests", h.GetPartnerDeletionRequestByID)
+	partnerAdminGr.GET("/requests/:request_id/deletion-request", h.GetPartnerDeletionRequestByID)
+	partnerAdminGr.GET("/partners/:partner_id/deletion-requests", h.GetPartnerDeletionRequestByID)
 }
 
 func MapErrorToHTTPStatusExtended(errorString string) (errorCode string, httpStatus int) {
