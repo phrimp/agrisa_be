@@ -140,6 +140,7 @@ func (c *CancelRequestService) GetAllProviderCancelRequests(ctx context.Context,
 
 // confirm the decision, update the request, start the notice period, and flag the payment process
 func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review models.ReviewCancelRequestReq) (string, error) {
+	now := time.Now()
 	request, err := c.cancelRequestRepo.GetCancelRequestByID(review.RequestID)
 	if err != nil {
 		slog.Error("error retriving cancel request", "error", err)
@@ -150,6 +151,9 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 	}
 	if request.RequestedBy == review.ReviewedBy {
 		return "", fmt.Errorf("cannot review your own request")
+	}
+	if now.Compare(request.CreatedAt.Add(1*time.Hour)) == -1 {
+		return "", fmt.Errorf("cannot review newly created request")
 	}
 
 	tx, err := c.policyRepo.BeginTransaction()
@@ -171,7 +175,6 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 
 	}
 
-	now := time.Now()
 	request.ReviewedBy = &review.ReviewedBy
 	request.ReviewedAt = &now
 	request.ReviewNotes = &review.ReviewNote
