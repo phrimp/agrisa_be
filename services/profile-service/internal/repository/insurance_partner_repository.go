@@ -563,7 +563,6 @@ func (r *InsurancePartnerRepository) GetAllDeletionRequests(
 			pdr.updated_at
 		FROM partner_deletion_requests pdr
 		INNER JOIN insurance_partners ip ON pdr.partner_id = ip.partner_id
-		WHERE pdr.requested_by = $1
 		ORDER BY pdr.requested_at DESC
 	`
 
