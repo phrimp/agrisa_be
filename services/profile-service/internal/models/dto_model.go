@@ -208,3 +208,20 @@ type ProcessRequestReviewDTO struct {
 	ReviewedByName string                `json:"reviewed_by_name"`
 	ReviewNote     string                `json:"review_note"`
 }
+
+type DeletionRequestResponse struct {
+	RequestID           uuid.UUID             `db:"request_id" json:"request_id"`
+	PartnerDisplayName  string                `db:"partner_display_name" json:"partner_display_name"`
+	PartnerID           uuid.UUID             `db:"partner_id" json:"partner_id"`
+	RequestedBy         string                `db:"requested_by" json:"requested_by"`
+	RequestedByName     string                `db:"requested_by_name" json:"requested_by_name"`
+	DetailedExplanation string                `db:"detailed_explanation" json:"detailed_explanation"`
+	Status              DeletionRequestStatus `db:"status" json:"status"`
+	RequestedAt         time.Time             `db:"requested_at" json:"requested_at"`
+	CancellableUntil    *time.Time            `db:"cancellable_until" json:"cancellable_until"`
+	ReviewedByID        *string               `db:"reviewed_by_id" json:"reviewed_by_id"`
+	ReviewedByName      *string               `db:"reviewed_by_name" json:"reviewed_by_name"`
+	ReviewedAt          *time.Time            `db:"reviewed_at" json:"reviewed_at"`
+	ReviewNote          *string               `db:"review_note" json:"review_note"`
+	UpdatedAt           *time.Time            `db:"updated_at" json:"updated_at"`
+}

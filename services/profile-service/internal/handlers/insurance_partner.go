@@ -47,8 +47,8 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	partnerAdminGr := insurancePartnerProtectedGrPub.Group("/insurance-partners/admin")
 	partnerAdminGr.POST("/process-request", h.ProcessPartnerDeletionRequestReview)
 	partnerAdminGr.GET("/deletion-requests", h.GetAllPartnerDeletionRequest)
-	partnerAdminGr.GET("/:request_id/deletion-request", h.GetPartnerDeletionRequestByID)
-	partnerAdminGr.GET("/:partner_id/deletion-requests", h.GetPartnerDeletionRequestByID)
+	partnerAdminGr.GET("/requests/:request_id/deletion-request", h.GetPartnerDeletionRequestByID)
+	partnerAdminGr.GET("/partners/:partner_id/deletion-requests", h.GetPartnerDeleletionRequestsByPartnerID)
 }
 
 func MapErrorToHTTPStatusExtended(errorString string) (errorCode string, httpStatus int) {
@@ -323,12 +323,6 @@ func (h *InsurancePartnerHandler) GetPartnerDeletionRequestByID(c *gin.Context) 
 		c.JSON(http.StatusBadRequest, errorResponse)
 		return
 	}
-	status := c.Query("status")
-	if status == "" {
-		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "status là bắt buộc")
-		c.JSON(http.StatusBadRequest, errorResponse)
-		return
-	}
 
 	requestID, err := uuid.Parse(requestIDParam)
 	if err != nil {
@@ -338,6 +332,21 @@ func (h *InsurancePartnerHandler) GetPartnerDeletionRequestByID(c *gin.Context) 
 	}
 
 	result, err := h.InsurancePartnerService.GetPartnerDeletionRequestByID(requestID)
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	response := utils.CreateSuccessResponse(result)
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *InsurancePartnerHandler) GetPartnerDeleletionRequestsByPartnerID(c *gin.Context) {
+	partnerID := c.Param("partner_id")
+	status := c.DefaultQuery("status", "all")
+
+	result, err := h.InsurancePartnerService.GetDeletionRequestsByPartnerID(partnerID, status)
 	if err != nil {
 		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
 		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
