@@ -186,6 +186,7 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 
 	if review.Approved {
 		request.Status = models.CancelRequestStatusApproved
+		request.DuringNoticePeriod = true
 	} else {
 		policy.Status = models.PolicyDispute
 		request.Status = models.CancelRequestStatusLitigation
@@ -262,6 +263,7 @@ func (c *CancelRequestService) ResolveConflict(ctx context.Context, review model
 			return "", fmt.Errorf("policy is not in dispute state")
 		}
 		policy.Status = models.PolicyPendingCancel
+		request.DuringNoticePeriod = true
 	} else {
 		policy.Status = models.PolicyActive
 	}
