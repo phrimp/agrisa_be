@@ -344,7 +344,7 @@ func (h *InsurancePartnerHandler) GetPartnerDeletionRequestByID(c *gin.Context) 
 
 func (h *InsurancePartnerHandler) GetPartnerDeleletionRequestsByPartnerID(c *gin.Context) {
 	partnerID := c.Param("partner_id")
-	status := c.DefaultQuery("status", "")
+	status := c.DefaultQuery("status", "all")
 
 	result, err := h.InsurancePartnerService.GetDeletionRequestsByPartnerID(partnerID, status)
 	if err != nil {
