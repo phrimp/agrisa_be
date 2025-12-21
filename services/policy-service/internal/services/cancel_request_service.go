@@ -320,21 +320,22 @@ func (s *CancelRequestService) RevokeRequest(ctx context.Context, requestID uuid
 	}
 
 	if request.Status == models.CancelRequestStatusApproved {
-		key := request.ID.String() + "--CancelRequest--NoticePeriod"
-		remainTime, err := s.redisClient.GetClient().TTL(ctx, key).Result()
-		if err != nil {
-			slog.Error("remaining notice period time failed to retrive", "error", err)
-			return fmt.Errorf("remaining notice period time failed to retrive: err=%w", err)
-		}
-		if models.NoticePeriod.Hours()-remainTime.Hours() > models.RevokeDeadline*24 {
-			slog.Error("cannot cancel the request", "detail", fmt.Sprintf("%v day revoke deadline passed", models.RevokeDeadline))
-			return fmt.Errorf("cannot cancel the request: err= %v day revoke deadline passed", models.RevokeDeadline)
-		}
-		err = s.redisClient.GetClient().Del(ctx, key).Err()
-		if err != nil {
-			slog.Error("error remove notice period", "request", request.ID)
-			return fmt.Errorf("error remove notice period for request %s : err=%w", requestID, err)
-		}
+		//key := request.ID.String() + "--CancelRequest--NoticePeriod"
+		//remainTime, err := s.redisClient.GetClient().TTL(ctx, key).Result()
+		//if err != nil {
+		//	slog.Error("remaining notice period time failed to retrive", "error", err)
+		//	return fmt.Errorf("remaining notice period time failed to retrive: err=%w", err)
+		//}
+		//if models.NoticePeriod.Hours()-remainTime.Hours() > models.RevokeDeadline*24 {
+		//	slog.Error("cannot cancel the request", "detail", fmt.Sprintf("%v day revoke deadline passed", models.RevokeDeadline))
+		//	return fmt.Errorf("cannot cancel the request: err= %v day revoke deadline passed", models.RevokeDeadline)
+		//}
+		//err = s.redisClient.GetClient().Del(ctx, key).Err()
+		//if err != nil {
+		//	slog.Error("error remove notice period", "request", request.ID)
+		//	return fmt.Errorf("error remove notice period for request %s : err=%w", requestID, err)
+		//}
+		return fmt.Errorf("approved request cannot be revoked")
 	}
 
 	request.Status = models.CancelRequestStatusCancelled
