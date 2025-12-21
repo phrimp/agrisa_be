@@ -82,6 +82,10 @@ func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID
 	}
 
 	if policy.Status == models.PolicyPendingReview || policy.Status == models.PolicyPendingPayment {
+		if policy.FarmerID != createdBy {
+			slog.Error("cannot direct cancel others policy", "owner", policy.FarmerID, "requested by", createdBy)
+			return nil, fmt.Errorf("cannot direct cancel others policy")
+		}
 		slog.Info("Policy has not activated change status to cancelled", "policy_id", policyID, "status", policy.Status)
 		policy.Status = models.PolicyCancelled
 		request.Status = models.CancelRequestStatusApproved
@@ -182,6 +186,7 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 
 	if review.Approved {
 		request.Status = models.CancelRequestStatusApproved
+		request.DuringNoticePeriod = true
 	} else {
 		policy.Status = models.PolicyDispute
 		request.Status = models.CancelRequestStatusLitigation
@@ -258,6 +263,7 @@ func (c *CancelRequestService) ResolveConflict(ctx context.Context, review model
 			return "", fmt.Errorf("policy is not in dispute state")
 		}
 		policy.Status = models.PolicyPendingCancel
+		request.DuringNoticePeriod = true
 	} else {
 		policy.Status = models.PolicyActive
 	}
