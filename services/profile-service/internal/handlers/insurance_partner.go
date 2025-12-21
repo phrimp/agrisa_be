@@ -323,12 +323,6 @@ func (h *InsurancePartnerHandler) GetPartnerDeletionRequestByID(c *gin.Context) 
 		c.JSON(http.StatusBadRequest, errorResponse)
 		return
 	}
-	status := c.Query("status")
-	if status == "" {
-		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "status là bắt buộc")
-		c.JSON(http.StatusBadRequest, errorResponse)
-		return
-	}
 
 	requestID, err := uuid.Parse(requestIDParam)
 	if err != nil {

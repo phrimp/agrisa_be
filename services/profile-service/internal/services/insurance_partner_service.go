@@ -31,13 +31,13 @@ type IInsurancePartnerService interface {
 	GetAllPartnersPublicProfiles() ([]models.PublicPartnerProfile, error)
 	GetPrivateProfileByPartnerID(partnerID string) (*models.PrivatePartnerProfile, error)
 	CreatePartnerDeletionRequest(req *models.PartnerDeletionRequest, partnerAdminID string) (result *models.PartnerDeletionRequest, err error)
-	GetDeletionRequestsByRequesterID(requesterID string) ([]models.PartnerDeletionRequest, error)
-	ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.PartnerDeletionRequest, err error)
+	GetDeletionRequestsByRequesterID(requesterID string) ([]models.DeletionRequestResponse, error)
+	ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.DeletionRequestResponse, err error)
 	ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO) error
 	RevokePartnerDeletionRequest(requestID uuid.UUID, userID string, reviewNote string) error
-	GetAllPartnerDeletionRequests() ([]models.PartnerDeletionRequest, error)
-	GetDeletionRequestsByPartnerID(partnerID, status string) ([]models.PartnerDeletionRequest, error)
-	GetPartnerDeletionRequestByID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error)
+	GetAllPartnerDeletionRequests() ([]models.DeletionRequestResponse, error)
+	GetDeletionRequestsByPartnerID(partnerID, status string) ([]models.DeletionRequestResponse, error)
+	GetPartnerDeletionRequestByID(requestID uuid.UUID) (*models.DeletionRequestResponse, error)
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
@@ -1061,7 +1061,7 @@ func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.Partn
 	return s.repo.CreateDeletionRequest(context.Background(), req)
 }
 
-func (s *InsurancePartnerService) GetDeletionRequestsByRequesterID(requesterID string) ([]models.PartnerDeletionRequest, error) {
+func (s *InsurancePartnerService) GetDeletionRequestsByRequesterID(requesterID string) ([]models.DeletionRequestResponse, error) {
 	return s.repo.GetDeletionRequestsByRequesterID(context.Background(), requesterID)
 }
 
@@ -1083,10 +1083,10 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 
 	if request.Status == models.DeletionRequestApproved {
 		// update status of partner profile
-		err = s.repo.UpdateStatusPartnerProfile(*existDeletionRequest.PartnerID, "terminated", request.ReviewedByID, request.ReviewedByName)
+		err = s.repo.UpdateStatusPartnerProfile(existDeletionRequest.PartnerID, "terminated", request.ReviewedByID, request.ReviewedByName)
 		if err != nil {
 			// logging input values
-			slog.Error("Failed to update partner profile status: err", "partnerID", *existDeletionRequest.PartnerID, "status", "terminated", "updatedByID", request.ReviewedByID, "updatedByName", request.ReviewedByName, "error", err)
+			slog.Error("Failed to update partner profile status: err", "partnerID", existDeletionRequest.PartnerID, "status", "terminated", "updatedByID", request.ReviewedByID, "updatedByName", request.ReviewedByName, "error", err)
 			slog.Error("Failed to update partner profile status: err", "error", err)
 			return fmt.Errorf("failed to update partner profile status: %v", err)
 		}
@@ -1094,7 +1094,7 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 	return s.repo.ProcessRequestReview(request)
 }
 
-func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.PartnerDeletionRequest, err error) {
+func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.DeletionRequestResponse, err error) {
 
 	// Validate Request ID
 	if strings.TrimSpace(request.RequestID.String()) == "" {
@@ -1112,16 +1112,6 @@ func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.
 	if deletionRequest.Status != models.DeletionRequestPending {
 		slog.Error("Only pending requests can be processed")
 		return nil, fmt.Errorf("invalid: Chỉ các yêu cầu đang chờ xử lý mới có thể được xử lý")
-	}
-
-	now := time.Now()
-	if now.Before(deletionRequest.CancellableUntil) || now.Equal(deletionRequest.CancellableUntil) {
-		// loging time.now value
-		slog.Info("Current time: ", now)
-		// loging cancellable until time value
-		slog.Info("Cancellable until time: ", deletionRequest.CancellableUntil)
-		slog.Error("Cannot process request before cancellable until time")
-		return nil, fmt.Errorf("invalid: Không thể xử lý yêu cầu trước thời gian có thể hủy")
 	}
 
 	return deletionRequest, nil
@@ -1142,16 +1132,16 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 	}
 
 	// check if the request is still pending
-	if deletionRequest.Status != models.DeletionRequestPending {
-		slog.Error("Only pending requests can be revoked", "requestID", requestID, "status", deletionRequest.Status)
-		return fmt.Errorf("invalid: Chỉ các yêu cầu đang chờ xử lý mới có thể bị hủy")
+	if deletionRequest.Status != models.DeletionRequestApproved {
+		slog.Error("Only approved requests can be revoked", "requestID", requestID, "status", deletionRequest.Status)
+		return fmt.Errorf("invalid: Chỉ các yêu cầu đã được phê duyệt mới có thể thu hồi")
 	}
 
 	// check if now is before cancellable until
 	now := time.Now()
-	if now.After(deletionRequest.CancellableUntil) {
+	if now.After(*deletionRequest.CancellableUntil) {
 		slog.Error("Cannot revoke request after cancellable until time", "currentTime", now, "cancellableUntil", deletionRequest.CancellableUntil)
-		return fmt.Errorf("invalid: Không thể tự hủy yêu cầu sau thời gian có thể hủy")
+		return fmt.Errorf("invalid: Không thể tự hủy yêu cầu sau thời gian đơn đã được duyệt 7 ngày")
 	}
 
 	// get revoker profile
@@ -1172,14 +1162,14 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 
 }
 
-func (s *InsurancePartnerService) GetAllPartnerDeletionRequests() ([]models.PartnerDeletionRequest, error) {
+func (s *InsurancePartnerService) GetAllPartnerDeletionRequests() ([]models.DeletionRequestResponse, error) {
 	return s.repo.GetAllDeletionRequests(context.Background())
 }
 
-func (s *InsurancePartnerService) GetPartnerDeletionRequestByID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error) {
+func (s *InsurancePartnerService) GetPartnerDeletionRequestByID(requestID uuid.UUID) (*models.DeletionRequestResponse, error) {
 	return s.repo.GetDeletionRequestsByRequestID(requestID)
 }
 
-func (s *InsurancePartnerService) GetDeletionRequestsByPartnerID(partnerID, status string) ([]models.PartnerDeletionRequest, error) {
+func (s *InsurancePartnerService) GetDeletionRequestsByPartnerID(partnerID, status string) ([]models.DeletionRequestResponse, error) {
 	return s.repo.GetDeletionRequestsByPartnerID(context.Background(), partnerID, status)
 }
