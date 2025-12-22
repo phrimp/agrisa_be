@@ -189,7 +189,13 @@ func main() {
 	} else {
 		log.Println("Payment event consumer started successfully")
 	}
-
+	profileEventHandler := event.NewDefaultProfileEventHandler(registeredPolicyRepo, basePolicyRepo, workerManager, cancelRepo)
+	profileConsumer := event.NewProfileConsumer(rabbitConn, profileEventHandler)
+	if err := profileConsumer.Start(ctx); err != nil {
+		log.Printf("error starting profile consumer: %v", err)
+	} else {
+		log.Println("Payment event profile started successfully")
+	}
 	// Register health check endpoint for payment consumer
 	paymentConsumerHealthHandler = func(c fiber.Ctx) error {
 		status := paymentConsumer.HealthCheck()

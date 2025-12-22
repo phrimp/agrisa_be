@@ -206,6 +206,7 @@ func (c *ProfileConsumer) processMessage(ctx context.Context, msg amqp.Delivery)
 
 type DefaultProfileEventHandler struct {
 	registeredPolicyRepo *repository.RegisteredPolicyRepository
+	cancelRequestRepo    *repository.CancelRequestRepository
 	basePolicyRepo       *repository.BasePolicyRepository
 	workerManager        *worker.WorkerManagerV2
 }
@@ -215,11 +216,13 @@ func NewDefaultProfileEventHandler(
 	registeredPolicyRepo *repository.RegisteredPolicyRepository,
 	basePolicyRepo *repository.BasePolicyRepository,
 	workerManager *worker.WorkerManagerV2,
+	cancelRequestRepo *repository.CancelRequestRepository,
 ) *DefaultProfileEventHandler {
 	return &DefaultProfileEventHandler{
 		registeredPolicyRepo: registeredPolicyRepo,
 		basePolicyRepo:       basePolicyRepo,
 		workerManager:        workerManager,
+		cancelRequestRepo:    cancelRequestRepo,
 	}
 }
 
@@ -231,5 +234,8 @@ func (h *DefaultProfileEventHandler) HandleProfileEvent(ctx context.Context, eve
 			Reason:    "payment event has no type",
 		}
 	}
+	switch event.EventType {
+	}
+
 	return nil
 }

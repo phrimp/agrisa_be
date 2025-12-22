@@ -48,6 +48,7 @@ type IUserService interface {
 	GeneratePhoneOTP(ctx context.Context, phoneNumber string) error
 	ValidatePhoneOTP(ctx context.Context, phoneNumber, otp string) error
 	UpdatePassword(ctx context.Context, userID, otp, newPassword string) error
+	UpdatePasswordPhone(ctx context.Context, phone, otp, newPassword string) error
 	CreateFarmerProfile(userID string, phone string, email string, role string) (bool, error)
 }
 
@@ -1406,6 +1407,24 @@ func (s *UserService) UpdatePassword(ctx context.Context, userID, otp, newPasswo
 		return fmt.Errorf("incorrect otp")
 	}
 	err = s.userRepo.UpdatePassword(userID, newPassword)
+	if err != nil {
+		return fmt.Errorf("error updating user password error=%w", err)
+	}
+	return nil
+}
+
+func (s *UserService) UpdatePasswordPhone(ctx context.Context, phone, otp, newPassword string) error {
+	user, err := s.userRepo.GetUserByPhone(phone)
+	if err != nil {
+		slog.Info("error get user by phone", "phone", phone)
+		return fmt.Errorf("error get user by id error=%w", err)
+	}
+	generatedOTP := s.redisClient.Get(ctx, phone).Val()
+	if otp != generatedOTP {
+		slog.Info("incorrect otp", "actual otp", generatedOTP)
+		return fmt.Errorf("incorrect otp")
+	}
+	err = s.userRepo.UpdatePassword(user.ID, newPassword)
 	if err != nil {
 		return fmt.Errorf("error updating user password error=%w", err)
 	}
