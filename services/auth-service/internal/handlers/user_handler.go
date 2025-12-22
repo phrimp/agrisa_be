@@ -33,7 +33,7 @@ func (u *UserHandler) RegisterRoutes(router *gin.Engine, userHandler *UserHandle
 	userAuthGrPub := router.Group("/auth/public/api/v2/")
 	userAuthGrPub.GET("/ping", userHandler.PingHandler)
 	userAuthGrPub.GET("/users", userHandler.GetAllUsers)
-	userAuthGrPub.PUT("/update/password", userHandler.UpdatePassword)
+	userAuthGrPub.PUT("/update/password", userHandler.UpdatePasswordPhone)
 
 	// Add the ping route
 	userAuthGrPro := router.Group("/auth/protected/api/v2/")
