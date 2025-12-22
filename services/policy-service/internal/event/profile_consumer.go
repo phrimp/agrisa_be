@@ -224,6 +224,7 @@ func NewDefaultProfileEventHandler(
 }
 
 func (h *DefaultProfileEventHandler) HandleProfileEvent(ctx context.Context, event ProfileEvent) error {
+	slog.Info("Profile Event Consumed", "event", event)
 	if event.EventType == "" {
 		return &PaymentValidationError{
 			PaymentID: event.ID,

@@ -5,12 +5,14 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
+
 	"profile-service/internal/config"
 	"profile-service/internal/database/postgres"
+	"profile-service/internal/event"
 	"profile-service/internal/handlers"
 	"profile-service/internal/repository"
 	"profile-service/internal/services"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -24,7 +26,7 @@ func setupLogging() (*os.File, error) {
 
 	logDir := filepath.Join("/agrisa", "log", "profile_service")
 	fmt.Println("Log directory:", logDir)
-	err := os.MkdirAll(logDir, 0755)
+	err := os.MkdirAll(logDir, 0o755)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create log directory: %v", err)
 	}
@@ -33,7 +35,7 @@ func setupLogging() (*os.File, error) {
 	logFileName := fmt.Sprintf("log_%s.log", currentTime.Format("2006-01-02"))
 	logFile := filepath.Join(logDir, logFileName)
 
-	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open log file: %v", err)
 	}
@@ -77,14 +79,21 @@ func main() {
 	}
 	defer db.Close()
 
+	rabbitConn, err := event.ConnectRabbitMQ(cfg.RabbitMQCfg)
+	if err != nil {
+		log.Fatalf("CRITICAL: Cannot start policy service without RabbitMQ connection: %v", err)
+	}
+	defer rabbitConn.Close()
+
+	profilePublisher := event.NewNotificationPublisher(rabbitConn)
 	r := gin.Default()
 
-	//repositories
+	// repositories
 	insurancePartnerRepository := repository.NewInsurancePartnerRepository(db)
 	userRepository := repository.NewUserRepository(db)
 
-	//services
-	insurancePartnerService := services.NewInsurancePartnerService(insurancePartnerRepository, userRepository)
+	// services
+	insurancePartnerService := services.NewInsurancePartnerService(insurancePartnerRepository, userRepository, profilePublisher)
 	userService := services.NewUserService(userRepository)
 	// handlers
 	insurancePartnerHandler := handlers.NewInsurancePartnerHandler(insurancePartnerService)
@@ -102,5 +111,4 @@ func main() {
 	if err := r.Run(":" + serverPort); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
-
 }

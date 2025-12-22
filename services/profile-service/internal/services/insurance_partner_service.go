@@ -5,13 +5,15 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
-	"profile-service/internal/models"
-	"profile-service/internal/repository"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 	"utils"
+
+	"profile-service/internal/event"
+	"profile-service/internal/models"
+	"profile-service/internal/repository"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -20,6 +22,7 @@ import (
 type InsurancePartnerService struct {
 	repo                  repository.IInsurancePartnerRepository
 	userProfileRepository repository.IUserRepository
+	profilePublisher      *event.NotificationPublisher
 }
 
 type IInsurancePartnerService interface {
@@ -40,10 +43,11 @@ type IInsurancePartnerService interface {
 	GetPartnerDeletionRequestByID(requestID uuid.UUID) (*models.DeletionRequestResponse, error)
 }
 
-func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
+func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository, profilePublisher *event.NotificationPublisher) IInsurancePartnerService {
 	return &InsurancePartnerService{
 		repo:                  repo,
 		userProfileRepository: userProfileRepository,
+		profilePublisher:      profilePublisher,
 	}
 }
 
@@ -1084,13 +1088,32 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 	if request.Status == models.DeletionRequestApproved {
 		// update status of partner profile
 		noticePeriod := now.Add(models.NoticePeriod * time.Hour)
-		err = s.repo.UpdateStatusPartnerProfile(existDeletionRequest.PartnerID, "terminated", request.ReviewedByID, request.ReviewedByName, noticePeriod)
-		if err != nil {
-			// logging input values
-			slog.Error("Failed to update partner profile status: err", "partnerID", existDeletionRequest.PartnerID, "status", "terminated", "updatedByID", request.ReviewedByID, "updatedByName", request.ReviewedByName, "error", err)
-			slog.Error("Failed to update partner profile status: err", "error", err)
-			return fmt.Errorf("failed to update partner profile status: %v", err)
-		}
+		// run cronj
+		go func(noticePeriod time.Time, partnerID uuid.UUID, reviewedByID, reviewedByName string) {
+			for {
+				now := time.Now()
+				if now.Compare(noticePeriod) == 0 {
+					err = s.repo.UpdateStatusPartnerProfile(partnerID, "terminated", reviewedByID, reviewedByName, noticePeriod)
+					if err != nil {
+						// logging input values
+						slog.Error("Failed to update partner profile status: err", "partnerID", partnerID, "status", "terminated", "updatedByID", reviewedByID, "updatedByName", reviewedByName, "error", err)
+						slog.Error("Failed to update partner profile status: err", "error", err)
+					}
+					return
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}(noticePeriod, existDeletionRequest.PartnerID, request.ReviewedByID, request.ReviewedByName)
+		// publish event
+		go func() {
+			eventPayload := event.ProfileEvent{
+				ID:        uuid.NewString(),
+				EventType: event.ProfleConfirmDelete,
+				UserID:    request.ReviewedByID,
+				ProfileID: existDeletionRequest.PartnerID.String(),
+			}
+			s.profilePublisher.PublishEvent(context.Background(), eventPayload)
+		}()
 	}
 	return s.repo.ProcessRequestReview(request)
 }

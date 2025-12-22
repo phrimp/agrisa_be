@@ -440,6 +440,10 @@ services:
             - MINIO_LOCATION=${MINIO_LOCATION}
             - MINIO_SECURE=${MINIO_SECURE}
             - MINIO_RESOURCE_URL=${MINIO_RESOURCE_URL}
+            - RABBITMQ_HOST=rabbitmq
+            - RABBITMQ_USER=admin
+            - RABBITMQ_PWD=${RABBITMQ_PASSWORD}
+            - RABBITMQ_PORT=5672
         volumes:
             - ./logs/profile-service:/agrisa/log/profile_service
         networks:
