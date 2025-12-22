@@ -7,6 +7,8 @@ import (
 	"github.com/lib/pq"
 )
 
+const NoticePeriod = 1
+
 // InsurancePartner
 type InsurancePartner struct {
 	PartnerID                  uuid.UUID      `db:"partner_id"`

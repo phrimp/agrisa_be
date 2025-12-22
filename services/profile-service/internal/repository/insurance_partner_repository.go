@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"profile-service/internal/models"
 	"strings"
+	"time"
 	"utils"
 
 	"github.com/google/uuid"
@@ -28,7 +29,7 @@ type IInsurancePartnerRepository interface {
 	GetDeletionRequestsByRequesterID(ctx context.Context, requesterID string) ([]models.DeletionRequestResponse, error)
 	ProcessRequestReview(request models.ProcessRequestReviewDTO) error
 	GetDeletionRequestsByRequestID(requestID uuid.UUID) (*models.DeletionRequestResponse, error)
-	UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string) error
+	UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string, noticePeriod time.Time) error
 	GetLatestDeletionRequestByRequesterID(requestedBy string) (*models.PartnerDeletionRequest, error)
 	GetAllDeletionRequests(ctx context.Context) ([]models.DeletionRequestResponse, error)
 	GetDeletionRequestsByPartnerID(ctx context.Context, partnerID, status string) ([]models.DeletionRequestResponse, error)
@@ -224,7 +225,6 @@ func (r *InsurancePartnerRepository) CreateInsurancePartner(req models.CreateIns
 		createdByName,
 		"active",
 	)
-
 	if err != nil {
 		log.Printf("Error creating insurance partner: %s", err.Error())
 		return fmt.Errorf("failed to create insurance partner: %w", err)
@@ -435,11 +435,11 @@ func (r *InsurancePartnerRepository) UpdateInsurancePartner(query string, args .
 	return nil
 }
 
-func (r *InsurancePartnerRepository) UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string) error {
+func (r *InsurancePartnerRepository) UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string, noticePeriod time.Time) error {
 	query := `
 	update insurance_partners
-		set status = $1, updated_at = NOW(), last_updated_by_id = $2, last_updated_by_name = $3, cancellable_until = NOW() + INTERVAL '7 days'
-		where partner_id = $4
+		set status = $1, updated_at = NOW(), last_updated_by_id = $2, last_updated_by_name = $3, cancellable_until = $4
+		where partner_id = $5
 	`
 	return utils.ExecWithCheck(
 		r.db,
@@ -448,6 +448,7 @@ func (r *InsurancePartnerRepository) UpdateStatusPartnerProfile(partnerID uuid.U
 		status,
 		updatedByID,
 		updatedByName,
+		noticePeriod,
 		partnerID,
 	)
 }

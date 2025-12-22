@@ -58,7 +58,7 @@ type CreateInsurancePartnerResult struct {
 
 func (s *InsurancePartnerService) CreateInsurancePartner(req *models.CreateInsurancePartnerRequest, userID string) CreateInsurancePartnerResult {
 	// Trim all field values
-	//trimmedDTO := utils.TrimAllStringFields(req).(*models.CreateInsurancePartnerRequest)
+	// trimmedDTO := utils.TrimAllStringFields(req).(*models.CreateInsurancePartnerRequest)
 
 	// Validate
 	validationErrors := ValidateInsurancePartner(req)
@@ -237,7 +237,7 @@ func (s *InsurancePartnerService) UpdateInsurancePartner(updateProfileRequestBod
 		return nil, fmt.Errorf("internal server error: failed to get insurance partner: %v", err)
 	}
 
-	//Verify if the current user is authorized to update this profile
+	// Verify if the current user is authorized to update this profile
 	updateUser, err := s.userProfileRepository.GetUserProfileByUserID(updateByID)
 	if err != nil {
 		log.Printf("Error getting user profile by ID %s: %s", updateByID, err.Error())
@@ -563,7 +563,6 @@ func ValidatePartnerTagline(partnerTaglineInput string) *utils.ValidationError {
 }
 
 func ValidatePartnerPhone(partnerPhoneInput string, fieldName string) *utils.ValidationError {
-
 	// 1. Optional field - if empty or whitespace only, it's valid
 	trimmed := strings.TrimSpace(partnerPhoneInput)
 	if trimmed == "" {
@@ -1066,6 +1065,7 @@ func (s *InsurancePartnerService) GetDeletionRequestsByRequesterID(requesterID s
 }
 
 func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO) error {
+	now := time.Now()
 	adminID := request.ReviewedByID
 	adminProfile, err := s.userProfileRepository.GetUserProfileByUserID(adminID)
 	if err != nil {
@@ -1083,7 +1083,8 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 
 	if request.Status == models.DeletionRequestApproved {
 		// update status of partner profile
-		err = s.repo.UpdateStatusPartnerProfile(existDeletionRequest.PartnerID, "terminated", request.ReviewedByID, request.ReviewedByName)
+		noticePeriod := now.Add(models.NoticePeriod * time.Hour)
+		err = s.repo.UpdateStatusPartnerProfile(existDeletionRequest.PartnerID, "terminated", request.ReviewedByID, request.ReviewedByName, noticePeriod)
 		if err != nil {
 			// logging input values
 			slog.Error("Failed to update partner profile status: err", "partnerID", existDeletionRequest.PartnerID, "status", "terminated", "updatedByID", request.ReviewedByID, "updatedByName", request.ReviewedByName, "error", err)
@@ -1095,7 +1096,6 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 }
 
 func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.DeletionRequestResponse, err error) {
-
 	// Validate Request ID
 	if strings.TrimSpace(request.RequestID.String()) == "" {
 		slog.Error("RequestID is required")
@@ -1115,7 +1115,6 @@ func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.
 	}
 
 	return deletionRequest, nil
-
 }
 
 func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UUID, userID string, reviewNote string) error {
@@ -1132,17 +1131,19 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 	}
 
 	// check if the request is still pending
-	if deletionRequest.Status != models.DeletionRequestApproved {
-		slog.Error("Only approved requests can be revoked", "requestID", requestID, "status", deletionRequest.Status)
-		return fmt.Errorf("invalid: Chỉ các yêu cầu đã được phê duyệt mới có thể thu hồi")
+	if deletionRequest.Status == models.DeletionRequestApproved {
+		slog.Error("Approved requests cannot be revoked", "requestID", requestID, "status", deletionRequest.Status)
+		return fmt.Errorf("invalid: Không thể thu hồi yêu cầu đã được phê duyệt ")
 	}
 
 	// check if now is before cancellable until
-	now := time.Now()
-	if now.After(*deletionRequest.CancellableUntil) {
-		slog.Error("Cannot revoke request after cancellable until time", "currentTime", now, "cancellableUntil", deletionRequest.CancellableUntil)
-		return fmt.Errorf("invalid: Không thể tự hủy yêu cầu sau thời gian đơn đã được duyệt 7 ngày")
-	}
+	//now := time.Now()
+	//revokeAllow := models.NoticePeriod * 0.2
+	//revokeAllowTime := now.Add((time.Duration(revokeAllow) * time.Hour))
+	//if now.After(revokeAllowTime) {
+	//	slog.Error("Cannot revoke request after cancellable until time", "currentTime", now, "cancellableUntil", deletionRequest.CancellableUntil)
+	//	return fmt.Errorf("invalid: Không thể tự hủy yêu cầu sau thời gian đơn đã được duyệt 6 ngày")
+	//}
 
 	// get revoker profile
 	revokerProfile, err := s.userProfileRepository.GetUserProfileByUserID(userID)
@@ -1159,7 +1160,6 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 	}
 
 	return s.repo.ProcessRequestReview(processRequestReview)
-
 }
 
 func (s *InsurancePartnerService) GetAllPartnerDeletionRequests() ([]models.DeletionRequestResponse, error) {
