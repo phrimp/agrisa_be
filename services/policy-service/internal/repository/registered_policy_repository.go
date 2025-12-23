@@ -825,6 +825,16 @@ func (r *RegisteredPolicyRepository) GetByInsuranceProviderID(providerID string)
 	return policies, nil
 }
 
+func (r *RegisteredPolicyRepository) GetByInsuranceProviderIDAndStatus(providerID string, status models.PolicyStatus) ([]models.RegisteredPolicy, error) {
+	var policies []models.RegisteredPolicy
+	query := `SELECT * FROM registered_policy WHERE insurance_provider_id = $1 and status = $2 ORDER BY created_at DESC`
+	err := r.db.Select(&policies, query, providerID, status)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get policies by provider ID: %w", err)
+	}
+	return policies, nil
+}
+
 // GetPolicyStats retrieves aggregated statistics for policies
 func (r *RegisteredPolicyRepository) GetPolicyStats(providerID string) (map[string]any, error) {
 	stats := make(map[string]any)

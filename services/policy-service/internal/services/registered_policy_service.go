@@ -1090,3 +1090,7 @@ func (s *RegisteredPolicyService) GetByBasePolicy(ctx context.Context, basePolic
 
 func (s *RegisteredPolicyService) GetCompensationAmount(id uuid.UUID, farmerID, providerID string, compensationType models.CancelRequestType) {
 }
+
+func (s *RegisteredPolicyService) GetPoliciesWithProviderStatusActive(ctx context.Context, providerID string) ([]models.RegisteredPolicy, error) {
+	return s.registeredPolicyRepo.GetByInsuranceProviderIDAndStatus(providerID, models.PolicyActive)
+}
