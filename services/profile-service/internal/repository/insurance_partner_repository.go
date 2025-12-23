@@ -420,7 +420,7 @@ func (r *InsurancePartnerRepository) GetPrivateProfile(partnerID string) (*model
 			ip.created_at,
 			ip.updated_at,
 			last_updated_by_id,
-			COALESCE(ip.last_updated_by_name, '') AS last_updated_by_name
+			COALESCE(ip.last_updated_by_name, '') AS last_updated_by_name,
 			COALESCE(ip.account_number, '') AS account_number,
 			COALESCE(ip.account_name, '') AS account_name,
 			COALESCE(ip.bank_code, '') AS bank_code
