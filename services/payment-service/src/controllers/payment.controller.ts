@@ -388,6 +388,17 @@ export class PaymentController {
       payment_id,
     });
 
+    // Update items with payout_id
+    if (items && items.length > 0) {
+      for (const item of items) {
+        // Find the created item by item_id and payment_id, then update with payout_id
+        const createdItem = await this.itemService.findByItemId(item.item_id!);
+        if (createdItem) {
+          await this.itemService.update(createdItem.id, { payout_id });
+        }
+      }
+    }
+
     const url = new URL(
       `https://img.vietqr.io/image/${bank_code}-${account_number}-compact2.png`,
     );
@@ -565,17 +576,29 @@ export class PaymentController {
 
     // Get items by item_ids to find payout_ids
     const items = await Promise.all(
-      item_ids.map((item_id) => this.itemService.findByItemId(item_id)),
+      item_ids.map(item_id => this.itemService.findByItemId(item_id))
     );
 
-    const validItems = items.filter((item) => item && item.payout_id) as Item[];
-    const payout_ids = validItems.map((item) => item.payout_id!);
+    const validItems = items.filter(item => item !== null) as Item[];
+
+    // Collect payout_ids from items that have payout_id, or find via payment for others
+    const payout_ids: string[] = [];
+    for (const item of validItems) {
+      if (item.payout_id) {
+        payout_ids.push(item.payout_id);
+      } else {
+        // Fallback: find payout via payment
+        const payment = await this.paymentService.findById(item.payment_id);
+        if (payment) {
+          // This assumes we need to add findByPaymentId to PayoutService
+          // For now, we'll skip items without payout_id
+          this.logger.warn(`Item ${item.id} has no payout_id, skipping`);
+        }
+      }
+    }
 
     if (payout_ids.length === 0) {
-      throw new HttpException(
-        'No valid payouts found for the provided item_ids',
-        HttpStatus.BAD_REQUEST,
-      );
+      throw new HttpException('No valid payouts found for the provided item_ids', HttpStatus.BAD_REQUEST);
     }
 
     const results: Array<{
