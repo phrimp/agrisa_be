@@ -14,7 +14,6 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { Item } from 'src/entities/item.entity';
 import { publisher } from 'src/events/publisher';
 import { payosConfig } from 'src/libs/payos.config';
 import { checkPermissions, generateRandomString } from 'src/libs/utils';
@@ -576,10 +575,10 @@ export class PaymentController {
 
     // Get items by item_ids to find payout_ids
     const items = await Promise.all(
-      item_ids.map(item_id => this.itemService.findByItemId(item_id))
+      item_ids.map((item_id) => this.itemService.findByItemId(item_id)),
     );
 
-    const validItems = items.filter(item => item !== null) as Item[];
+    const validItems = items.filter((item) => item !== null);
 
     // Collect payout_ids from items that have payout_id, or find via payment for others
     const payout_ids: string[] = [];
@@ -598,7 +597,10 @@ export class PaymentController {
     }
 
     if (payout_ids.length === 0) {
-      throw new HttpException('No valid payouts found for the provided item_ids', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        'No valid payouts found for the provided item_ids',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     const results: Array<{
