@@ -2,18 +2,20 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
+	"net/http"
+	"profile-service/internal/event"
+	"profile-service/internal/models"
+	"profile-service/internal/repository"
 	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
 	"utils"
-
-	"profile-service/internal/event"
-	"profile-service/internal/models"
-	"profile-service/internal/repository"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -36,11 +38,12 @@ type IInsurancePartnerService interface {
 	CreatePartnerDeletionRequest(req *models.PartnerDeletionRequest, partnerAdminID string) (result *models.PartnerDeletionRequest, err error)
 	GetDeletionRequestsByRequesterID(requesterID string) ([]models.DeletionRequestResponse, error)
 	ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.DeletionRequestResponse, err error)
-	ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO) error
+	ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO, contracts map[string]any) error
 	RevokePartnerDeletionRequest(requestID uuid.UUID, userID string, reviewNote string) error
 	GetAllPartnerDeletionRequests() ([]models.DeletionRequestResponse, error)
 	GetDeletionRequestsByPartnerID(partnerID, status string) ([]models.DeletionRequestResponse, error)
 	GetPartnerDeletionRequestByID(requestID uuid.UUID) (*models.DeletionRequestResponse, error)
+	GetActiveContracts(token string) (map[string]any, error)
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository, profilePublisher *event.NotificationPublisher) IInsurancePartnerService {
@@ -1061,6 +1064,17 @@ func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.Partn
 	req.RequestedByName = userProfile.FullName
 	req.Status = models.DeletionRequestPending
 	req.RequestedAt = time.Now()
+	// publish event
+	go func() {
+		eventPayload := event.ProfileEvent{
+			ID:        uuid.NewString(),
+			EventType: event.ProfleConfirmDelete,
+			UserID:    req.RequestedBy,
+			ProfileID: req.PartnerID.String(),
+		}
+		s.profilePublisher.PublishEvent(context.Background(), eventPayload)
+	}()
+
 	return s.repo.CreateDeletionRequest(context.Background(), req)
 }
 
@@ -1068,7 +1082,7 @@ func (s *InsurancePartnerService) GetDeletionRequestsByRequesterID(requesterID s
 	return s.repo.GetDeletionRequestsByRequesterID(context.Background(), requesterID)
 }
 
-func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO) error {
+func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO, contracts map[string]any) error {
 	now := time.Now()
 	adminID := request.ReviewedByID
 	adminProfile, err := s.userProfileRepository.GetUserProfileByUserID(adminID)
@@ -1104,18 +1118,55 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 				time.Sleep(1 * time.Second)
 			}
 		}(noticePeriod, existDeletionRequest.PartnerID, request.ReviewedByID, request.ReviewedByName)
-		// publish event
-		go func() {
-			eventPayload := event.ProfileEvent{
-				ID:        uuid.NewString(),
-				EventType: event.ProfleConfirmDelete,
-				UserID:    request.ReviewedByID,
-				ProfileID: existDeletionRequest.PartnerID.String(),
-			}
-			s.profilePublisher.PublishEvent(context.Background(), eventPayload)
-		}()
 	}
 	return s.repo.ProcessRequestReview(request)
+}
+
+func (s *InsurancePartnerService) GetActiveContracts(token string) (map[string]any, error) {
+	url := "http://policy-service:8089/policy/protected/api/v2/policies/read-partner/active"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		slog.Error("Error creating request for active contracts", "error", err)
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
+
+	req.Header.Add("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error("Error making request for active contracts", "error", err)
+		return nil, fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		slog.Error("Error reading response body for active contracts", "error", err)
+		return nil, fmt.Errorf("error reading response: %v", err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		slog.Error("active contracts not found", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("active contracts not found %d, body: %s", resp.StatusCode, string(body))
+	}
+	if resp.StatusCode == http.StatusForbidden {
+		slog.Error("active contracts not found", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("active contracts not found %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Error("Unexpected status code for active contracts", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err != nil {
+		slog.Error("Error parsing JSON for active contracts", "error", err)
+		return nil, fmt.Errorf("error parsing JSON: %v", err)
+	}
+
+	return result, nil
 }
 
 func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.DeletionRequestResponse, err error) {
