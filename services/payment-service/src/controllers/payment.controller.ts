@@ -565,7 +565,7 @@ export class PaymentController {
 
     // Get items by item_ids to find payout_ids
     const items = await Promise.all(
-      item_ids.map((item_id) => this.itemService.findById(item_id)),
+      item_ids.map((item_id) => this.itemService.findByItemId(item_id)),
     );
 
     const validItems = items.filter((item) => item && item.payout_id) as Item[];
