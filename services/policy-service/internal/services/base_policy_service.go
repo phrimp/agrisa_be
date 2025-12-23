@@ -375,7 +375,7 @@ func (s *BasePolicyService) validateDataSource(condition *models.BasePolicyTrigg
 	if condition.CategoryMultiplier != dataCategory.CategoryCostMultiplier {
 		return fmt.Errorf("data tier category multiplier mismatch")
 	}
-	totalCost := float64(dataSource.BaseCost)*dataTier.DataTierMultiplier*dataCategory.CategoryCostMultiplier + (float64(trigger.MonitorInterval) * models.CostPerMonitorFrequencyUnit[trigger.MonitorFrequencyUnit])
+	totalCost := float64(dataSource.BaseCost)*dataTier.DataTierMultiplier*dataCategory.CategoryCostMultiplier + (models.FrequencyBaseCost - (10000 * float64(trigger.MonitorInterval) * models.CostPerMonitorFrequencyUnit[trigger.MonitorFrequencyUnit]))
 	if condition.CalculatedCost != totalCost {
 		slog.Error("Total cost calculation mismatch",
 			"condition_id", condition.ID,

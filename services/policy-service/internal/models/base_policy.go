@@ -87,12 +87,14 @@ type BasePolicyTriggerCondition struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at"`
 }
 
+const FrequencyBaseCost = 200000
+
 var CostPerMonitorFrequencyUnit map[MonitorFrequency]float64 = map[MonitorFrequency]float64{
-	MonitorFrequencyHour:  2.0,
-	MonitorFrequencyDay:   1.5,
+	MonitorFrequencyHour:  0.5,
+	MonitorFrequencyDay:   0.8,
 	MonitorFrequencyWeek:  1,
-	MonitorFrequencyMonth: 0.8,
-	MonitorFrequencyYear:  0.5,
+	MonitorFrequencyMonth: 1.5,
+	MonitorFrequencyYear:  2,
 }
 
 type BasePolicyDocumentValidation struct {
