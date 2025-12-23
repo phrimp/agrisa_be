@@ -1112,6 +1112,11 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 		return err
 	}
 
+	if request.Status == models.DeletionRequestApproved && len(contracts) > 0 {
+		slog.Error("Cannot approve deletion request: active contracts exist", "requestID", request.RequestID)
+		return fmt.Errorf("invalid: Không thể phê duyệt yêu cầu xóa hồ sơ đối tác bảo hiểm vì vẫn còn hợp đồng bảo hiểm đang hoạt động")
+	}
+
 	if request.Status == models.DeletionRequestApproved {
 		// update status of partner profile
 		noticePeriod := now.Add(models.NoticePeriod * time.Hour)
