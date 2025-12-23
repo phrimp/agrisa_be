@@ -1246,6 +1246,21 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 		ReviewNote:     reviewNote,
 	}
 
+	go func() {
+		eventPayload := event.ProfileEvent{
+			ID:        uuid.NewString(),
+			EventType: event.ProfileCancelDelete,
+			UserID:    userID,
+			ProfileID: deletionRequest.PartnerID.String(),
+		}
+		err := s.profilePublisher.PublishEvent(context.Background(), eventPayload)
+		if err != nil {
+			slog.Error("error publishing event", "error", err)
+			return
+		}
+		slog.Info("profile event published", "event", eventPayload)
+	}()
+
 	return s.repo.ProcessRequestReview(processRequestReview)
 }
 
