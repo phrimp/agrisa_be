@@ -3,7 +3,6 @@ import { Payout } from '../entities/payout.entity';
 export interface PayoutService {
   create(payout: Partial<Payout>): Promise<Payout>;
   findById(id: string): Promise<Payout | null>;
-  findByPaymentId(payment_id: string): Promise<Payout | null>;
   update(id: string, updates: Partial<Payout>): Promise<Payout | null>;
   findByUserId(
     user_id: string,
