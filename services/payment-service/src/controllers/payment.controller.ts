@@ -370,6 +370,7 @@ export class PaymentController {
           name: item.name,
           price: item.price,
           quantity: item.quantity ?? 1,
+          payout_id,
           created_at: new Date(),
           updated_at: new Date(),
         });
@@ -578,23 +579,39 @@ export class PaymentController {
       item_ids.map((item_id) => this.itemService.findByItemId(item_id)),
     );
 
+    this.logger.log(
+      'Found items:',
+      items.map((item) => ({
+        id: item?.id,
+        item_id: item?.item_id,
+        payout_id: item?.payout_id,
+        payment_id: item?.payment_id,
+      })),
+    );
+
     const validItems = items.filter((item) => item !== null);
+
+    this.logger.log('Valid items count:', validItems.length);
 
     // Collect payout_ids from items that have payout_id, or find via payment for others
     const payout_ids: string[] = [];
     for (const item of validItems) {
       if (item.payout_id) {
         payout_ids.push(item.payout_id);
+        this.logger.log(`Item ${item.id} has payout_id: ${item.payout_id}`);
       } else {
-        // Fallback: find payout via payment
-        const payment = await this.paymentService.findById(item.payment_id);
-        if (payment) {
-          // This assumes we need to add findByPaymentId to PayoutService
-          // For now, we'll skip items without payout_id
-          this.logger.warn(`Item ${item.id} has no payout_id, skipping`);
-        }
+        // Try to find payout via payment_id for legacy data
+        this.logger.log(
+          `Item ${item.id} has no payout_id, trying to find via payment ${item.payment_id}`,
+        );
+        // For now, skip legacy items - they need manual database update
+        this.logger.warn(
+          `Skipping legacy item ${item.id} - run SQL update to fix: UPDATE items SET payout_id = payouts.id FROM payouts WHERE items.payment_id = payouts.payment_id AND items.payout_id IS NULL;`,
+        );
       }
     }
+
+    this.logger.log('Final payout_ids:', payout_ids);
 
     if (payout_ids.length === 0) {
       throw new HttpException(
