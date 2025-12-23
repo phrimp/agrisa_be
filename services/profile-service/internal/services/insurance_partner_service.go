@@ -1080,7 +1080,12 @@ func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.Partn
 			UserID:    req.RequestedBy,
 			ProfileID: req.PartnerID.String(),
 		}
-		s.profilePublisher.PublishEvent(context.Background(), eventPayload)
+		err := s.profilePublisher.PublishEvent(context.Background(), eventPayload)
+		if err != nil {
+			slog.Error("error publishing event", "error", err)
+			return
+		}
+		slog.Info("profile event published", "event", eventPayload)
 	}()
 
 	return s.repo.CreateDeletionRequest(context.Background(), req)

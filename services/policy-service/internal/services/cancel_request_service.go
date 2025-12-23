@@ -1,6 +1,7 @@
 package services
 
 import (
+	utils "agrisa_utils"
 	"context"
 	"fmt"
 	"log/slog"
@@ -100,10 +101,12 @@ func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID
 		return nil, fmt.Errorf("error creating request cancel for policy=%s error=%w", policy.ID, err)
 	}
 
-	err = c.policyRepo.UpdateTx(tx, policy)
-	if err != nil {
-		slog.Error("error updating policy status", "error", err, "policy_id", policyID)
-		return nil, fmt.Errorf("error updating policy status error=%w", err)
+	if request.CancelRequestType != models.CancelRequestTransferContract {
+		err = c.policyRepo.UpdateTx(tx, policy)
+		if err != nil {
+			slog.Error("error updating policy status", "error", err, "policy_id", policyID)
+			return nil, fmt.Errorf("error updating policy status error=%w", err)
+		}
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -136,6 +139,10 @@ func (c *CancelRequestService) GetByPolicyID(ctx context.Context, policyID uuid.
 
 func (c *CancelRequestService) GetAllProviderCancelRequests(ctx context.Context, providerID string) ([]models.CancelRequest, error) {
 	return c.cancelRequestRepo.GetAllRequestsByProviderID(ctx, providerID)
+}
+
+func (c *CancelRequestService) GetFarmerTransferContract(ctx context.Context, farmerID string) ([]models.CancelRequest, error) {
+	return c.cancelRequestRepo.GetLatestTransferRequestByFarmer(ctx, farmerID)
 }
 
 // confirm the decision, update the request, start the notice period, and flag the payment process
@@ -185,6 +192,45 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 
 	if policy.InsuranceProviderID != review.ReviewedBy && policy.FarmerID != review.ReviewedBy {
 		return "", fmt.Errorf("reviewer cannot review cancel request of this policy")
+	}
+
+	if request.CancelRequestType == models.CancelRequestTransferContract {
+		oldProvider := policy.InsuranceProviderID
+		policy.InsuranceProviderID = request.Evidence["toProvider"].(string)
+		successMessage := ""
+		if review.Approved {
+			request.Status = models.CancelRequestStatusApproved
+			successMessage = "Contract transferred"
+			err := c.policyRepo.UpdateTx(tx, policy)
+			if err != nil {
+				slog.Error("error updating policy", "error", err)
+				return "", err
+			}
+		} else {
+			// create real cancel request
+			req, err := c.CreateCancelRequest(ctx, policy.ID, *request.ReviewedBy, models.CreateCancelRequestRequest{
+				Reason:            fmt.Sprintf("Từ chối chuyển giao hợp đồng từ công ty %s qua công ty %s", oldProvider, policy.InsuranceProviderID),
+				CancelRequestType: models.CancelRequestTypeOther,
+				Evidence:          utils.JSONMap{"requestID": request.ID},
+			})
+			if err != nil {
+				return "", fmt.Errorf("error creating new cancel request from refusing transfer request: %w", err)
+			}
+			request.Status = models.CancelRequestStatusDenied
+			slog.Info("Cancel request created successfully", "request", req)
+			successMessage = "New request cancel created"
+		}
+
+		err = c.cancelRequestRepo.UpdateCancelRequestTx(tx, *request)
+		if err != nil {
+			slog.Error("error updating cancel request", "error", err)
+			return "", err
+		}
+		if err := tx.Commit(); err != nil {
+			slog.Error("error commiting transaction", "error", err)
+			return "", fmt.Errorf("error commiting transaction=%w", err)
+		}
+		return successMessage, nil
 	}
 
 	if review.Approved {
@@ -371,6 +417,25 @@ func (s *CancelRequestService) RevokeRequest(ctx context.Context, requestID uuid
 	if err := tx.Commit(); err != nil {
 		slog.Error("error commiting transaction", "error", err)
 		return fmt.Errorf("error commiting transaction=%w", err)
+	}
+	return nil
+}
+
+func (c *CancelRequestService) CreateTransferRequest(ctx context.Context, createdBy string, fromProvider, toProvider string) error {
+	policies, err := c.policyRepo.GetByInsuranceProviderIDAndStatus(fromProvider, models.PolicyActive)
+	if err != nil {
+		return err
+	}
+	for _, policy := range policies {
+		req, err := c.CreateCancelRequest(ctx, policy.ID, fromProvider, models.CreateCancelRequestRequest{
+			Reason:            fmt.Sprintf("Chuyển giao hợp đồng từ công ty %s qua công ty %s", fromProvider, toProvider),
+			CancelRequestType: models.CancelRequestTransferContract,
+			Evidence:          utils.JSONMap{"toProvider": toProvider},
+		})
+		if err != nil {
+			return fmt.Errorf("error creating transfer request for contract: %s error=%w", policy.ID, err)
+		}
+		slog.Info("Created transfer request policy succeed", "request", req)
 	}
 	return nil
 }
