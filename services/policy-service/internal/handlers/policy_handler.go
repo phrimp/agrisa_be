@@ -62,6 +62,7 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 	partnerCreateGroup := policyGroup.Group("/create-partner")
 	partnerCreateGroup.Post("/underwriting/:id", h.CreatePartnerPolicyUnderwriting) // PATCH /policies/update-partner/underwriting/:id]
 	partnerGroup.Post("/monthly-data-cost", h.GetMonthlyDataCost)
+	partnerGroup.Get("/active", h.GetActiveContracts)
 
 	// Admin routes - full access to all policies
 	adminReadGroup := policyGroup.Group("/read-all")
@@ -1171,6 +1172,23 @@ func (h *PolicyHandler) GetMonthlyDataCost(c fiber.Ctx) error {
 	}
 
 	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(response))
+}
+
+func (h *PolicyHandler) GetActiveContracts(c fiber.Ctx) error {
+	providerID := c.Query("provider")
+	if providerID == "" {
+		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "provider required"))
+	}
+	contracts, err := h.registeredPolicyService.GetPoliciesWithProviderStatusActive(c.Context(), providerID)
+	if err != nil {
+		slog.Error("Failed to get active contracts",
+			"provider_id", providerID,
+			"error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("INTERNAL",
+				"Failed to get active contracts"))
+	}
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(contracts))
 }
 
 // Helper function to extract partner ID from authorization token

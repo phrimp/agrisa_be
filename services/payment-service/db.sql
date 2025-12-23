@@ -5,7 +5,7 @@ CREATE DATABASE payment_service;
 \c payment_service
 
 CREATE TYPE payment_status AS ENUM ('pending', 'completed', 'failed', 'refunded', 'cancelled', 'expired');
-CREATE TYPE payout_status AS ENUM ('pending', 'completed');
+CREATE TYPE payout_status AS ENUM ('pending', 'scanned', 'completed');
 
 CREATE TABLE payments (
     id VARCHAR PRIMARY KEY,

@@ -44,7 +44,7 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	partnerGr.GET("/:partner_admin_id/deletion-requests", h.GetPartnerDeletionRequestsByPartnerAdminID)
 	partnerGr.POST("/deletion-requests/revoke", h.RevokePartnerDeletionRequest)
 
-	//admin endpoint
+	// admin endpoint
 	partnerAdminGr := insurancePartnerProtectedGrPub.Group("/insurance-partners/admin")
 	partnerAdminGr.POST("/process-request", h.ProcessPartnerDeletionRequestReview)
 	partnerAdminGr.GET("/deletion-requests", h.GetAllPartnerDeletionRequest)
@@ -272,7 +272,14 @@ func (h *InsurancePartnerHandler) ProcessPartnerDeletionRequestReview(c *gin.Con
 		return
 	}
 	req.ReviewedByID = reviewByID
-	err := h.InsurancePartnerService.ProcessRequestReviewByAdmin(req)
+	contracts, err := h.InsurancePartnerService.GetActiveContracts(c.GetHeader("token"))
+	if err != nil {
+		errorResponse := utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "contracts failed to load")
+		c.JSON(http.StatusBadRequest, errorResponse)
+		return
+	}
+	slog.Info("DEBUG", "data", contracts)
+	err = h.InsurancePartnerService.ProcessRequestReviewByAdmin(req, contracts)
 	if err != nil {
 		log.Printf("Error processing deletion request review: %s", err.Error())
 		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())

@@ -6,5 +6,6 @@ export interface ItemService {
   deleteByPaymentId(payment_id: string): Promise<boolean>;
   deleteById(id: string): Promise<boolean>;
   findById(id: string): Promise<Item | null>;
+  findByItemId(item_id: string): Promise<Item | null>;
   update(id: string, updates: Partial<Item>): Promise<Item | null>;
 }

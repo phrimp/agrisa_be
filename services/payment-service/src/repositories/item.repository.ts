@@ -37,4 +37,8 @@ export class ItemRepository {
     await this.orderItemRepository.update(id, updates);
     return await this.findById(id);
   }
+
+  async findByItemId(item_id: string): Promise<Item | null> {
+    return await this.orderItemRepository.findOne({ where: { item_id } });
+  }
 }

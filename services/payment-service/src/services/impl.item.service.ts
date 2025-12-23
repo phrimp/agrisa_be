@@ -27,6 +27,10 @@ export class ImplItemService implements ItemService {
     return await this.itemRepository.findById(id);
   }
 
+  async findByItemId(item_id: string): Promise<Item | null> {
+    return await this.itemRepository.findByItemId(item_id);
+  }
+
   async update(id: string, updates: Partial<Item>): Promise<Item | null> {
     return await this.itemRepository.update(id, updates);
   }

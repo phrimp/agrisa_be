@@ -4,7 +4,7 @@ export const payoutSchema = z.object({
   id: z.string(),
   amount: z.coerce.number().positive(),
   description: z.string().min(1).max(255),
-  status: z.enum(['pending', 'completed']).default('pending'),
+  status: z.enum(['pending', 'scanned', 'completed']).default('pending'),
   user_id: z.string(),
   bank_code: z.string().nullable().optional(),
   account_number: z.string().nullable().optional(),
@@ -17,6 +17,7 @@ export const payoutSchema = z.object({
 const payoutStatusMap: Record<z.infer<typeof payoutSchema>['status'], string> =
   {
     pending: 'Chờ chi trả',
+    scanned: 'Đã quét',
     completed: 'Đã chi trả',
   };
 

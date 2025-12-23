@@ -21,7 +21,7 @@ export class Payout {
 
   @Column({
     type: 'enum',
-    enum: ['pending', 'completed'],
+    enum: ['pending', 'scanned', 'completed'],
     default: 'pending',
   })
   status: string;

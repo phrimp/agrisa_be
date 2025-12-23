@@ -370,6 +370,7 @@ export class PaymentController {
           name: item.name,
           price: item.price,
           quantity: item.quantity ?? 1,
+          payout_id,
           created_at: new Date(),
           updated_at: new Date(),
         });
@@ -387,6 +388,17 @@ export class PaymentController {
       payment_id,
     });
 
+    // Update items with payout_id
+    if (items && items.length > 0) {
+      for (const item of items) {
+        // Find the created item by item_id and payment_id, then update with payout_id
+        const createdItem = await this.itemService.findByItemId(item.item_id!);
+        if (createdItem) {
+          await this.itemService.update(createdItem.id, { payout_id });
+        }
+      }
+    }
+
     const url = new URL(
       `https://img.vietqr.io/image/${bank_code}-${account_number}-compact2.png`,
     );
@@ -397,7 +409,7 @@ export class PaymentController {
     return {
       payout_id,
       qr: url.toString(),
-      verify_hook: `https://agrisa-api.phrimp.io.vn/payment/public/payout/verify?payout_id=${payout_id}`,
+      verify_hook: `https://agrisa-api.phrimp.io.vn/payment/public/payout/scan?payout_id=${payout_id}`,
     };
   }
 
@@ -531,7 +543,7 @@ export class PaymentController {
 
     if (payout.payment_id) {
       await this.paymentService.update(payout.payment_id, {
-        status: 'scanned',
+        status: 'pending',
         paid_at: new Date(),
       });
 
@@ -556,89 +568,139 @@ export class PaymentController {
     }
   }
 
-  // @Post('public/payout/verify/bulk')
-  // async verifyPayoutsBulk(@Body('lstItemIds') item_ids: string[]) {
-  //   if (!item_ids || !Array.isArray(item_ids) || item_ids.length === 0) {
-  //     throw new HttpException('lstItemIds is required', HttpStatus.BAD_REQUEST);
-  //   }
+  @Post('public/payout/verify/bulk')
+  async bulkVerifyPayouts(@Body('item_ids') item_ids: string[]) {
+    if (!item_ids || !Array.isArray(item_ids) || item_ids.length === 0) {
+      throw new HttpException('item_ids is required', HttpStatus.BAD_REQUEST);
+    }
 
-  //   const payouts = await this.payoutService.findByItemIds(item_ids);
+    // Get items by item_ids to find payout_ids
+    const items = await Promise.all(
+      item_ids.map((item_id) => this.itemService.findByItemId(item_id)),
+    );
 
-  //   if (!payouts || payouts.length === 0) {
-  //     throw new HttpException(
-  //       'No payouts found for the provided item_ids',
-  //       HttpStatus.NOT_FOUND,
-  //     );
-  //   }
+    this.logger.log(
+      'Found items:',
+      items.map((item) => ({
+        id: item?.id,
+        item_id: item?.item_id,
+        payout_id: item?.payout_id,
+        payment_id: item?.payment_id,
+      })),
+    );
 
-  //   const results: Array<{
-  //     payout_id: string;
-  //     item_ids: string[];
-  //     success: boolean;
-  //     message?: string;
-  //   }> = [];
+    const validItems = items.filter((item) => item !== null);
 
-  //   for (const payout of payouts) {
-  //     try {
-  //       const payout_item_ids =
-  //         payout.payment?.items
-  //           ?.map((item) => item.item_id)
-  //           .filter((item_id): item_id is string => item_id !== null) || [];
+    this.logger.log('Valid items count:', validItems.length);
 
-  //       await this.payoutService.update(payout.id, {
-  //         status: 'completed',
-  //         completed_at: new Date(),
-  //       });
+    // Collect payout_ids from items that have payout_id, or find via payment for others
+    const payout_ids: string[] = [];
+    for (const item of validItems) {
+      if (item.payout_id) {
+        payout_ids.push(item.payout_id);
+        this.logger.log(`Item ${item.id} has payout_id: ${item.payout_id}`);
+      } else {
+        // Try to find payout via payment_id for legacy data
+        this.logger.log(
+          `Item ${item.id} has no payout_id, trying to find via payment ${item.payment_id}`,
+        );
+        // For now, skip legacy items - they need manual database update
+        this.logger.warn(
+          `Skipping legacy item ${item.id} - run SQL update to fix: UPDATE items SET payout_id = payouts.id FROM payouts WHERE items.payment_id = payouts.payment_id AND items.payout_id IS NULL;`,
+        );
+      }
+    }
 
-  //       if (payout.payment_id) {
-  //         await this.paymentService.update(payout.payment_id, {
-  //           status: 'completed',
-  //           paid_at: new Date(),
-  //         });
+    this.logger.log('Final payout_ids:', payout_ids);
 
-  //         const publisher_payment = await this.paymentService.findById(
-  //           payout.payment_id,
-  //         );
-  //         if (publisher_payment) {
-  //           this.logger.log('Publishing payout payment to queue', {
-  //             payment_id: payout.payment_id,
-  //             type: publisher_payment.type,
-  //             amount: publisher_payment.amount,
-  //             item_ids: payout_item_ids,
-  //           });
-  //           await publisher({
-  //             item_ids: payout_item_ids,
-  //           });
-  //           this.logger.log('Payout payment event published to queue', {
-  //             payment_id: payout.payment_id,
-  //             item_ids: payout_item_ids,
-  //           });
-  //         } else {
-  //           this.logger.error(
-  //             'Failed to fetch created payment for publishing',
-  //             {
-  //               payment_id: payout.payment_id,
-  //             },
-  //           );
-  //         }
-  //       }
+    if (payout_ids.length === 0) {
+      throw new HttpException(
+        'No valid payouts found for the provided item_ids',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
 
-  //       results.push({
-  //         payout_id: payout.id,
-  //         item_ids: payout_item_ids,
-  //         success: true,
-  //       });
-  //     } catch (error) {
-  //       this.logger.error(`Failed to verify payout ${payout.id}`, error);
-  //       results.push({
-  //         payout_id: payout.id,
-  //         item_ids: [],
-  //         success: false,
-  //         message: 'Internal error',
-  //       });
-  //     }
-  //   }
+    const results: Array<{
+      item_id: string;
+      payout_id: string;
+      success: boolean;
+      error?: string;
+    }> = [];
+    for (const item of validItems) {
+      const payout_id = item.payout_id!;
+      try {
+        const payout = await this.payoutService.findById(payout_id);
+        if (!payout) {
+          results.push({
+            item_id: item.item_id || item.id,
+            payout_id,
+            success: false,
+            error: 'Payout not found',
+          });
+          continue;
+        }
 
-  //   return results;
-  // }
+        if (payout.status === 'scanned') {
+          await this.payoutService.update(payout_id, {
+            status: 'completed',
+            completed_at: new Date(),
+          });
+
+          if (payout.payment_id) {
+            await this.paymentService.update(payout.payment_id, {
+              status: 'completed',
+              paid_at: new Date(),
+            });
+
+            const publisher_payment = await this.paymentService.findById(
+              payout.payment_id,
+            );
+            if (publisher_payment) {
+              this.logger.log('Publishing payout payment to queue', {
+                payment_id: payout.payment_id,
+                type: publisher_payment.type,
+                amount: publisher_payment.amount,
+              });
+              await publisher(publisher_payment);
+              this.logger.log('Payout payment event published to queue', {
+                payment_id: payout.payment_id,
+              });
+            } else {
+              this.logger.error(
+                'Failed to fetch created payment for publishing',
+                {
+                  payment_id: payout.payment_id,
+                },
+              );
+            }
+          }
+        }
+
+        if (payout.status === 'scanned') {
+          results.push({
+            item_id: item.item_id || item.id,
+            payout_id,
+            success: true,
+          });
+        } else {
+          results.push({
+            item_id: item.item_id || item.id,
+            payout_id,
+            success: false,
+            error: `Payout status is ${payout.status}, not scanned`,
+          });
+        }
+      } catch (error) {
+        this.logger.error(`Failed to verify payout ${payout_id}`, error);
+        results.push({
+          item_id: item.item_id || item.id,
+          payout_id,
+          success: false,
+          error: 'Internal server error',
+        });
+      }
+    }
+
+    return results;
+  }
 }
