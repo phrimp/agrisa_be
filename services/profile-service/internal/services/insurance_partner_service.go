@@ -1080,7 +1080,12 @@ func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.Partn
 			UserID:    req.RequestedBy,
 			ProfileID: req.PartnerID.String(),
 		}
-		s.profilePublisher.PublishEvent(context.Background(), eventPayload)
+		err := s.profilePublisher.PublishEvent(context.Background(), eventPayload)
+		if err != nil {
+			slog.Error("error publishing event", "error", err)
+			return
+		}
+		slog.Info("profile event published", "event", eventPayload)
 	}()
 
 	return s.repo.CreateDeletionRequest(context.Background(), req)
@@ -1240,6 +1245,21 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 		ReviewedByName: revokerProfile.FullName,
 		ReviewNote:     reviewNote,
 	}
+
+	go func() {
+		eventPayload := event.ProfileEvent{
+			ID:        uuid.NewString(),
+			EventType: event.ProfileCancelDelete,
+			UserID:    userID,
+			ProfileID: deletionRequest.PartnerID.String(),
+		}
+		err := s.profilePublisher.PublishEvent(context.Background(), eventPayload)
+		if err != nil {
+			slog.Error("error publishing event", "error", err)
+			return
+		}
+		slog.Info("profile event published", "event", eventPayload)
+	}()
 
 	return s.repo.ProcessRequestReview(processRequestReview)
 }

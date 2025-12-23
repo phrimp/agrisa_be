@@ -171,6 +171,7 @@ const (
 	CancelRequestTypeContractViolation   CancelRequestType = "contract_violation"
 	CancelRequestTypeOther               CancelRequestType = "other"
 	CancelRequestTypePolicyholderRequest CancelRequestType = "policyholder_request"
+	CancelRequestTransferContract        CancelRequestType = "transfer_contract"
 )
 
 type CancelRequestStatus string
