@@ -212,8 +212,8 @@ func (r *DashboardRepository) GetPremiumGrowthYoY(partnerID string, startDate, e
 func (r *DashboardRepository) GetAveragePremiumPerPolicy(partnerID string, startDate, endDate time.Time) (float64, error) {
 	query := `
 		SELECT 
-			SUM(rp.total_farmer_premium) / COUNT(DISTINCT rp.id) 
-				AS avg_premium_per_policy
+			COALESCE(SUM(rp.total_farmer_premium) / NULLIF(COUNT(DISTINCT rp.id), 0), 0)
+        	AS avg_premium_per_policy
 		FROM registered_policy rp
 		JOIN base_policy bp ON rp.base_policy_id = bp.id
 		WHERE bp.insurance_provider_id = $1

@@ -748,9 +748,6 @@ func (r RegisterAPolicyAPIRequest) Validate() error {
 	if r.RegisteredPolicy.PlantingDate <= 0 {
 		return errors.New("planting_date is required and must be a valid Unix timestamp")
 	}
-	if r.RegisteredPolicy.PlantingDate > time.Now().Unix() {
-		return errors.New("planting_date cannot be in the future")
-	}
 
 	// Validate area multiplier
 	if r.RegisteredPolicy.AreaMultiplier < 0 {

@@ -158,7 +158,7 @@ CREATE TABLE partner_deletion_requests (
     -- Status and timeline
     status deletion_request_status NOT NULL DEFAULT 'pending',
     requested_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    cancellable_until TIMESTAMP NOT NULL,
+    cancellable_until TIMESTAMP,
 
     -- Reviewer information (người duyệt/từ chối)
     reviewed_by_id VARCHAR(255),          -- User ID của người duyệt

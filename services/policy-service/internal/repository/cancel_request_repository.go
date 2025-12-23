@@ -176,11 +176,18 @@ func (r *CancelRequestRepository) DeleteCancelRequestByID(id uuid.UUID) error {
 
 func (r *CancelRequestRepository) GetAllRequestsByFarmerID(ctx context.Context, farmerID string) ([]models.CancelRequest, error) {
 	var requests []models.CancelRequest
-	query := `SELECT cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, 
-	paid, paid_at, during_notice_period, -- Added missing fields
-	cr.created_at, cr.updated_at
-FROM cancel_request cr join registered_policy rp ON cr.registered_policy_id = rp.id
-where rp.farmer_id = $1 ORDER by cr.requested_at DESC`
+	query := `
+    SELECT 
+        cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, 
+        requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, 
+        paid, paid_at, during_notice_period,
+        cr.created_at, cr.updated_at
+    FROM cancel_request cr 
+    JOIN registered_policy rp ON cr.registered_policy_id = rp.id
+    WHERE rp.farmer_id = $1 
+    AND NOT (cr.requested_by != rp.farmer_id AND cr.created_at > NOW() - INTERVAL '1 hour')
+    ORDER BY cr.requested_at DESC
+`
 
 	err := r.db.SelectContext(ctx, &requests, query, farmerID)
 	if err != nil {
@@ -192,11 +199,18 @@ where rp.farmer_id = $1 ORDER by cr.requested_at DESC`
 
 func (r *CancelRequestRepository) GetAllRequestsByProviderID(ctx context.Context, providerID string) ([]models.CancelRequest, error) {
 	var requests []models.CancelRequest
-	query := `SELECT cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, 
-	paid, paid_at, during_notice_period, -- Added missing fields
-	cr.created_at, cr.updated_at
-FROM cancel_request cr join registered_policy rp ON cr.registered_policy_id = rp.id
-where rp.insurance_provider_id = $1 ORDER by cr.requested_at DESC`
+	query := `
+    SELECT 
+        cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, 
+        requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, 
+        paid, paid_at, during_notice_period,
+        cr.created_at, cr.updated_at
+    FROM cancel_request cr 
+    JOIN registered_policy rp ON cr.registered_policy_id = rp.id
+    WHERE rp.insurance_provider_id = $1 
+    AND NOT (cr.requested_by != rp.insurance_provider_id AND cr.created_at > NOW() - INTERVAL '1 hour')
+    ORDER BY cr.requested_at DESC
+`
 
 	err := r.db.SelectContext(ctx, &requests, query, providerID)
 	if err != nil {

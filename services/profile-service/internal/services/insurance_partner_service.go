@@ -2,9 +2,13 @@ package services
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"log/slog"
+	"net/http"
+	"profile-service/internal/event"
 	"profile-service/internal/models"
 	"profile-service/internal/repository"
 	"regexp"
@@ -20,6 +24,7 @@ import (
 type InsurancePartnerService struct {
 	repo                  repository.IInsurancePartnerRepository
 	userProfileRepository repository.IUserRepository
+	profilePublisher      *event.NotificationPublisher
 }
 
 type IInsurancePartnerService interface {
@@ -31,17 +36,21 @@ type IInsurancePartnerService interface {
 	GetAllPartnersPublicProfiles() ([]models.PublicPartnerProfile, error)
 	GetPrivateProfileByPartnerID(partnerID string) (*models.PrivatePartnerProfile, error)
 	CreatePartnerDeletionRequest(req *models.PartnerDeletionRequest, partnerAdminID string) (result *models.PartnerDeletionRequest, err error)
-	GetDeletionRequestsByRequesterID(requesterID string) ([]models.PartnerDeletionRequest, error)
-	ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.PartnerDeletionRequest, err error)
-	ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO) error
+	GetDeletionRequestsByRequesterID(requesterID string) ([]models.DeletionRequestResponse, error)
+	ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.DeletionRequestResponse, err error)
+	ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO, contracts map[string]any) error
 	RevokePartnerDeletionRequest(requestID uuid.UUID, userID string, reviewNote string) error
-	GetAllPartnerDeletionRequests() ([]models.PartnerDeletionRequest, error)
+	GetAllPartnerDeletionRequests() ([]models.DeletionRequestResponse, error)
+	GetDeletionRequestsByPartnerID(partnerID, status string) ([]models.DeletionRequestResponse, error)
+	GetPartnerDeletionRequestByID(requestID uuid.UUID) (*models.DeletionRequestResponse, error)
+	GetActiveContracts(token string) (map[string]any, error)
 }
 
-func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository) IInsurancePartnerService {
+func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository, profilePublisher *event.NotificationPublisher) IInsurancePartnerService {
 	return &InsurancePartnerService{
 		repo:                  repo,
 		userProfileRepository: userProfileRepository,
+		profilePublisher:      profilePublisher,
 	}
 }
 
@@ -56,7 +65,7 @@ type CreateInsurancePartnerResult struct {
 
 func (s *InsurancePartnerService) CreateInsurancePartner(req *models.CreateInsurancePartnerRequest, userID string) CreateInsurancePartnerResult {
 	// Trim all field values
-	//trimmedDTO := utils.TrimAllStringFields(req).(*models.CreateInsurancePartnerRequest)
+	// trimmedDTO := utils.TrimAllStringFields(req).(*models.CreateInsurancePartnerRequest)
 
 	// Validate
 	validationErrors := ValidateInsurancePartner(req)
@@ -235,7 +244,7 @@ func (s *InsurancePartnerService) UpdateInsurancePartner(updateProfileRequestBod
 		return nil, fmt.Errorf("internal server error: failed to get insurance partner: %v", err)
 	}
 
-	//Verify if the current user is authorized to update this profile
+	// Verify if the current user is authorized to update this profile
 	updateUser, err := s.userProfileRepository.GetUserProfileByUserID(updateByID)
 	if err != nil {
 		log.Printf("Error getting user profile by ID %s: %s", updateByID, err.Error())
@@ -561,7 +570,6 @@ func ValidatePartnerTagline(partnerTaglineInput string) *utils.ValidationError {
 }
 
 func ValidatePartnerPhone(partnerPhoneInput string, fieldName string) *utils.ValidationError {
-
 	// 1. Optional field - if empty or whitespace only, it's valid
 	trimmed := strings.TrimSpace(partnerPhoneInput)
 	if trimmed == "" {
@@ -570,11 +578,11 @@ func ValidatePartnerPhone(partnerPhoneInput string, fieldName string) *utils.Val
 
 	// 3. Check Format: Must follow Vietnamese phone format with +84 prefix
 	// Pattern: +84 followed by 9 or 10 digits
-	phoneRegex := regexp.MustCompile(`^\+84\d{9,10}$`)
+	phoneRegex := regexp.MustCompile(`^0\d{9,10}$`)
 	if !phoneRegex.MatchString(trimmed) {
 		return &utils.ValidationError{
 			Field:   fieldName,
-			Message: "Số điện thoại/fax phải có định dạng +84 theo sau bởi 9-10 chữ số (ví dụ: +84865921357)",
+			Message: "Số điện thoại/fax phải có số 0 đầu tiên và theo sau bởi 9 chữ số (ví dụ: 0865921357)",
 		}
 	}
 
@@ -1056,14 +1064,26 @@ func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.Partn
 	req.RequestedByName = userProfile.FullName
 	req.Status = models.DeletionRequestPending
 	req.RequestedAt = time.Now()
+	// publish event
+	go func() {
+		eventPayload := event.ProfileEvent{
+			ID:        uuid.NewString(),
+			EventType: event.ProfleConfirmDelete,
+			UserID:    req.RequestedBy,
+			ProfileID: req.PartnerID.String(),
+		}
+		s.profilePublisher.PublishEvent(context.Background(), eventPayload)
+	}()
+
 	return s.repo.CreateDeletionRequest(context.Background(), req)
 }
 
-func (s *InsurancePartnerService) GetDeletionRequestsByRequesterID(requesterID string) ([]models.PartnerDeletionRequest, error) {
+func (s *InsurancePartnerService) GetDeletionRequestsByRequesterID(requesterID string) ([]models.DeletionRequestResponse, error) {
 	return s.repo.GetDeletionRequestsByRequesterID(context.Background(), requesterID)
 }
 
-func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO) error {
+func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO, contracts map[string]any) error {
+	now := time.Now()
 	adminID := request.ReviewedByID
 	adminProfile, err := s.userProfileRepository.GetUserProfileByUserID(adminID)
 	if err != nil {
@@ -1081,19 +1101,75 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 
 	if request.Status == models.DeletionRequestApproved {
 		// update status of partner profile
-		err = s.repo.UpdateStatusPartnerProfile(*existDeletionRequest.PartnerID, "terminated", request.ReviewedByID, request.ReviewedByName)
-		if err != nil {
-			// logging input values
-			slog.Error("Failed to update partner profile status: err", "partnerID", *existDeletionRequest.PartnerID, "status", "terminated", "updatedByID", request.ReviewedByID, "updatedByName", request.ReviewedByName, "error", err)
-			slog.Error("Failed to update partner profile status: err", "error", err)
-			return fmt.Errorf("failed to update partner profile status: %v", err)
-		}
+		noticePeriod := now.Add(models.NoticePeriod * time.Hour)
+		// run cronj
+		go func(noticePeriod time.Time, partnerID uuid.UUID, reviewedByID, reviewedByName string) {
+			for {
+				now := time.Now()
+				if now.Compare(noticePeriod) == 0 {
+					err = s.repo.UpdateStatusPartnerProfile(partnerID, "terminated", reviewedByID, reviewedByName, noticePeriod)
+					if err != nil {
+						// logging input values
+						slog.Error("Failed to update partner profile status: err", "partnerID", partnerID, "status", "terminated", "updatedByID", reviewedByID, "updatedByName", reviewedByName, "error", err)
+						slog.Error("Failed to update partner profile status: err", "error", err)
+					}
+					return
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}(noticePeriod, existDeletionRequest.PartnerID, request.ReviewedByID, request.ReviewedByName)
 	}
 	return s.repo.ProcessRequestReview(request)
 }
 
-func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.PartnerDeletionRequest, err error) {
+func (s *InsurancePartnerService) GetActiveContracts(token string) (map[string]any, error) {
+	url := "http://policy-service:8089/policy/protected/api/v2/policies/read-partner/active"
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		slog.Error("Error creating request for active contracts", "error", err)
+		return nil, fmt.Errorf("error creating request: %v", err)
+	}
 
+	req.Header.Add("Authorization", "Bearer "+token)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		slog.Error("Error making request for active contracts", "error", err)
+		return nil, fmt.Errorf("error making request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		slog.Error("Error reading response body for active contracts", "error", err)
+		return nil, fmt.Errorf("error reading response: %v", err)
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		slog.Error("active contracts not found", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("active contracts not found %d, body: %s", resp.StatusCode, string(body))
+	}
+	if resp.StatusCode == http.StatusForbidden {
+		slog.Error("active contracts not found", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("active contracts not found %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		slog.Error("Unexpected status code for active contracts", "status_code", resp.StatusCode, "body", string(body))
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(body))
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal(body, &result); err != nil {
+		slog.Error("Error parsing JSON for active contracts", "error", err)
+		return nil, fmt.Errorf("error parsing JSON: %v", err)
+	}
+
+	return result, nil
+}
+
+func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.ProcessRequestReviewDTO) (existDeletionRequest *models.DeletionRequestResponse, err error) {
 	// Validate Request ID
 	if strings.TrimSpace(request.RequestID.String()) == "" {
 		slog.Error("RequestID is required")
@@ -1112,18 +1188,7 @@ func (s *InsurancePartnerService) ValidateDeletionRequestProcess(request models.
 		return nil, fmt.Errorf("invalid: Chỉ các yêu cầu đang chờ xử lý mới có thể được xử lý")
 	}
 
-	now := time.Now()
-	if now.Before(deletionRequest.CancellableUntil) || now.Equal(deletionRequest.CancellableUntil) {
-		// loging time.now value
-		slog.Info("Current time: ", now)
-		// loging cancellable until time value
-		slog.Info("Cancellable until time: ", deletionRequest.CancellableUntil)
-		slog.Error("Cannot process request before cancellable until time")
-		return nil, fmt.Errorf("invalid: Không thể xử lý yêu cầu trước thời gian có thể hủy")
-	}
-
 	return deletionRequest, nil
-
 }
 
 func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UUID, userID string, reviewNote string) error {
@@ -1140,17 +1205,19 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 	}
 
 	// check if the request is still pending
-	if deletionRequest.Status != models.DeletionRequestPending {
-		slog.Error("Only pending requests can be revoked", "requestID", requestID, "status", deletionRequest.Status)
-		return fmt.Errorf("invalid: Chỉ các yêu cầu đang chờ xử lý mới có thể bị hủy")
+	if deletionRequest.Status == models.DeletionRequestApproved {
+		slog.Error("Approved requests cannot be revoked", "requestID", requestID, "status", deletionRequest.Status)
+		return fmt.Errorf("invalid: Không thể thu hồi yêu cầu đã được phê duyệt ")
 	}
 
 	// check if now is before cancellable until
-	now := time.Now()
-	if now.After(deletionRequest.CancellableUntil) {
-		slog.Error("Cannot revoke request after cancellable until time", "currentTime", now, "cancellableUntil", deletionRequest.CancellableUntil)
-		return fmt.Errorf("invalid: Không thể tự hủy yêu cầu sau thời gian có thể hủy")
-	}
+	//now := time.Now()
+	//revokeAllow := models.NoticePeriod * 0.2
+	//revokeAllowTime := now.Add((time.Duration(revokeAllow) * time.Hour))
+	//if now.After(revokeAllowTime) {
+	//	slog.Error("Cannot revoke request after cancellable until time", "currentTime", now, "cancellableUntil", deletionRequest.CancellableUntil)
+	//	return fmt.Errorf("invalid: Không thể tự hủy yêu cầu sau thời gian đơn đã được duyệt 6 ngày")
+	//}
 
 	// get revoker profile
 	revokerProfile, err := s.userProfileRepository.GetUserProfileByUserID(userID)
@@ -1167,9 +1234,16 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 	}
 
 	return s.repo.ProcessRequestReview(processRequestReview)
-
 }
 
-func (s *InsurancePartnerService) GetAllPartnerDeletionRequests() ([]models.PartnerDeletionRequest, error) {
+func (s *InsurancePartnerService) GetAllPartnerDeletionRequests() ([]models.DeletionRequestResponse, error) {
 	return s.repo.GetAllDeletionRequests(context.Background())
+}
+
+func (s *InsurancePartnerService) GetPartnerDeletionRequestByID(requestID uuid.UUID) (*models.DeletionRequestResponse, error) {
+	return s.repo.GetDeletionRequestsByRequestID(requestID)
+}
+
+func (s *InsurancePartnerService) GetDeletionRequestsByPartnerID(partnerID, status string) ([]models.DeletionRequestResponse, error) {
+	return s.repo.GetDeletionRequestsByPartnerID(context.Background(), partnerID, status)
 }

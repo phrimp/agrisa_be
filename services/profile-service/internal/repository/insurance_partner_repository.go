@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"profile-service/internal/models"
 	"strings"
+	"time"
 	"utils"
 
 	"github.com/google/uuid"
@@ -25,12 +26,13 @@ type IInsurancePartnerRepository interface {
 	GetAllPublicProfiles() ([]models.PublicPartnerProfile, error)
 	SearchDeletionRequestsByRequesterName(ctx context.Context, searchTerm string) ([]models.PartnerDeletionRequest, error)
 	CreateDeletionRequest(ctx context.Context, req *models.PartnerDeletionRequest) (*models.PartnerDeletionRequest, error)
-	GetDeletionRequestsByRequesterID(ctx context.Context, requesterID string) ([]models.PartnerDeletionRequest, error)
+	GetDeletionRequestsByRequesterID(ctx context.Context, requesterID string) ([]models.DeletionRequestResponse, error)
 	ProcessRequestReview(request models.ProcessRequestReviewDTO) error
-	GetDeletionRequestsByRequestID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error)
-	UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string) error
+	GetDeletionRequestsByRequestID(requestID uuid.UUID) (*models.DeletionRequestResponse, error)
+	UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string, noticePeriod time.Time) error
 	GetLatestDeletionRequestByRequesterID(requestedBy string) (*models.PartnerDeletionRequest, error)
-	GetAllDeletionRequests(ctx context.Context) ([]models.PartnerDeletionRequest, error)
+	GetAllDeletionRequests(ctx context.Context) ([]models.DeletionRequestResponse, error)
+	GetDeletionRequestsByPartnerID(ctx context.Context, partnerID, status string) ([]models.DeletionRequestResponse, error)
 }
 type InsurancePartnerRepository struct {
 	db *sqlx.DB
@@ -223,7 +225,6 @@ func (r *InsurancePartnerRepository) CreateInsurancePartner(req models.CreateIns
 		createdByName,
 		"active",
 	)
-
 	if err != nil {
 		log.Printf("Error creating insurance partner: %s", err.Error())
 		return fmt.Errorf("failed to create insurance partner: %w", err)
@@ -434,11 +435,11 @@ func (r *InsurancePartnerRepository) UpdateInsurancePartner(query string, args .
 	return nil
 }
 
-func (r *InsurancePartnerRepository) UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string) error {
+func (r *InsurancePartnerRepository) UpdateStatusPartnerProfile(partnerID uuid.UUID, status string, updatedByID string, updatedByName string, noticePeriod time.Time) error {
 	query := `
 	update insurance_partners
-		set status = $1, updated_at = NOW(), last_updated_by_id = $2, last_updated_by_name = $3
-		where partner_id = $4
+		set status = $1, updated_at = NOW(), last_updated_by_id = $2, last_updated_by_name = $3, cancellable_until = $4
+		where partner_id = $5
 	`
 	return utils.ExecWithCheck(
 		r.db,
@@ -447,6 +448,7 @@ func (r *InsurancePartnerRepository) UpdateStatusPartnerProfile(partnerID uuid.U
 		status,
 		updatedByID,
 		updatedByName,
+		noticePeriod,
 		partnerID,
 	)
 }
@@ -504,13 +506,30 @@ func (r *InsurancePartnerRepository) CreateDeletionRequest(
 	return &result, nil
 }
 
-func (r *InsurancePartnerRepository) GetDeletionRequestsByRequestID(requestID uuid.UUID) (*models.PartnerDeletionRequest, error) {
+func (r *InsurancePartnerRepository) GetDeletionRequestsByRequestID(requestID uuid.UUID) (*models.DeletionRequestResponse, error) {
 	query := `
-		SELECT * FROM partner_deletion_requests
-		WHERE request_id = $1
+		SELECT 
+			pdr.request_id,
+			ip.partner_display_name,
+			pdr.partner_id,
+			pdr.requested_by,
+			pdr.requested_by_name,
+			pdr.detailed_explanation,
+			pdr.status,
+			pdr.requested_at,
+			pdr.cancellable_until,
+			pdr.reviewed_by_id,
+			pdr.reviewed_by_name,
+			pdr.reviewed_at,
+			pdr.review_note,
+			pdr.updated_at
+		FROM partner_deletion_requests pdr
+		INNER JOIN insurance_partners ip ON pdr.partner_id = ip.partner_id
+		WHERE pdr.request_id = $1
+		ORDER BY pdr.requested_at DESC
 	`
 
-	var request models.PartnerDeletionRequest
+	var request models.DeletionRequestResponse
 	err := r.db.Get(&request, query, requestID)
 	if err != nil {
 		if err.Error() == "sql: no rows in result set" {
@@ -526,27 +545,29 @@ func (r *InsurancePartnerRepository) GetDeletionRequestsByRequestID(requestID uu
 
 func (r *InsurancePartnerRepository) GetAllDeletionRequests(
 	ctx context.Context,
-) ([]models.PartnerDeletionRequest, error) {
+) ([]models.DeletionRequestResponse, error) {
 	query := `
-        SELECT 
-            request_id,
-            partner_id,
-            requested_by,
-            requested_by_name,
-            detailed_explanation,
-            status,
-            requested_at,
-            cancellable_until,
-            reviewed_by_id,
-            reviewed_by_name,
-            reviewed_at,
-            review_note,
-            updated_at
-        FROM partner_deletion_requests
-        ORDER BY requested_at DESC
-    `
+		SELECT 
+			pdr.request_id,
+			ip.partner_display_name,
+			pdr.partner_id,
+			pdr.requested_by,
+			pdr.requested_by_name,
+			pdr.detailed_explanation,
+			pdr.status,
+			pdr.requested_at,
+			pdr.cancellable_until,
+			pdr.reviewed_by_id,
+			pdr.reviewed_by_name,
+			pdr.reviewed_at,
+			pdr.review_note,
+			pdr.updated_at
+		FROM partner_deletion_requests pdr
+		INNER JOIN insurance_partners ip ON pdr.partner_id = ip.partner_id
+		ORDER BY pdr.requested_at DESC
+	`
 
-	var requests []models.PartnerDeletionRequest
+	var requests []models.DeletionRequestResponse
 	err := r.db.SelectContext(ctx, &requests, query)
 	if err != nil {
 		log.Printf("Error retrieving all deletion requests: %s", err.Error())
@@ -590,14 +611,28 @@ func (r *InsurancePartnerRepository) SearchDeletionRequestsByRequesterName(
 func (r *InsurancePartnerRepository) GetDeletionRequestsByRequesterID(
 	ctx context.Context,
 	requesterID string,
-) ([]models.PartnerDeletionRequest, error) {
+) ([]models.DeletionRequestResponse, error) {
 	query := `
-		SELECT * FROM partner_deletion_requests
-		WHERE requested_by = $1
-		ORDER BY requested_at DESC
+		select 
+pdr.request_id, 
+ip.partner_display_name, 
+pdr.partner_id, 
+pdr.requested_by, 
+pdr.requested_by_name, 
+pdr.detailed_explanation, 
+pdr.status, 
+pdr.requested_at, 
+pdr.cancellable_until, 
+pdr.reviewed_by_id, 
+pdr.reviewed_by_name, 
+pdr.reviewed_at, 
+pdr.review_note, 
+pdr.updated_at from partner_deletion_requests pdr
+inner join insurance_partners ip on pdr.partner_id = ip.partner_id 
+where pdr.requested_by = $1
 	`
 
-	var requests []models.PartnerDeletionRequest
+	var requests []models.DeletionRequestResponse
 	err := r.db.SelectContext(ctx, &requests, query, requesterID)
 	if err != nil {
 		return nil, err
@@ -650,4 +685,67 @@ func (r *InsurancePartnerRepository) GetLatestDeletionRequestByRequesterID(reque
 	}
 
 	return &request, nil
+}
+
+func (r *InsurancePartnerRepository) GetDeletionRequestsByPartnerID(ctx context.Context, partnerID, status string) ([]models.DeletionRequestResponse, error) {
+	var query string
+	var requests []models.DeletionRequestResponse
+
+	if status == "all" {
+		query = `
+			SELECT 
+				pdr.request_id,
+				ip.partner_display_name,
+				pdr.partner_id,
+				pdr.requested_by,
+				pdr.requested_by_name,
+				pdr.detailed_explanation,
+				pdr.status,
+				pdr.requested_at,
+				pdr.cancellable_until,
+				pdr.reviewed_by_id,
+				pdr.reviewed_by_name,
+				pdr.reviewed_at,
+				pdr.review_note,
+				pdr.updated_at
+			FROM partner_deletion_requests pdr
+			INNER JOIN insurance_partners ip ON pdr.partner_id = ip.partner_id
+			WHERE pdr.partner_id = $1
+			ORDER BY pdr.requested_at DESC
+		`
+		err := r.db.SelectContext(ctx, &requests, query, partnerID)
+		if err != nil {
+			slog.Error("Error retrieving deletion requests by partner ID", "error", err, "partnerID", partnerID)
+			return nil, err
+		}
+	} else {
+		query = `
+			SELECT 
+				pdr.request_id,
+				ip.partner_display_name,
+				pdr.partner_id,
+				pdr.requested_by,
+				pdr.requested_by_name,
+				pdr.detailed_explanation,
+				pdr.status,
+				pdr.requested_at,
+				pdr.cancellable_until,
+				pdr.reviewed_by_id,
+				pdr.reviewed_by_name,
+				pdr.reviewed_at,
+				pdr.review_note,
+				pdr.updated_at
+			FROM partner_deletion_requests pdr
+			INNER JOIN insurance_partners ip ON pdr.partner_id = ip.partner_id
+			WHERE pdr.partner_id = $1 AND pdr.status = $2
+			ORDER BY pdr.requested_at DESC
+		`
+		err := r.db.SelectContext(ctx, &requests, query, partnerID, status)
+		if err != nil {
+			slog.Error("Error retrieving deletion requests by partner ID and status", "error", err, "partnerID", partnerID, "status", status)
+			return nil, err
+		}
+	}
+
+	return requests, nil
 }

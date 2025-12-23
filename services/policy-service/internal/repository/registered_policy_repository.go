@@ -215,7 +215,8 @@ func (r *RegisteredPolicyRepository) GetCompensationAmount(id uuid.UUID, request
 	}
 
 	if now.Unix() < policy.CoverageStartDate {
-		return 0, fmt.Errorf("policy haven't started")
+		slog.Info("policy haven't started, return full compensation", "policy", policy.ID, "start date", time.Unix(policy.CoverageStartDate, 0))
+		return policy.TotalFarmerPremium, nil
 	}
 
 	coveragePercentage = float64((now.Unix() - policy.CoverageStartDate) * 100 / (policy.CoverageEndDate - policy.CoverageStartDate))
@@ -818,6 +819,16 @@ func (r *RegisteredPolicyRepository) GetByInsuranceProviderID(providerID string)
 	var policies []models.RegisteredPolicy
 	query := `SELECT * FROM registered_policy WHERE insurance_provider_id = $1 ORDER BY created_at DESC`
 	err := r.db.Select(&policies, query, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get policies by provider ID: %w", err)
+	}
+	return policies, nil
+}
+
+func (r *RegisteredPolicyRepository) GetByInsuranceProviderIDAndStatus(providerID string, status models.PolicyStatus) ([]models.RegisteredPolicy, error) {
+	var policies []models.RegisteredPolicy
+	query := `SELECT * FROM registered_policy WHERE insurance_provider_id = $1 and status = $2 ORDER BY created_at DESC`
+	err := r.db.Select(&policies, query, providerID, status)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get policies by provider ID: %w", err)
 	}

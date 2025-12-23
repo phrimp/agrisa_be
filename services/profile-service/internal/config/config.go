@@ -6,6 +6,7 @@ type ProfileServiceConfig struct {
 	Port        string
 	PostgresCfg PostgresConfig
 	MinioCfg    MinioConfig
+	RabbitMQCfg RabbitMQConfig
 }
 
 type PostgresConfig struct {
@@ -25,6 +26,13 @@ type MinioConfig struct {
 	MinioResourceUrl string
 }
 
+type RabbitMQConfig struct {
+	Host     string
+	Username string
+	Password string
+	Port     string
+}
+
 func New() *ProfileServiceConfig {
 	return &ProfileServiceConfig{
 		Port: getEnvOrDefault("PROFILE_SERVICE_PORT", "8087"),
@@ -42,6 +50,12 @@ func New() *ProfileServiceConfig {
 			MinioLocation:    getEnvOrDefault("MINIO_LOCATION", "us-east-1"),
 			MinioSecure:      getEnvOrDefault("MINIO_SECURE", "false"),
 			MinioResourceUrl: getEnvOrDefault("MINIO_RESOURCE_URL", "http://localhost:9407/"),
+		},
+		RabbitMQCfg: RabbitMQConfig{
+			Host:     getEnvOrDefault("RABBITMQ_HOST", "rabbitmq"),
+			Username: getEnvOrDefault("RABBITMQ_USER", "admin"),
+			Password: getEnvOrDefault("RABBITMQ_PWD", "admin"),
+			Port:     getEnvOrDefault("RABBITMQ_PORT", "5672"),
 		},
 	}
 }

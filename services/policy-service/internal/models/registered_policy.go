@@ -11,7 +11,15 @@ import (
 // REGISTERED POLICY (ACTUAL POLICY INSTANCES)
 // ============================================================================
 
-const NoticePeriod = 30 * 24 * time.Hour
+//const (
+//	NoticePeriod   = 30 * 24 * time.Hour
+//	RevokeDeadline = 7
+//)
+
+const (
+	NoticePeriod   = 30 * time.Minute
+	RevokeDeadline = 0.01
+)
 
 type RegisteredPolicy struct {
 	ID                      uuid.UUID          `json:"id" db:"id"`

@@ -33,6 +33,7 @@ func (u *UserHandler) RegisterRoutes(router *gin.Engine, userHandler *UserHandle
 	userAuthGrPub := router.Group("/auth/public/api/v2/")
 	userAuthGrPub.GET("/ping", userHandler.PingHandler)
 	userAuthGrPub.GET("/users", userHandler.GetAllUsers)
+	userAuthGrPub.PUT("/update/password", userHandler.UpdatePasswordPhone)
 
 	// Add the ping route
 	userAuthGrPro := router.Group("/auth/protected/api/v2/")
@@ -133,6 +134,31 @@ func (h *UserHandler) UpdatePassword(c *gin.Context) {
 		return
 	}
 	err := h.userService.UpdatePassword(c, userID, otp, newPwd)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("INTERNAL_ERROR", "failed to update new password"))
+		return
+	}
+	c.JSON(http.StatusOK, utils.CreateSuccessResponse("password updated"))
+}
+
+func (h *UserHandler) UpdatePasswordPhone(c *gin.Context) {
+	phone := c.Query("phone")
+	if phone == "" {
+		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "phone is required"))
+		return
+	}
+
+	otp := c.Query("otp")
+	if otp == "" {
+		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "otp is required"))
+		return
+	}
+	newPwd := c.Query("new_password")
+	if otp == "" {
+		c.JSON(http.StatusBadRequest, utils.CreateErrorResponse("BAD_REQUEST", "new password is required"))
+		return
+	}
+	err := h.userService.UpdatePasswordPhone(c, phone, otp, newPwd)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, utils.CreateErrorResponse("INTERNAL_ERROR", "failed to update new password"))
 		return

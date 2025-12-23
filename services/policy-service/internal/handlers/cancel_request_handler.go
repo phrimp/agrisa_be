@@ -2,6 +2,7 @@ package handlers
 
 import (
 	utils "agrisa_utils"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"policy-service/internal/models"
@@ -112,7 +113,7 @@ func (h *CancelRequestHandler) ReviewCancelRequest(c fiber.Ctx) error {
 	if err != nil {
 		slog.Error("error reviewing cancel request", "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(
-			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to reviewing cancel request"))
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", fmt.Sprintf("Failed to reviewing cancel request: %s", err)))
 	}
 
 	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(res))
@@ -203,7 +204,37 @@ func (h *CancelRequestHandler) RevokeRequest(c fiber.Ctx) error {
 		return c.Status(http.StatusBadRequest).JSON(
 			utils.CreateErrorResponse("INVALID_UUID", "Invalid cancel request ID format"))
 	}
-	err = h.cancelRequestService.RevokeRequest(c.Context(), requestID)
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+	requestBy := userID
+	tokenString := c.Get("Authorization")
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	partnerProfileData, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
+	partnerFound := true
+	if err != nil {
+		if !strings.Contains(err.Error(), "insurance partner profile not found") {
+			slog.Error("error retriving partner profile", "error", err)
+			return c.Status(http.StatusInternalServerError).JSON(
+				utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+		}
+		partnerFound = false
+	}
+
+	if partnerFound {
+		requestBy, err = h.registeredPolicyService.GetPartnerID(partnerProfileData)
+		if err != nil {
+			slog.Error("error retriving partner id", "error", err)
+			return c.Status(http.StatusInternalServerError).JSON(
+				utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
+		}
+	}
+
+	err = h.cancelRequestService.RevokeRequest(c.Context(), requestID, requestBy)
 	if err != nil {
 		slog.Error("revoke cancel request failed", "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(

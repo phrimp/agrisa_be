@@ -10,6 +10,7 @@ import (
 	"utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
 
 type InsurancePartnerHandler struct {
@@ -42,10 +43,12 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	partnerGr.GET("/:partner_admin_id/deletion-requests", h.GetPartnerDeletionRequestsByPartnerAdminID)
 	partnerGr.POST("/deletion-requests/revoke", h.RevokePartnerDeletionRequest)
 
-	//admin endpoint
+	// admin endpoint
 	partnerAdminGr := insurancePartnerProtectedGrPub.Group("/insurance-partners/admin")
 	partnerAdminGr.POST("/process-request", h.ProcessPartnerDeletionRequestReview)
 	partnerAdminGr.GET("/deletion-requests", h.GetAllPartnerDeletionRequest)
+	partnerAdminGr.GET("/requests/:request_id/deletion-request", h.GetPartnerDeletionRequestByID)
+	partnerAdminGr.GET("/partners/:partner_id/deletion-requests", h.GetPartnerDeleletionRequestsByPartnerID)
 }
 
 func MapErrorToHTTPStatusExtended(errorString string) (errorCode string, httpStatus int) {
@@ -256,7 +259,14 @@ func (h *InsurancePartnerHandler) ProcessPartnerDeletionRequestReview(c *gin.Con
 		return
 	}
 	req.ReviewedByID = reviewByID
-	err := h.InsurancePartnerService.ProcessRequestReviewByAdmin(req)
+	contracts, err := h.InsurancePartnerService.GetActiveContracts(c.GetHeader("token"))
+	if err != nil {
+		errorResponse := utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "contracts failed to load")
+		c.JSON(http.StatusBadRequest, errorResponse)
+		return
+	}
+	slog.Info("DEBUG", "data", contracts)
+	err = h.InsurancePartnerService.ProcessRequestReviewByAdmin(req, contracts)
 	if err != nil {
 		log.Printf("Error processing deletion request review: %s", err.Error())
 		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
@@ -306,6 +316,47 @@ func (h *InsurancePartnerHandler) GetAllPartnerDeletionRequest(c *gin.Context) {
 			return
 		}
 		errorResponse := utils.CreateErrorResponse(errorCode, "Đã có lỗi xảy ra")
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	response := utils.CreateSuccessResponse(result)
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *InsurancePartnerHandler) GetPartnerDeletionRequestByID(c *gin.Context) {
+	requestIDParam := c.Param("request_id")
+	if requestIDParam == "" {
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "request id là bắt buộc")
+		c.JSON(http.StatusBadRequest, errorResponse)
+		return
+	}
+
+	requestID, err := uuid.Parse(requestIDParam)
+	if err != nil {
+		errorResponse := utils.CreateErrorResponse("BAD_REQUEST", "request id không hợp lệ")
+		c.JSON(http.StatusBadRequest, errorResponse)
+		return
+	}
+
+	result, err := h.InsurancePartnerService.GetPartnerDeletionRequestByID(requestID)
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	response := utils.CreateSuccessResponse(result)
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *InsurancePartnerHandler) GetPartnerDeleletionRequestsByPartnerID(c *gin.Context) {
+	partnerID := c.Param("partner_id")
+	status := c.DefaultQuery("status", "all")
+
+	result, err := h.InsurancePartnerService.GetDeletionRequestsByPartnerID(partnerID, status)
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
 		c.JSON(httpStatus, errorResponse)
 		return
 	}

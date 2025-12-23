@@ -7,6 +7,8 @@ import (
 	"github.com/lib/pq"
 )
 
+const NoticePeriod = 1
+
 // InsurancePartner
 type InsurancePartner struct {
 	PartnerID                  uuid.UUID      `db:"partner_id"`
@@ -123,7 +125,7 @@ type PartnerDeletionRequest struct {
 	// Status and timeline
 	Status           DeletionRequestStatus `json:"status" db:"status"`
 	RequestedAt      time.Time             `json:"requested_at" db:"requested_at"`
-	CancellableUntil time.Time             `json:"cancellable_until" db:"cancellable_until"`
+	CancellableUntil *time.Time            `json:"cancellable_until" db:"cancellable_until"`
 
 	// Reviewer info
 	ReviewedByID   *string    `json:"reviewed_by_id,omitempty" db:"reviewed_by_id"`

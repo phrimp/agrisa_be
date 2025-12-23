@@ -82,6 +82,10 @@ func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID
 	}
 
 	if policy.Status == models.PolicyPendingReview || policy.Status == models.PolicyPendingPayment {
+		if policy.FarmerID != createdBy {
+			slog.Error("cannot direct cancel others policy", "owner", policy.FarmerID, "requested by", createdBy)
+			return nil, fmt.Errorf("cannot direct cancel others policy")
+		}
 		slog.Info("Policy has not activated change status to cancelled", "policy_id", policyID, "status", policy.Status)
 		policy.Status = models.PolicyCancelled
 		request.Status = models.CancelRequestStatusApproved
@@ -136,6 +140,7 @@ func (c *CancelRequestService) GetAllProviderCancelRequests(ctx context.Context,
 
 // confirm the decision, update the request, start the notice period, and flag the payment process
 func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review models.ReviewCancelRequestReq) (string, error) {
+	now := time.Now()
 	request, err := c.cancelRequestRepo.GetCancelRequestByID(review.RequestID)
 	if err != nil {
 		slog.Error("error retriving cancel request", "error", err)
@@ -146,6 +151,9 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 	}
 	if request.RequestedBy == review.ReviewedBy {
 		return "", fmt.Errorf("cannot review your own request")
+	}
+	if now.Compare(request.CreatedAt.Add(1*time.Hour)) == -1 {
+		return "", fmt.Errorf("cannot review newly created request")
 	}
 
 	tx, err := c.policyRepo.BeginTransaction()
@@ -167,7 +175,6 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 
 	}
 
-	now := time.Now()
 	request.ReviewedBy = &review.ReviewedBy
 	request.ReviewedAt = &now
 	request.ReviewNotes = &review.ReviewNote
@@ -182,6 +189,7 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 
 	if review.Approved {
 		request.Status = models.CancelRequestStatusApproved
+		request.DuringNoticePeriod = true
 	} else {
 		policy.Status = models.PolicyDispute
 		request.Status = models.CancelRequestStatusLitigation
@@ -258,6 +266,7 @@ func (c *CancelRequestService) ResolveConflict(ctx context.Context, review model
 			return "", fmt.Errorf("policy is not in dispute state")
 		}
 		policy.Status = models.PolicyPendingCancel
+		request.DuringNoticePeriod = true
 	} else {
 		policy.Status = models.PolicyActive
 	}
@@ -294,22 +303,74 @@ func (s *CancelRequestService) GetCompensationAmount(ctx context.Context, reques
 	return s.policyRepo.GetCompensationAmount(policyID, request.RequestedBy, request.CancelRequestType)
 }
 
-func (s *CancelRequestService) RevokeRequest(ctx context.Context, requestID uuid.UUID) error {
+func (s *CancelRequestService) RevokeRequest(ctx context.Context, requestID uuid.UUID, requestBy string) error {
 	request, err := s.cancelRequestRepo.GetCancelRequestByID(requestID)
 	if err != nil {
 		return err
-	}
-	if request.Status != models.CancelRequestStatusPendingReview {
-		return fmt.Errorf("invalid request status")
 	}
 	policy, err := s.policyRepo.GetByID(request.RegisteredPolicyID)
 	if err != nil {
 		return err
 	}
+	if requestBy != request.RequestedBy {
+		return fmt.Errorf("you cannot revoke what is not yours")
+	}
 	if policy.Status != models.PolicyPendingCancel {
 		return fmt.Errorf("invalid policy status")
 	}
-	request.Status = models.CancelRequestStatusCancelled
+	if request.Status == models.CancelRequestPaymentFailed {
+		return fmt.Errorf("invalid request status")
+	}
 
+	if request.Status == models.CancelRequestStatusApproved {
+		//key := request.ID.String() + "--CancelRequest--NoticePeriod"
+		//remainTime, err := s.redisClient.GetClient().TTL(ctx, key).Result()
+		//if err != nil {
+		//	slog.Error("remaining notice period time failed to retrive", "error", err)
+		//	return fmt.Errorf("remaining notice period time failed to retrive: err=%w", err)
+		//}
+		//if models.NoticePeriod.Hours()-remainTime.Hours() > models.RevokeDeadline*24 {
+		//	slog.Error("cannot cancel the request", "detail", fmt.Sprintf("%v day revoke deadline passed", models.RevokeDeadline))
+		//	return fmt.Errorf("cannot cancel the request: err= %v day revoke deadline passed", models.RevokeDeadline)
+		//}
+		//err = s.redisClient.GetClient().Del(ctx, key).Err()
+		//if err != nil {
+		//	slog.Error("error remove notice period", "request", request.ID)
+		//	return fmt.Errorf("error remove notice period for request %s : err=%w", requestID, err)
+		//}
+		return fmt.Errorf("approved request cannot be revoked")
+	}
+
+	request.Status = models.CancelRequestStatusCancelled
+	policy.Status = models.PolicyActive
+
+	tx, err := s.policyRepo.BeginTransaction()
+	if err != nil {
+		slog.Error("error beginning transaction", "error", err)
+		return fmt.Errorf("error beginning transaction error=%w", err)
+	}
+
+	defer func() {
+		if r := recover(); r != nil || err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	err = s.policyRepo.UpdateTx(tx, policy)
+	if err != nil {
+		slog.Error("error updating policy", "error", err)
+		return err
+	}
+
+	err = s.cancelRequestRepo.UpdateCancelRequestTx(tx, *request)
+	if err != nil {
+		slog.Error("error updating cancel request", "error", err)
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		slog.Error("error commiting transaction", "error", err)
+		return fmt.Errorf("error commiting transaction=%w", err)
+	}
 	return nil
 }
