@@ -532,7 +532,7 @@ export class PaymentController {
 
     if (payout.payment_id) {
       await this.paymentService.update(payout.payment_id, {
-        status: 'scanned',
+        status: 'pending',
         paid_at: new Date(),
       });
 
