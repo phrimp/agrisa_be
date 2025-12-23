@@ -32,6 +32,7 @@ type IInsurancePartnerService interface {
 	GetPrivateProfile(userID string) (*models.PrivatePartnerProfile, error)
 	UpdateInsurancePartner(updateProfileRequestBody map[string]any, updateByID, updateByName string) (*models.PrivatePartnerProfile, error)
 	GetAllPartnersPublicProfiles() ([]models.PublicPartnerProfile, error)
+	GetAllPartnersPrivateProfiles() ([]models.PrivatePartnerProfile, error)
 	GetPrivateProfileByPartnerID(partnerID string) (*models.PrivatePartnerProfile, error)
 	CreatePartnerDeletionRequest(req *models.PartnerDeletionRequest, partnerAdminID string) (result *models.PartnerDeletionRequest, err error)
 	GetDeletionRequestsByRequesterID(requesterID string) ([]models.DeletionRequestResponse, error)
@@ -219,6 +220,9 @@ var allowedUpdateInsuranceProfileFields = map[string]bool{
 	"last_updated_by_id":           true,
 	"last_updated_by_name":         true,
 	"legal_document_urls":          true,
+	"account_number":               true,
+	"account_name":                 true,
+	"bank_code":                    true,
 }
 
 var arrayInsuranceProfileFields = map[string]bool{
@@ -1015,6 +1019,10 @@ func (s *InsurancePartnerService) GetPublicProfile(partnerID string) (*models.Pu
 
 func (s *InsurancePartnerService) GetAllPartnersPublicProfiles() ([]models.PublicPartnerProfile, error) {
 	return s.repo.GetAllPublicProfiles()
+}
+
+func (s *InsurancePartnerService) GetAllPartnersPrivateProfiles() ([]models.PrivatePartnerProfile, error) {
+	return s.repo.GetAllPrivateProfiles()
 }
 
 func (s *InsurancePartnerService) GetPrivateProfile(userID string) (*models.PrivatePartnerProfile, error) {

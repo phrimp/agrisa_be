@@ -35,6 +35,7 @@ func (h *InsurancePartnerHandler) RegisterRoutes(router *gin.Engine) {
 	insurancePartnerProtectedGrPub.POST("/insurance-partners", h.CreateInsurancePartner) // featurea: insu
 	insurancePartnerProtectedGrPub.GET("/insurance-partners/me/profile", h.GetInsurancePartnerPrivateByID)
 	insurancePartnerProtectedGrPub.PUT("/insurance-partners/me/profile", h.UpdateInsurancePartnerProfile)
+	insurancePartnerProtectedGrPub.GET("/insurance-partners/all", h.GetAllInsurancePartnersPrivateProfiles)
 
 	// ======= PARTNER DELETION REQUESTS =======
 	partnerGr := insurancePartnerProtectedGrPub.Group("/insurance-partners")
@@ -78,6 +79,18 @@ func (h *InsurancePartnerHandler) Ping(c *gin.Context) {
 
 func (h *InsurancePartnerHandler) GetAllInsurancePartnersPublicProfiles(c *gin.Context) {
 	result, err := h.InsurancePartnerService.GetAllPartnersPublicProfiles()
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+	response := utils.CreateSuccessResponse(result)
+	c.JSON(http.StatusOK, response)
+}
+
+func (h *InsurancePartnerHandler) GetAllInsurancePartnersPrivateProfiles(c *gin.Context) {
+	result, err := h.InsurancePartnerService.GetAllPartnersPrivateProfiles()
 	if err != nil {
 		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
 		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())

@@ -47,7 +47,11 @@ CREATE TABLE insurance_partners (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     last_updated_by_id VARCHAR,
     last_updated_by_name VARCHAR,
-    legal_document_urls TEXT[] DEFAULT ARRAY[]::TEXT[]
+    legal_document_urls TEXT[] DEFAULT ARRAY[]::TEXT[],
+      -- Bank info
+    account_number VARCHAR(50),
+    account_name VARCHAR(255),
+    bank_code VARCHAR(20)
 );
 
 -- -- Bảng 2: products

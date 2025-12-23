@@ -57,6 +57,10 @@ type InsurancePartner struct {
 	LastUpdatedByID            *string        `db:"last_updated_by_id"`
 	LastUpdatedByName          *string        `db:"last_updated_by_name"`
 	LegalDocumentURLs          pq.StringArray `db:"legal_document_urls"`
+	// bank info
+	AccountNumber *string `db:"account_number"`
+	AccountName   *string `db:"account_name"`
+	BankCode      *string `db:"bank_code"`
 }
 
 type Product struct {
