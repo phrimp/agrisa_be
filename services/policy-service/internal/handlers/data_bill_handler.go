@@ -76,7 +76,7 @@ func (h *DataBillHandler) GetDataBillHandler(c fiber.Ctx) error {
 
 	filtered := []models.BasePolicy{}
 	for _, p := range activePolicies {
-		if p.InsuranceProviderID == insuranceProviderId && time.Since(p.CreatedAt) >= 30*24*time.Hour {
+		if p.InsuranceProviderID == insuranceProviderId && p.Status == models.BasePolicyPaymentDue {
 			filtered = append(filtered, p)
 		}
 	}
