@@ -69,17 +69,21 @@ func (h *DataBillHandler) MarkPoliciesForPayment(ctx context.Context) error {
 
 func (h *DataBillHandler) GetDataBillHandler(c fiber.Ctx) error {
 	insuranceProviderId := c.Get("x-user-id")
+	fmt.Printf("Insurance Provider ID: %s\n", insuranceProviderId)
 	paymentDuePolicies, err := h.basePolicyService.GetPaymentDuePolicies(c.Context())
 	if err != nil {
 		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to retrieve payment due policies"))
 	}
+	fmt.Printf("Total payment due policies: %d\n", len(paymentDuePolicies))
 
 	filtered := []models.BasePolicy{}
 	for _, p := range paymentDuePolicies {
+		fmt.Printf("Policy ID: %s, Provider ID: %s, Status: %s\n", p.ID, p.InsuranceProviderID, p.Status)
 		if p.InsuranceProviderID == insuranceProviderId {
 			filtered = append(filtered, p)
 		}
 	}
+	fmt.Printf("Filtered policies: %d\n", len(filtered))
 
 	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(filtered))
 }
