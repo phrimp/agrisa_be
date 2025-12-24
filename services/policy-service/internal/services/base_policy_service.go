@@ -1172,6 +1172,10 @@ func (s *BasePolicyService) GetActivePolicies(ctx context.Context) ([]models.Bas
 	return s.basePolicyRepo.GetBasePoliciesByStatus(models.BasePolicyActive)
 }
 
+func (s *BasePolicyService) GetPaymentDuePolicies(ctx context.Context) ([]models.BasePolicy, error) {
+	return s.basePolicyRepo.GetBasePoliciesByStatus(models.BasePolicyPaymentDue)
+}
+
 func (s *BasePolicyService) GetAllPolicyCreationResponse(ctx context.Context) (any, error) {
 	keyParttern := "*--*--CompletePolicyResponse"
 	keys, err := s.basePolicyRepo.FindKeysByPattern(ctx, keyParttern, "")

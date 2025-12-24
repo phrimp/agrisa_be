@@ -253,7 +253,7 @@ func main() {
 	dashboardHandler := handlers.NewDashboardHandler(dashboardService)
 	payoutHandler := handlers.NewPayoutHandler(payoutServie, registeredPolicyService)
 	cancelRequestHandler := handlers.NewCancelRequestHandler(registeredPolicyService, cancelRequestService)
-	dataBillHandler := handlers.NewDataBillHandler(basePolicyService, notificationHelper)
+	dataBillHandler := handlers.NewDataBillHandler(basePolicyService, notificationHelper, registeredPolicyService)
 
 	// Register routes
 	dataTierHandler.Register(app)

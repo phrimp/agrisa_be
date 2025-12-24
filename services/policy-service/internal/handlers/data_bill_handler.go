@@ -15,14 +15,16 @@ import (
 )
 
 type DataBillHandler struct {
-	basePolicyService  *services.BasePolicyService
-	notificationHelper *event.NotificationHelper
+	basePolicyService       *services.BasePolicyService
+	notificationHelper      *event.NotificationHelper
+	registeredPolicyService *services.RegisteredPolicyService
 }
 
-func NewDataBillHandler(basePolicyService *services.BasePolicyService, notificationHelper *event.NotificationHelper) *DataBillHandler {
+func NewDataBillHandler(basePolicyService *services.BasePolicyService, notificationHelper *event.NotificationHelper, registeredPolicyService *services.RegisteredPolicyService) *DataBillHandler {
 	handler := &DataBillHandler{
-		basePolicyService:  basePolicyService,
-		notificationHelper: notificationHelper,
+		basePolicyService:       basePolicyService,
+		notificationHelper:      notificationHelper,
+		registeredPolicyService: registeredPolicyService,
 	}
 	handler.startCron()
 	return handler
@@ -68,18 +70,33 @@ func (h *DataBillHandler) MarkPoliciesForPayment(ctx context.Context) error {
 }
 
 func (h *DataBillHandler) GetDataBillHandler(c fiber.Ctx) error {
-	insuranceProviderId := c.Get("x-user-id")
-	activePolicies, err := h.basePolicyService.GetActivePolicies(c.Context())
+	token := c.Get("Authorization")
+	token = token[len("Bearer "):]
+	insuranceProfile, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to retrieve active policies"))
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to get insurance partner profile"))
 	}
 
+	insuranceProviderId, err := h.registeredPolicyService.GetPartnerID(insuranceProfile)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to extract partner ID"))
+	}
+
+	fmt.Printf("Insurance Provider ID: %s\n", insuranceProviderId)
+	paymentDuePolicies, err := h.basePolicyService.GetPaymentDuePolicies(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to retrieve payment due policies"))
+	}
+	fmt.Printf("Total payment due policies: %d\n", len(paymentDuePolicies))
+
 	filtered := []models.BasePolicy{}
-	for _, p := range activePolicies {
-		if p.InsuranceProviderID == insuranceProviderId && time.Since(p.CreatedAt) >= 30*24*time.Hour {
+	for _, p := range paymentDuePolicies {
+		fmt.Printf("Policy ID: %s, Provider ID: %s, Status: %s\n", p.ID, p.InsuranceProviderID, p.Status)
+		if p.InsuranceProviderID == insuranceProviderId {
 			filtered = append(filtered, p)
 		}
 	}
+	fmt.Printf("Filtered policies: %d\n", len(filtered))
 
 	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(filtered))
 }
