@@ -44,7 +44,7 @@ type IInsurancePartnerService interface {
 	GetAllPartnerDeletionRequests() ([]models.DeletionRequestResponse, error)
 	GetDeletionRequestsByPartnerID(partnerID, status string) ([]models.DeletionRequestResponse, error)
 	GetPartnerDeletionRequestByID(requestID uuid.UUID) (*models.DeletionRequestResponse, error)
-	GetActiveContracts(token string) (map[string]any, error)
+	GetActiveContracts(token, providerID string) (map[string]any, error)
 }
 
 func NewInsurancePartnerService(repo repository.IInsurancePartnerRepository, userProfileRepository repository.IUserRepository, profilePublisher *event.NotificationPublisher) IInsurancePartnerService {
@@ -1146,8 +1146,8 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 	return s.repo.ProcessRequestReview(request)
 }
 
-func (s *InsurancePartnerService) GetActiveContracts(token string) (map[string]any, error) {
-	url := "http://policy-service:8089/policy/protected/api/v2/policies/read-partner/active"
+func (s *InsurancePartnerService) GetActiveContracts(token, providerID string) (map[string]any, error) {
+	url := fmt.Sprintf("http://policy-service:8089/policy/protected/api/v2/policies/read-partner/active?provider=%s", providerID)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		slog.Error("Error creating request for active contracts", "error", err)

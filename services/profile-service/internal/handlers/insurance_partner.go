@@ -272,7 +272,16 @@ func (h *InsurancePartnerHandler) ProcessPartnerDeletionRequestReview(c *gin.Con
 		return
 	}
 	req.ReviewedByID = reviewByID
-	contracts, err := h.InsurancePartnerService.GetActiveContracts(c.GetHeader("token"))
+	// get deletion request by reuest ID
+	deletionRequest, err := h.InsurancePartnerService.GetPartnerDeletionRequestByID(req.RequestID)
+	if err != nil {
+		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
+		errorResponse := utils.CreateErrorResponse(errorCode, err.Error())
+		c.JSON(httpStatus, errorResponse)
+		return
+	}
+
+	contracts, err := h.InsurancePartnerService.GetActiveContracts(c.GetHeader("token"), deletionRequest.PartnerID.String())
 	if err != nil {
 		errorResponse := utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "contracts failed to load")
 		c.JSON(http.StatusBadRequest, errorResponse)
