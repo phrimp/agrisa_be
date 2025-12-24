@@ -69,14 +69,14 @@ func (h *DataBillHandler) MarkPoliciesForPayment(ctx context.Context) error {
 
 func (h *DataBillHandler) GetDataBillHandler(c fiber.Ctx) error {
 	insuranceProviderId := c.Get("x-user-id")
-	activePolicies, err := h.basePolicyService.GetActivePolicies(c.Context())
+	paymentDuePolicies, err := h.basePolicyService.GetPaymentDuePolicies(c.Context())
 	if err != nil {
-		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to retrieve active policies"))
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to retrieve payment due policies"))
 	}
 
 	filtered := []models.BasePolicy{}
-	for _, p := range activePolicies {
-		if p.InsuranceProviderID == insuranceProviderId && p.Status == models.BasePolicyPaymentDue {
+	for _, p := range paymentDuePolicies {
+		if p.InsuranceProviderID == insuranceProviderId {
 			filtered = append(filtered, p)
 		}
 	}
