@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
 	"sync"
@@ -277,7 +278,15 @@ func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Cont
 	if err != nil {
 		return err
 	}
+	basePolicies, err := h.basePolicyRepo.GetBasePoliciesByProvider(event.ProfileID)
+	if err != nil {
+		return err
+	}
+	for _, basePolicy := range basePolicies {
+		basePolicy.Status = models.BasePolicyClosed
+	}
 
+	h.redisClient.Set(ctx, fmt.Sprintf("Delete-Profile-%s", event.ProfileID), "true", 10000*time.Hour)
 	return nil
 }
 
@@ -287,6 +296,5 @@ func (h *DefaultProfileEventHandler) handleProfileCancelDelete(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	h.redisClient.Set(ctx, fmt.Sprintf("Delete-Profile-%s", event.ProfileID), "true", 1000*time.Hour)
 	return nil
 }

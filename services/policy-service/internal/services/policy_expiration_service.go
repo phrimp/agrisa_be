@@ -220,6 +220,10 @@ func (s *PolicyExpirationService) processEnrollmentClosed(ctx context.Context, e
 		slog.Error("error retriving base policy", "base_policy_id", basePolicyID, "error", err)
 		return
 	}
+	if basePolicy.Status == models.BasePolicyClosed {
+		slog.Error("invalid operation: base policy is already closed", "status", basePolicy.Status)
+		return
+	}
 	if basePolicy.Status == models.BasePolicyArchived {
 		slog.Error("invalid operation: base policy status invalid", "status", basePolicy.Status)
 		return
