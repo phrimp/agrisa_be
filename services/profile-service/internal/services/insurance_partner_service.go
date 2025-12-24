@@ -130,10 +130,10 @@ func ValidateInsurancePartner(req *models.CreateInsurancePartnerRequest) []*util
 	if err := ValidatePartnerTagline(req.PartnerTagline); err != nil {
 		validationErrors = append(validationErrors, err)
 	}
-	// Validate Partner Phone
-	if err := ValidatePartnerPhone(req.PartnerPhone, "PartnerPhone"); err != nil {
-		validationErrors = append(validationErrors, err)
-	}
+	// // Validate Partner Phone
+	// if err := ValidatePartnerPhone(req.PartnerPhone, "PartnerPhone"); err != nil {
+	// 	validationErrors = append(validationErrors, err)
+	// }
 	// Validate Partner Official Email (required)
 	if err := ValidatePartnerOfficialEmail(req.PartnerOfficialEmail, "PartnerOfficialEmail", true); err != nil {
 		validationErrors = append(validationErrors, err)
