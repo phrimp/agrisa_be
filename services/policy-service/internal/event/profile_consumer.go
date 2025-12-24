@@ -25,10 +25,11 @@ const (
 )
 
 type ProfileEvent struct {
-	ID        string           `json:"id"`
-	EventType ProfileEventType `json:"event_type"`
-	UserID    string           `json:"user_id"`
-	ProfileID string           `json:"profile_id"`
+	ID         string           `json:"id"`
+	EventType  ProfileEventType `json:"event_type"`
+	UserID     string           `json:"user_id"`
+	ProfileID  string           `json:"profile_id"`
+	Additional map[string]any   `json:"additional"`
 }
 
 type ProfileConsumer struct {
@@ -209,6 +210,8 @@ type DefaultProfileEventHandler struct {
 	cancelRequestRepo    *repository.CancelRequestRepository
 	basePolicyRepo       *repository.BasePolicyRepository
 	workerManager        *worker.WorkerManagerV2
+	cancelRequestService ICancelService
+	notievent            *NotificationHelper
 }
 
 // NewDefaultPaymentEventHandler creates a new default payment event handler
@@ -217,12 +220,16 @@ func NewDefaultProfileEventHandler(
 	basePolicyRepo *repository.BasePolicyRepository,
 	workerManager *worker.WorkerManagerV2,
 	cancelRequestRepo *repository.CancelRequestRepository,
+	cancelRequestService ICancelService,
+	notievent *NotificationHelper,
 ) *DefaultProfileEventHandler {
 	return &DefaultProfileEventHandler{
 		registeredPolicyRepo: registeredPolicyRepo,
 		basePolicyRepo:       basePolicyRepo,
 		workerManager:        workerManager,
 		cancelRequestRepo:    cancelRequestRepo,
+		cancelRequestService: cancelRequestService,
+		notievent:            notievent,
 	}
 }
 
@@ -236,6 +243,7 @@ func (h *DefaultProfileEventHandler) HandleProfileEvent(ctx context.Context, eve
 	}
 	switch event.EventType {
 	case ProfleConfirmDelete:
+		return h.handleProfileConfirmDelete(ctx, event)
 	case ProfileCancelDelete:
 	default:
 		return &PaymentValidationError{
@@ -249,5 +257,20 @@ func (h *DefaultProfileEventHandler) HandleProfileEvent(ctx context.Context, eve
 
 func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Context, event ProfileEvent) error {
 	slog.Info("CONFIRM DELETE PROFILE EVENT", "event", event)
+	toProvider := event.Additional["toProvider"].(string)
+	err := h.cancelRequestService.CreateTransferRequest(ctx, event.UserID, event.ProfileID, toProvider)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (h *DefaultProfileEventHandler) handleProfileCancelDelete(ctx context.Context, event ProfileEvent) error {
+	slog.Info("Cancel profile deletion event", "event", event)
+	err := h.cancelRequestService.RevokeAllTransferRequest(ctx, event.UserID, event.ProfileID)
+	if err != nil {
+		return err
+	}
 	return nil
 }
