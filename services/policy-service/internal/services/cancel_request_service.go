@@ -459,10 +459,14 @@ func (c *CancelRequestService) RevokeAllTransferRequest(ctx context.Context, cre
 	if err != nil {
 		return err
 	}
-	updatedRequest := []models.CancelRequest{}
+	requestIDs := []uuid.UUID{}
 	for _, request := range requests {
-		request.Status = models.CancelRequestStatusCancelled
-		updatedRequest = append(updatedRequest, request)
+		requestIDs = append(requestIDs, request.ID)
 	}
+	res, err := c.cancelRequestRepo.BulkUpdateStatusWhereProviderStatusAndType(ctx, requestIDs, fromProvider, models.CancelRequestStatusPendingReview, models.CancelRequestTransferContract, models.CancelRequestStatusCancelled)
+	if err != nil {
+		return err
+	}
+	slog.Info("revoke all transfer request", "count", res)
 	return nil
 }

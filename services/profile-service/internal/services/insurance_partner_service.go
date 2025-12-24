@@ -1072,13 +1072,19 @@ func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.Partn
 	req.RequestedByName = userProfile.FullName
 	req.Status = models.DeletionRequestPending
 	req.RequestedAt = time.Now()
+
+	res, err := s.repo.CreateDeletionRequest(context.Background(), req)
+	if err != nil {
+		return nil, err
+	}
 	// publish event
 	go func() {
 		eventPayload := event.ProfileEvent{
-			ID:        uuid.NewString(),
-			EventType: event.ProfleConfirmDelete,
-			UserID:    req.RequestedBy,
-			ProfileID: req.PartnerID.String(),
+			ID:         uuid.NewString(),
+			EventType:  event.ProfleConfirmDelete,
+			UserID:     req.RequestedBy,
+			ProfileID:  req.PartnerID.String(),
+			Additional: map[string]any{"toProvider": req.TransferPartnerID},
 		}
 		err := s.profilePublisher.PublishEvent(context.Background(), eventPayload)
 		if err != nil {
@@ -1088,7 +1094,7 @@ func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.Partn
 		slog.Info("profile event published", "event", eventPayload)
 	}()
 
-	return s.repo.CreateDeletionRequest(context.Background(), req)
+	return res, nil
 }
 
 func (s *InsurancePartnerService) GetDeletionRequestsByRequesterID(requesterID string) ([]models.DeletionRequestResponse, error) {
@@ -1250,7 +1256,10 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 		ReviewedByName: revokerProfile.FullName,
 		ReviewNote:     reviewNote,
 	}
-
+	err = s.repo.ProcessRequestReview(processRequestReview)
+	if err != nil {
+		return err
+	}
 	go func() {
 		eventPayload := event.ProfileEvent{
 			ID:        uuid.NewString(),
@@ -1266,7 +1275,7 @@ func (s *InsurancePartnerService) RevokePartnerDeletionRequest(requestID uuid.UU
 		slog.Info("profile event published", "event", eventPayload)
 	}()
 
-	return s.repo.ProcessRequestReview(processRequestReview)
+	return nil
 }
 
 func (s *InsurancePartnerService) GetAllPartnerDeletionRequests() ([]models.DeletionRequestResponse, error) {
