@@ -172,6 +172,7 @@ func (s *RegisteredPolicyService) RiskAnalysisJob(params map[string]any) error {
 	if farmPhotos == nil {
 		farmPhotos = []models.FarmPhoto{}
 	}
+	farmPhotos = []models.FarmPhoto{farmPhotos[0]}
 
 	slog.Info("Successfully fetched all required data",
 		"farm_id", farm.ID,

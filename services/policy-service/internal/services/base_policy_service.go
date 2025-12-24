@@ -409,10 +409,12 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 	// Generate IDs and establish relationships
 	basePolicyID := uuid.New()
 	triggerID := uuid.New()
+	productCode := "AP" + utils.GenerateRandomStringWithLength(8)
 
 	request.BasePolicy.ID = basePolicyID
 	request.Trigger.ID = triggerID
 	request.Trigger.BasePolicyID = basePolicyID
+	request.BasePolicy.ProductCode = &productCode
 
 	conditionIDs := make([]uuid.UUID, len(request.Conditions))
 	for i := range request.Conditions {

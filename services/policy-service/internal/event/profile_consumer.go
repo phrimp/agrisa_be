@@ -235,7 +235,19 @@ func (h *DefaultProfileEventHandler) HandleProfileEvent(ctx context.Context, eve
 		}
 	}
 	switch event.EventType {
+	case ProfleConfirmDelete:
+	case ProfileCancelDelete:
+	default:
+		return &PaymentValidationError{
+			PaymentID: event.ID,
+			Reason:    fmt.Sprintf("unsupported payment type: %s", event.EventType),
+		}
 	}
 
+	return nil
+}
+
+func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Context, event ProfileEvent) error {
+	slog.Info("CONFIRM DELETE PROFILE EVENT", "event", event)
 	return nil
 }
