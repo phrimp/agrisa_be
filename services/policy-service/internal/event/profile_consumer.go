@@ -283,11 +283,26 @@ func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Cont
 	if err != nil {
 		return err
 	}
-	policyIDs := []uuid.UUID{}
-	for _, basePolicy := range basePolicies {
-		policyIDs = append(policyIDs, basePolicy.ID)
+	policies, err := h.registeredPolicyRepo.GetByInsuranceProviderIDAndStatus(event.ProfileID, models.PolicyPendingPayment)
+	if err != nil {
+		return err
 	}
-	res, err := h.basePolicyRepo.BulkUpdateBasePolicyStatus(policyIDs, models.BasePolicyClosed)
+
+	basePolicyIDs := []uuid.UUID{}
+	policyIDs := []uuid.UUID{}
+
+	for _, basePolicy := range basePolicies {
+		basePolicyIDs = append(basePolicyIDs, basePolicy.ID)
+	}
+	for _, policy := range policies {
+		policyIDs = append(policyIDs, policy.ID)
+	}
+	res, err := h.registeredPolicyRepo.BulkUpdateStatusWhereProviderAndStatusIn(ctx, policyIDs, event.ProfileID, models.PolicyCancelled, []models.PolicyStatus{models.PolicyPendingPayment})
+	if err != nil {
+		return err
+	}
+	slog.Info("cancelled all pending payment policy", "count", res)
+	res, err = h.basePolicyRepo.BulkUpdateBasePolicyStatus(basePolicyIDs, models.BasePolicyClosed)
 	if err != nil {
 		return err
 	}
