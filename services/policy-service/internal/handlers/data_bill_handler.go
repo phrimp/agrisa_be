@@ -128,7 +128,39 @@ func (h *DataBillHandler) MarkPolicyForPaymentManual(c fiber.Ctx) error {
 	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse("Policy marked for payment"))
 }
 
+func (h *DataBillHandler) getDataCost(policyId uuid.UUID) (float64, error) {
+	policies, err := h.registeredPolicyService.GetByBasePolicy(context.Background(), policyId)
+	if err != nil {
+		return 0, err
+	}
+	var total float64
+	for _, p := range policies {
+		total += p.TotalDataCost
+	}
+	return total, nil
+}
+
+func (h *DataBillHandler) GetDataCost(c fiber.Ctx) error {
+	policyID := c.Params("id")
+	if policyID == "" {
+		return c.Status(fiber.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "policy ID is required"))
+	}
+
+	policyUUID, err := uuid.Parse(policyID)
+	if err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_REQUEST", "invalid policy ID"))
+	}
+
+	totalCost, err := h.getDataCost(policyUUID)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to calculate data cost"))
+	}
+
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(totalCost))
+}
+
 func (h *DataBillHandler) Register(app *fiber.App) {
 	app.Get("policy/protected/api/v2/data-bill", h.GetDataBillHandler)
+	app.Get("policy/protected/api/v2/data-bill/cost/:id", h.GetDataCost)
 	app.Post("policy/protected/api/v2/data-bill/mark-payment/:id", h.MarkPolicyForPaymentManual)
 }
