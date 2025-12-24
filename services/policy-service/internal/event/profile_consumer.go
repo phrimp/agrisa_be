@@ -257,7 +257,10 @@ func (h *DefaultProfileEventHandler) HandleProfileEvent(ctx context.Context, eve
 
 func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Context, event ProfileEvent) error {
 	slog.Info("CONFIRM DELETE PROFILE EVENT", "event", event)
-	toProvider := event.Additional["toProvider"].(string)
+	toProvider, ok := event.Additional["toProvider"].(string)
+	if !ok {
+		return fmt.Errorf("to provider is null")
+	}
 	err := h.cancelRequestService.CreateTransferRequest(ctx, event.UserID, event.ProfileID, toProvider)
 	if err != nil {
 		return err
