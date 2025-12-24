@@ -112,6 +112,6 @@ func (h *DataBillHandler) MarkPolicyForPaymentManual(c fiber.Ctx) error {
 }
 
 func (h *DataBillHandler) Register(app *fiber.App) {
-	app.Get("/data-bill", h.GetDataBillHandler)
-	app.Post("/data-bill/:id/mark-payment", h.MarkPolicyForPaymentManual)
+	app.Get("policy/protected/api/v2/data-bill", h.GetDataBillHandler)
+	app.Post("policy/protected/api/v2/data-bill/mark-payment/:id", h.MarkPolicyForPaymentManual)
 }
