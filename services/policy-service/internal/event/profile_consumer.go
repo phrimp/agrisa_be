@@ -248,5 +248,6 @@ func (h *DefaultProfileEventHandler) HandleProfileEvent(ctx context.Context, eve
 }
 
 func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Context, event ProfileEvent) error {
+	slog.Info("CONFIRM DELETE PROFILE EVENT", "event", event)
 	return nil
 }
