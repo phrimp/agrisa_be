@@ -20,6 +20,10 @@ const (
 	PaymentEventsQueue = "payment_events"
 )
 
+type ICancelService interface {
+	CreateTransferRequest(ctx context.Context, createdBy string, fromProvider, toProvider string) error
+}
+
 // PaymentEvent represents the payment event data from payment-service
 type PaymentEvent struct {
 	ID          string      `json:"id"`
@@ -224,7 +228,7 @@ func (c *PaymentConsumer) processMessage(ctx context.Context, msg amqp.Delivery)
 		c.messagesFailed++
 		// Requeue the message for retry
 
-		var mu *sync.Mutex
+		var mu sync.Mutex
 		mu.Lock()
 		if c.messagesFailed >= 10 {
 			msg.Ack(false)
