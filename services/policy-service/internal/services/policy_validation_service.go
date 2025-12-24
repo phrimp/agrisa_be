@@ -182,6 +182,18 @@ func (s *BasePolicyService) ValidatePolicy(ctx context.Context, request *models.
 		"warning_count", request.WarningCount,
 		"duration", time.Since(start))
 
+	go func() {
+		for {
+			err := s.notievent.NotifyBasePolicyReviewed(context.Background(), basePolicy.InsuranceProviderID, *basePolicy.ProductCode)
+			if err == nil {
+				slog.Info("policy reviewed notification sent", "base_policy_id", basePolicy.ID)
+				return
+			}
+			slog.Error("error sending policy registeration partner notification", "error", err)
+			time.Sleep(10 * time.Second)
+		}
+	}()
+
 	return validation, nil
 }
 

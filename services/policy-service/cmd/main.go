@@ -189,7 +189,7 @@ func main() {
 	} else {
 		log.Println("Payment event consumer started successfully")
 	}
-	profileEventHandler := event.NewDefaultProfileEventHandler(registeredPolicyRepo, basePolicyRepo, workerManager, cancelRepo)
+	profileEventHandler := event.NewDefaultProfileEventHandler(registeredPolicyRepo, basePolicyRepo, workerManager, cancelRepo, cancelRequestService, notificationHelper)
 	profileConsumer := event.NewProfileConsumer(rabbitConn, profileEventHandler)
 	if err := profileConsumer.Start(ctx); err != nil {
 		log.Printf("error starting profile consumer: %v", err)

@@ -436,7 +436,21 @@ func (c *CancelRequestService) CreateTransferRequest(ctx context.Context, create
 			return fmt.Errorf("error creating transfer request for contract: %s error=%w", policy.ID, err)
 		}
 		slog.Info("Created transfer request policy succeed", "request", req)
+
+		go func() {
+			for {
+				err := c.notievent.NotifyTransferPolicyRequest(ctx, policy.FarmerID, policy.PolicyNumber, toProvider)
+				if err == nil {
+					slog.Info("policy transfer request notification sent", "policy_id", policy.ID)
+					return
+				}
+				slog.Error("error sending payout completed notification", "error", err)
+				time.Sleep(10 * time.Second)
+			}
+		}()
+
 	}
+
 	return nil
 }
 
@@ -445,8 +459,10 @@ func (c *CancelRequestService) RevokeAllTransferRequest(ctx context.Context, cre
 	if err != nil {
 		return err
 	}
+	updatedRequest := []models.CancelRequest{}
 	for _, request := range requests {
 		request.Status = models.CancelRequestStatusCancelled
+		updatedRequest = append(updatedRequest, request)
 	}
 	return nil
 }

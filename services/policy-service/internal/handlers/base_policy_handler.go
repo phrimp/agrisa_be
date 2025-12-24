@@ -272,7 +272,42 @@ func (bph *BasePolicyHandler) CommitPolicies(c fiber.Ctx) error {
 
 // GetBasePolicyCount returns the total count of base policies
 func (bph *BasePolicyHandler) GetBasePolicyCount(c fiber.Ctx) error {
-	count, err := bph.basePolicyService.GetBasePolicyCount()
+	tokenString := c.Get("Authorization")
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	slog.Info("Fetching partner policies token: ", "token", token)
+	// calling api to get profile by token
+	partnerProfileData, err := bph.registeredPolicyService.GetInsurancePartnerProfile(token)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+	}
+
+	// get partner id from profile data
+	partnerID, err := bph.registeredPolicyService.GetPartnerID(partnerProfileData)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
+	}
+
+	profileData, ok := partnerProfileData["data"].(map[string]any)
+	if ok {
+		partnerIDProfile, ok := profileData["partner_id"].(string)
+		if ok {
+			if partnerID != partnerIDProfile {
+				return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "Cannot underwrite others policies"))
+			}
+		} else {
+			return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "partner id not found"))
+		}
+	} else {
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "profile data not fould"))
+	}
+
+	providerID := partnerID
+
+	count, err := bph.basePolicyService.GetBasePolicyCount(providerID)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("COUNT_FAILED", err.Error()))
 	}
@@ -284,13 +319,48 @@ func (bph *BasePolicyHandler) GetBasePolicyCount(c fiber.Ctx) error {
 
 // GetBasePolicyCountByStatus returns count of base policies by status
 func (bph *BasePolicyHandler) GetBasePolicyCountByStatus(c fiber.Ctx) error {
+	tokenString := c.Get("Authorization")
+
+	token := strings.TrimPrefix(tokenString, "Bearer ")
+
+	slog.Info("Fetching partner policies token: ", "token", token)
+	// calling api to get profile by token
+	partnerProfileData, err := bph.registeredPolicyService.GetInsurancePartnerProfile(token)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve insurance partner profile"))
+	}
+
+	// get partner id from profile data
+	partnerID, err := bph.registeredPolicyService.GetPartnerID(partnerProfileData)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve partner ID"))
+	}
+
+	profileData, ok := partnerProfileData["data"].(map[string]any)
+	if ok {
+		partnerIDProfile, ok := profileData["partner_id"].(string)
+		if ok {
+			if partnerID != partnerIDProfile {
+				return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "Cannot underwrite others policies"))
+			}
+		} else {
+			return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "partner id not found"))
+		}
+	} else {
+		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL", "profile data not fould"))
+	}
+
+	providerID := partnerID
+
 	statusParam := c.Params("status")
 	if statusParam == "" {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("INVALID_PARAMETER", "Status parameter is required"))
 	}
 
 	status := models.BasePolicyStatus(statusParam)
-	count, err := bph.basePolicyService.GetBasePolicyCountByStatus(status)
+	count, err := bph.basePolicyService.GetBasePolicyCountByStatus(status, providerID)
 	if err != nil {
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("COUNT_FAILED", err.Error()))
 	}
