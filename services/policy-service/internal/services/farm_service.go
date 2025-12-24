@@ -258,6 +258,46 @@ func (s *FarmService) UpdateFarm(ctx context.Context, farm *models.Farm, updated
 	return s.farmRepository.Update(farm)
 }
 
+// UpdateFarmPartial updates only the provided fields of a farm
+func (s *FarmService) UpdateFarmPartial(ctx context.Context, req *models.UpdateFarmRequest, userID string, farmID string) (*models.Farm, error) {
+	// 1. Get existing farm
+	existingFarm, err := s.farmRepository.GetFarmByID(ctx, farmID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. Authorization check
+	if existingFarm.OwnerID != userID {
+		return nil, fmt.Errorf("forbidden: you don't have permission to update this farm")
+	}
+
+	// 3. Validate only provided fields
+	if req.ExpectedHarvestDate != nil {
+		// Get planting date (from request or existing farm)
+		plantingDate := existingFarm.PlantingDate
+		if req.PlantingDate != nil {
+			plantingDate = req.PlantingDate
+		}
+
+		if plantingDate == nil {
+			return nil, fmt.Errorf("badrequest: planting_date is required when expected_harvest_date is provided")
+		}
+
+		if *req.ExpectedHarvestDate < *plantingDate {
+			return nil, fmt.Errorf("badrequest: expected_harvest_date must be greater than or equal to planting_date")
+		}
+	}
+
+	// 4. Update repository
+	err = s.farmRepository.UpdatePartial(ctx, farmID, req)
+	if err != nil {
+		return nil, err
+	}
+
+	// 5. Return updated farm
+	return s.farmRepository.GetFarmByID(ctx, farmID)
+}
+
 func (s *FarmService) DeleteFarm(ctx context.Context, id string, deletedBy string) error {
 	// check if farm exists
 	farmID, err := uuid.Parse(id)

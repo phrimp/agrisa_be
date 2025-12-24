@@ -8,6 +8,7 @@ import (
 	"log"
 	"log/slog"
 	"policy-service/internal/models"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -320,6 +321,60 @@ func (r *FarmRepository) Update(farm *models.Farm) error {
 		WHERE id = :id`
 
 	_, err := r.db.NamedExec(query, farm)
+	if err != nil {
+		return fmt.Errorf("failed to update farm: %w", err)
+	}
+
+	return nil
+}
+
+// UpdatePartial updates only the provided fields of a farm
+func (r *FarmRepository) UpdatePartial(ctx context.Context, farmID string, req *models.UpdateFarmRequest) error {
+	updateFields := []string{}
+	args := map[string]interface{}{
+		"id":         farmID,
+		"updated_at": time.Now(),
+	}
+
+	if req.FarmName != nil {
+		updateFields = append(updateFields, "farm_name = :farm_name")
+		args["farm_name"] = req.FarmName
+	}
+
+	if req.PlantingDate != nil {
+		updateFields = append(updateFields, "planting_date = :planting_date")
+		args["planting_date"] = req.PlantingDate
+	}
+
+	if req.ExpectedHarvestDate != nil {
+		updateFields = append(updateFields, "expected_harvest_date = :expected_harvest_date")
+		args["expected_harvest_date"] = req.ExpectedHarvestDate
+	}
+
+	if req.HasIrrigation != nil {
+		updateFields = append(updateFields, "has_irrigation = :has_irrigation")
+		args["has_irrigation"] = req.HasIrrigation
+	}
+
+	if req.IrrigationType != nil {
+		updateFields = append(updateFields, "irrigation_type = :irrigation_type")
+		args["irrigation_type"] = req.IrrigationType
+	}
+
+	// Always update updated_at
+	updateFields = append(updateFields, "updated_at = :updated_at")
+
+	if len(updateFields) == 1 {
+		return fmt.Errorf("badrequest: no fields to update")
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE farm
+		SET %s
+		WHERE id = :id
+	`, strings.Join(updateFields, ", "))
+
+	_, err := r.db.NamedExecContext(ctx, query, args)
 	if err != nil {
 		return fmt.Errorf("failed to update farm: %w", err)
 	}
