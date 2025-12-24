@@ -56,7 +56,7 @@ func (h *DataBillHandler) MarkPoliciesForPayment(ctx context.Context) error {
 	return nil
 }
 
-func (h *DataBillHandler) GetDataBillHandler(c fiber.Ctx) error {
+func (h *DataBillHandler) GetMyDataBillHandler(c fiber.Ctx) error {
 	token := c.Get("Authorization")
 	token = token[len("Bearer "):]
 	insuranceProfile, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
@@ -147,7 +147,7 @@ func (h *DataBillHandler) GetDataCost(c fiber.Ctx) error {
 }
 
 func (h *DataBillHandler) Register(app *fiber.App) {
-	app.Get("policy/protected/api/v2/data-bill", h.GetDataBillHandler)
+	app.Get("policy/protected/api/v2/data-bill/me", h.GetMyDataBillHandler)
 	app.Get("policy/protected/api/v2/data-bill/cost/:id", h.GetDataCost)
 	app.Post("policy/protected/api/v2/data-bill/mark-payment/:id", h.MarkPolicyForPaymentManual)
 }

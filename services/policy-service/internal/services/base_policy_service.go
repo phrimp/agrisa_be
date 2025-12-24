@@ -1507,3 +1507,7 @@ func (s *BasePolicyService) CancelBasePolicy(ctx context.Context, basePolicyID u
 func (s *BasePolicyService) UpdateBasePolicyStatus(ctx context.Context, basePolicyID uuid.UUID, status models.BasePolicyStatus) error {
 	return s.basePolicyRepo.UpdateStatus(basePolicyID, status)
 }
+
+func (s *BasePolicyService) GetAllBasePolicies(ctx context.Context) ([]models.BasePolicy, error) {
+	return s.basePolicyRepo.GetAllBasePolicies()
+}
