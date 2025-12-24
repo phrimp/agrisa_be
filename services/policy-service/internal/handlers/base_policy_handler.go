@@ -48,6 +48,7 @@ func (bph *BasePolicyHandler) Register(app *fiber.App) {
 	policyGroup.Post("/validate", bph.ValidatePolicy)                              // POST /base-policies/validate - Validate policy & auto-commit
 	policyGroup.Post("/commit", bph.CommitPolicies)                                // POST /base-policies/commit - Manual commit policies to DB
 	policyGroup.Get("/active", bph.GetAllActivePolicy)
+	policyGroup.Get("/all", bph.GetAllBasePolicies)         // GET /base-policies/all - Get all base policies
 	policyGroup.Get("/detail", bph.GetCompletePolicyDetail) // GET  /base-policies/detail - Get complete policy details with PDF
 	policyGroup.Get("/by-provider", bph.GetByProvider)
 	policyGroup.Put("/cancel/:id", bph.CancelBasePolicy)
@@ -569,4 +570,12 @@ func (bph *BasePolicyHandler) CancelBasePolicy(c fiber.Ctx) error {
 			utils.CreateErrorResponse("CANCEL_FAILED", "Failed to cancel base policy"))
 	}
 	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(res))
+}
+
+func (bph *BasePolicyHandler) GetAllBasePolicies(c fiber.Ctx) error {
+	basePolicies, err := bph.basePolicyService.GetAllBasePolicies(c.Context())
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to retrieve all base policies"))
+	}
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(basePolicies))
 }
