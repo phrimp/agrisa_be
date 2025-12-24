@@ -38,6 +38,7 @@ func (h *CancelRequestHandler) Register(app *fiber.App) {
 
 	farmerGr := cancelRequestGr.Group("/read-own")
 	farmerGr.Get("/me", h.GetAllMyRequests)
+	farmerGr.Get("/transfer", h.GetLastestTranser)
 
 	partnerGroup := cancelRequestGr.Group("/read-partner")
 	partnerGroup.Get("/own", h.GetAllPartnerRequest)
@@ -50,6 +51,26 @@ func (h *CancelRequestHandler) GetAllMyRequests(c fiber.Ctx) error {
 			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
 	}
 	requests, err := h.cancelRequestService.GetAllFarmerCancelRequest(c.Context(), userID)
+	if err != nil {
+		slog.Error("Failed to get farmer requests", "farmer_id", userID, "error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("RETRIEVAL_FAILED", "Failed to retrieve requests"))
+	}
+
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(map[string]any{
+		"claims":    requests,
+		"count":     len(requests),
+		"farmer_id": userID,
+	}))
+}
+
+func (h *CancelRequestHandler) GetLastestTranser(c fiber.Ctx) error {
+	userID := c.Get("X-User-ID")
+	if userID == "" {
+		return c.Status(http.StatusUnauthorized).JSON(
+			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
+	}
+	requests, err := h.cancelRequestService.GetFarmerTransferContract(c.Context(), userID)
 	if err != nil {
 		slog.Error("Failed to get farmer requests", "farmer_id", userID, "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(

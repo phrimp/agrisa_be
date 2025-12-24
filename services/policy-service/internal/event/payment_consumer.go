@@ -9,6 +9,7 @@ import (
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -222,7 +223,16 @@ func (c *PaymentConsumer) processMessage(ctx context.Context, msg amqp.Delivery)
 		)
 		c.messagesFailed++
 		// Requeue the message for retry
-		msg.Nack(false, true)
+
+		var mu *sync.Mutex
+		mu.Lock()
+		if c.messagesFailed >= 10 {
+			msg.Ack(false)
+		} else {
+			msg.Nack(false, true)
+		}
+		mu.Unlock()
+
 		return
 	}
 

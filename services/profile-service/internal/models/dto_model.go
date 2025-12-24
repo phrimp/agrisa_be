@@ -44,6 +44,9 @@ type CreateInsurancePartnerRequest struct {
 	Hotline                    string    `json:"hotline"`
 	SupportHours               string    `json:"support_hours"`
 	CoverageAreas              string    `json:"coverage_areas"`
+	AccountNumber              *string   `json:"account_number"`
+	AccountName                *string   `json:"account_name"`
+	BankCode                   *string   `json:"bank_code"`
 }
 
 // response
@@ -151,6 +154,11 @@ type PrivatePartnerProfile struct {
 	UpdatedAt         *time.Time `db:"updated_at" json:"updated_at"`
 	LastUpdatedByID   string     `db:"last_updated_by_id" json:"last_updated_by_id"`
 	LastUpdatedByName string     `db:"last_updated_by_name" json:"last_updated_by_name"`
+
+	// bank info
+	AccountNumber *string `db:"account_number" json:"account_number"`
+	AccountName   *string `db:"account_name" json:"account_name"`
+	BankCode      *string `db:"bank_code" json:"bank_code"`
 }
 
 type CreateUserProfileRequest struct {
