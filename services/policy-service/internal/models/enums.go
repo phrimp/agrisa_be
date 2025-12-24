@@ -19,10 +19,11 @@ const (
 type BasePolicyStatus string
 
 const (
-	BasePolicyDraft    BasePolicyStatus = "draft"
-	BasePolicyActive   BasePolicyStatus = "active"
-	BasePolicyClosed   BasePolicyStatus = "closed"
-	BasePolicyArchived BasePolicyStatus = "archived"
+	BasePolicyDraft      BasePolicyStatus = "draft"
+	BasePolicyActive     BasePolicyStatus = "active"
+	BasePolicyPaymentDue BasePolicyStatus = "payment_due"
+	BasePolicyClosed     BasePolicyStatus = "closed"
+	BasePolicyArchived   BasePolicyStatus = "archived"
 )
 
 type PolicyStatus string
@@ -66,6 +67,7 @@ const (
 	PaymentTypePolicyPayout       PaymentType = "policy_payout_payment"
 	PaymentTypePolicyCompensation PaymentType = "policy_compensation_payment"
 	PaymentTypePolicyRenewal      PaymentType = "policy_renewal_payment"
+	PaymentTypeDataBill           PaymentType = "data_bill_payment"
 )
 
 type ValidationStatus string

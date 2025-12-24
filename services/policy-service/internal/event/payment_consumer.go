@@ -314,6 +314,8 @@ func (h *DefaultPaymentEventHandler) HandlePaymentCompleted(ctx context.Context,
 		return h.handlePolicyPayoutPayment(ctx, event)
 	case models.PaymentTypePolicyCompensation:
 		return h.handlePolicyCompensationPayment(ctx, event)
+	case models.PaymentTypeDataBill:
+		return h.handleDataBillPayment(ctx, event)
 
 	// ============================================================================
 	// TODO: ADD NEW PAYMENT TYPE HANDLERS HERE
@@ -1029,4 +1031,41 @@ func (c *PaymentConsumer) calculateSuccessRate() float64 {
 		return 100.0
 	}
 	return (float64(c.messagesProcessed) / float64(total)) * 100.0
+}
+
+func (h *DefaultPaymentEventHandler) handleDataBillPayment(ctx context.Context, event PaymentEvent) error {
+	slog.Info("processing data bill payment",
+		"payment_id", event.ID,
+		"order_items_count", len(event.OrderItems),
+		"amount", event.Amount)
+
+	for _, orderItem := range event.OrderItems {
+		basePolicyID, err := uuid.Parse(orderItem.ItemID)
+		if err != nil {
+			slog.Error("invalid base policy id in order item",
+				"order_item_id", orderItem.ID,
+				"item_id", orderItem.ItemID,
+				"error", err)
+			return &PaymentValidationError{
+				PaymentID: event.ID,
+				Reason:    "invalid base policy id format",
+			}
+		}
+
+		// Update base policy status to active
+		err = h.basePolicyRepo.UpdateStatus(basePolicyID, models.BasePolicyActive)
+		if err != nil {
+			slog.Error("failed to update base policy status",
+				"base_policy_id", basePolicyID,
+				"error", err)
+			return err
+		}
+
+		slog.Info("base policy activated after payment",
+			"base_policy_id", basePolicyID,
+			"payment_id", event.ID)
+	}
+
+	slog.Info("data bill payment processed successfully", "payment_id", event.ID)
+	return nil
 }

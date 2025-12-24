@@ -1497,3 +1497,7 @@ func (s *BasePolicyService) CancelBasePolicy(ctx context.Context, basePolicyID u
 
 	return "Base Policy Cancelled", nil
 }
+
+func (s *BasePolicyService) UpdateBasePolicyStatus(ctx context.Context, basePolicyID uuid.UUID, status models.BasePolicyStatus) error {
+	return s.basePolicyRepo.UpdateStatus(basePolicyID, status)
+}

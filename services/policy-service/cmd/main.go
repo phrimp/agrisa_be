@@ -253,6 +253,7 @@ func main() {
 	dashboardHandler := handlers.NewDashboardHandler(dashboardService)
 	payoutHandler := handlers.NewPayoutHandler(payoutServie, registeredPolicyService)
 	cancelRequestHandler := handlers.NewCancelRequestHandler(registeredPolicyService, cancelRequestService)
+	dataBillHandler := handlers.NewDataBillHandler(basePolicyService, notificationHelper)
 
 	// Register routes
 	dataTierHandler.Register(app)
@@ -267,6 +268,7 @@ func main() {
 	dashboardHandler.Register(app)
 	payoutHandler.Register(app)
 	cancelRequestHandler.Register(app)
+	dataBillHandler.Register(app)
 
 	// Register payment consumer health check endpoint
 	app.Get("/health/payment-consumer", paymentConsumerHealthHandler)

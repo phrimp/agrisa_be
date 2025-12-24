@@ -1771,3 +1771,12 @@ func (r *BasePolicyRepository) CreateBasePolicyDocumentValidationTx(
 
 	return nil
 }
+
+func (r *BasePolicyRepository) UpdateStatus(basePolicyID uuid.UUID, status models.BasePolicyStatus) error {
+	query := `UPDATE base_policy SET status = $1, updated_at = $2 WHERE id = $3`
+	_, err := r.db.Exec(query, status, time.Now(), basePolicyID)
+	if err != nil {
+		return fmt.Errorf("failed to update base policy status: %w", err)
+	}
+	return nil
+}
