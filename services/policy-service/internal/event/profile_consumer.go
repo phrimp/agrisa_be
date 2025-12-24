@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/redis/go-redis/v9"
 )
@@ -282,9 +283,15 @@ func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Cont
 	if err != nil {
 		return err
 	}
+	policyIDs := []uuid.UUID{}
 	for _, basePolicy := range basePolicies {
-		basePolicy.Status = models.BasePolicyClosed
+		policyIDs = append(policyIDs, basePolicy.ID)
 	}
+	res, err := h.basePolicyRepo.BulkUpdateBasePolicyStatus(policyIDs, models.BasePolicyClosed)
+	if err != nil {
+		return err
+	}
+	slog.Info("closed all base policy", "count", res)
 
 	h.redisClient.Set(ctx, fmt.Sprintf("Delete-Profile-%s", event.ProfileID), "true", 10000*time.Hour)
 	return nil

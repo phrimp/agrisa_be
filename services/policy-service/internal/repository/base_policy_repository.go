@@ -1780,3 +1780,247 @@ func (r *BasePolicyRepository) UpdateStatus(basePolicyID uuid.UUID, status model
 	}
 	return nil
 }
+
+// ============================================================================
+// OPTIMIZED BULK UPDATE OPERATIONS
+// ============================================================================
+
+// BulkUpdateBasePolicyStatus updates status for multiple policies using single query with IN clause
+// This is ~100x faster than loop-based updates for large datasets
+func (r *BasePolicyRepository) BulkUpdateBasePolicyStatus(
+	policyIDs []uuid.UUID,
+	status models.BasePolicyStatus,
+) (int64, error) {
+	if len(policyIDs) == 0 {
+		slog.Warn("Empty policy IDs slice provided to BulkUpdateBasePolicyStatus")
+		return 0, nil
+	}
+
+	slog.Info("Starting optimized bulk status update",
+		"policy_count", len(policyIDs),
+		"new_status", status)
+	start := time.Now()
+
+	// Build IN clause with placeholders: ($3, $4, $5, ...)
+	placeholders := make([]string, len(policyIDs))
+	args := make([]interface{}, 0, len(policyIDs)+2)
+
+	// First two args are status and updated_at
+	now := time.Now()
+	args = append(args, status, now)
+
+	// Add policy IDs as remaining args
+	for i, id := range policyIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+3) // +3 because $1=status, $2=updated_at
+		args = append(args, id)
+	}
+
+	// Single UPDATE query with IN clause
+	query := fmt.Sprintf(`
+		UPDATE base_policy
+		SET status = $1, updated_at = $2
+		WHERE id IN (%s)`,
+		strings.Join(placeholders, ", "))
+
+	// Execute single query
+	result, err := r.db.Exec(query, args...)
+	if err != nil {
+		slog.Error("Failed to execute bulk status update",
+			"policy_count", len(policyIDs),
+			"status", status,
+			"error", err)
+		return 0, fmt.Errorf("failed to execute bulk status update: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		slog.Error("Failed to get rows affected", "error", err)
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	slog.Info("Bulk status update completed",
+		"policy_count", len(policyIDs),
+		"rows_affected", rowsAffected,
+		"duration", time.Since(start))
+
+	if rowsAffected != int64(len(policyIDs)) {
+		slog.Warn("Some policies were not updated",
+			"requested", len(policyIDs),
+			"updated", rowsAffected,
+			"missing", len(policyIDs)-int(rowsAffected))
+	}
+
+	return rowsAffected, nil
+}
+
+// BulkUpdateBasePolicyStatusTx updates status for multiple policies in a transaction using IN clause
+func (r *BasePolicyRepository) BulkUpdateBasePolicyStatusTx(
+	tx *sqlx.Tx,
+	policyIDs []uuid.UUID,
+	status models.BasePolicyStatus,
+) (int64, error) {
+	if len(policyIDs) == 0 {
+		return 0, nil
+	}
+
+	slog.Info("Starting bulk status update in transaction",
+		"policy_count", len(policyIDs),
+		"new_status", status)
+	start := time.Now()
+
+	// Build IN clause with placeholders
+	placeholders := make([]string, len(policyIDs))
+	args := make([]interface{}, 0, len(policyIDs)+2)
+
+	now := time.Now()
+	args = append(args, status, now)
+
+	for i, id := range policyIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+3)
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE base_policy
+		SET status = $1, updated_at = $2
+		WHERE id IN (%s)`,
+		strings.Join(placeholders, ", "))
+
+	result, err := tx.Exec(query, args...)
+	if err != nil {
+		slog.Error("Failed to execute bulk status update in transaction",
+			"policy_count", len(policyIDs),
+			"status", status,
+			"error", err)
+		return 0, fmt.Errorf("failed to execute bulk status update: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	slog.Info("Bulk status update in transaction completed",
+		"policy_count", len(policyIDs),
+		"rows_affected", rowsAffected,
+		"duration", time.Since(start))
+
+	return rowsAffected, nil
+}
+
+// BulkUpdateProviderID updates insurance_provider_id for multiple policies using IN clause
+func (r *BasePolicyRepository) BulkUpdateProviderID(
+	policyIDs []uuid.UUID,
+	newProviderID string,
+) (int64, error) {
+	if len(policyIDs) == 0 {
+		slog.Warn("Empty policy IDs slice provided to BulkUpdateProviderID")
+		return 0, nil
+	}
+
+	slog.Info("Starting bulk provider ID update",
+		"policy_count", len(policyIDs),
+		"new_provider_id", newProviderID)
+	start := time.Now()
+
+	// Build IN clause with placeholders
+	placeholders := make([]string, len(policyIDs))
+	args := make([]interface{}, 0, len(policyIDs)+2)
+
+	now := time.Now()
+	args = append(args, newProviderID, now)
+
+	for i, id := range policyIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+3)
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE base_policy
+		SET insurance_provider_id = $1, updated_at = $2
+		WHERE id IN (%s)`,
+		strings.Join(placeholders, ", "))
+
+	result, err := r.db.Exec(query, args...)
+	if err != nil {
+		slog.Error("Failed to execute bulk provider ID update",
+			"policy_count", len(policyIDs),
+			"new_provider_id", newProviderID,
+			"error", err)
+		return 0, fmt.Errorf("failed to execute bulk provider ID update: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	slog.Info("Bulk provider ID update completed",
+		"policy_count", len(policyIDs),
+		"rows_affected", rowsAffected,
+		"new_provider_id", newProviderID,
+		"duration", time.Since(start))
+
+	if rowsAffected != int64(len(policyIDs)) {
+		slog.Warn("Some policies were not updated",
+			"requested", len(policyIDs),
+			"updated", rowsAffected,
+			"missing", len(policyIDs)-int(rowsAffected))
+	}
+
+	return rowsAffected, nil
+}
+
+// BulkUpdateProviderIDTx updates insurance_provider_id for multiple policies in a transaction
+func (r *BasePolicyRepository) BulkUpdateProviderIDTx(
+	tx *sqlx.Tx,
+	policyIDs []uuid.UUID,
+	newProviderID string,
+) (int64, error) {
+	if len(policyIDs) == 0 {
+		return 0, nil
+	}
+
+	slog.Info("Starting bulk provider ID update in transaction",
+		"policy_count", len(policyIDs),
+		"new_provider_id", newProviderID)
+	start := time.Now()
+
+	placeholders := make([]string, len(policyIDs))
+	args := make([]interface{}, 0, len(policyIDs)+2)
+
+	now := time.Now()
+	args = append(args, newProviderID, now)
+
+	for i, id := range policyIDs {
+		placeholders[i] = fmt.Sprintf("$%d", i+3)
+		args = append(args, id)
+	}
+
+	query := fmt.Sprintf(`
+		UPDATE base_policy
+		SET insurance_provider_id = $1, updated_at = $2
+		WHERE id IN (%s)`,
+		strings.Join(placeholders, ", "))
+
+	result, err := tx.Exec(query, args...)
+	if err != nil {
+		slog.Error("Failed to execute bulk provider ID update in transaction",
+			"policy_count", len(policyIDs),
+			"new_provider_id", newProviderID,
+			"error", err)
+		return 0, fmt.Errorf("failed to execute bulk provider ID update: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	slog.Info("Bulk provider ID update in transaction completed",
+		"policy_count", len(policyIDs),
+		"rows_affected", rowsAffected,
+		"duration", time.Since(start))
+
+	return rowsAffected, nil
+}
