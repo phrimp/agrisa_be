@@ -15,14 +15,16 @@ import (
 )
 
 type DataBillHandler struct {
-	basePolicyService  *services.BasePolicyService
-	notificationHelper *event.NotificationHelper
+	basePolicyService       *services.BasePolicyService
+	notificationHelper      *event.NotificationHelper
+	registeredPolicyService *services.RegisteredPolicyService
 }
 
-func NewDataBillHandler(basePolicyService *services.BasePolicyService, notificationHelper *event.NotificationHelper) *DataBillHandler {
+func NewDataBillHandler(basePolicyService *services.BasePolicyService, notificationHelper *event.NotificationHelper, registeredPolicyService *services.RegisteredPolicyService) *DataBillHandler {
 	handler := &DataBillHandler{
-		basePolicyService:  basePolicyService,
-		notificationHelper: notificationHelper,
+		basePolicyService:       basePolicyService,
+		notificationHelper:      notificationHelper,
+		registeredPolicyService: registeredPolicyService,
 	}
 	handler.startCron()
 	return handler
@@ -68,7 +70,18 @@ func (h *DataBillHandler) MarkPoliciesForPayment(ctx context.Context) error {
 }
 
 func (h *DataBillHandler) GetDataBillHandler(c fiber.Ctx) error {
-	insuranceProviderId := c.Get("x-user-id")
+	token := c.Get("Authorization")
+	token = token[len("Bearer "):]
+	insuranceProfile, err := h.registeredPolicyService.GetInsurancePartnerProfile(token)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to get insurance partner profile"))
+	}
+
+	insuranceProviderId, err := h.registeredPolicyService.GetPartnerID(insuranceProfile)
+	if err != nil {
+		return c.Status(fiber.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "failed to extract partner ID"))
+	}
+
 	fmt.Printf("Insurance Provider ID: %s\n", insuranceProviderId)
 	paymentDuePolicies, err := h.basePolicyService.GetPaymentDuePolicies(c.Context())
 	if err != nil {
