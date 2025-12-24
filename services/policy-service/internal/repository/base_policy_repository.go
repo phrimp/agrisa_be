@@ -484,11 +484,11 @@ func (r *BasePolicyRepository) CheckBasePolicyExists(id uuid.UUID) (bool, error)
 	return count > 0, nil
 }
 
-func (r *BasePolicyRepository) GetBasePolicyCount() (int, error) {
+func (r *BasePolicyRepository) GetBasePolicyCount(providerID string) (int, error) {
 	var count int
-	query := `SELECT COUNT(*) FROM base_policy`
+	query := `SELECT COUNT(*) FROM base_policy WHERE insurance_provider_id = $1`
 
-	err := r.db.Get(&count, query)
+	err := r.db.Get(&count, query, providerID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get base policy count: %w", err)
 	}
@@ -496,11 +496,11 @@ func (r *BasePolicyRepository) GetBasePolicyCount() (int, error) {
 	return count, nil
 }
 
-func (r *BasePolicyRepository) GetBasePolicyCountByStatus(status models.BasePolicyStatus) (int, error) {
+func (r *BasePolicyRepository) GetBasePolicyCountByStatus(status models.BasePolicyStatus, providerID string) (int, error) {
 	var count int
-	query := `SELECT COUNT(*) FROM base_policy WHERE status = $1`
+	query := `SELECT COUNT(*) FROM base_policy WHERE status = $1 AND insurance_provider_id = $2`
 
-	err := r.db.Get(&count, query, status)
+	err := r.db.Get(&count, query, status, providerID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get base policy count by status: %w", err)
 	}
