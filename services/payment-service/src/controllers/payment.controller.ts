@@ -546,25 +546,6 @@ export class PaymentController {
         status: 'pending',
         paid_at: new Date(),
       });
-
-      const publisher_payment = await this.paymentService.findById(
-        payout.payment_id,
-      );
-      if (publisher_payment) {
-        this.logger.log('Publishing payout payment to queue', {
-          payment_id: payout.payment_id,
-          type: publisher_payment.type,
-          amount: publisher_payment.amount,
-        });
-        await publisher(publisher_payment);
-        this.logger.log('Payout payment event published to queue', {
-          payment_id: payout.payment_id,
-        });
-      } else {
-        this.logger.error('Failed to fetch created payment for publishing', {
-          payment_id: payout.payment_id,
-        });
-      }
     }
   }
 
@@ -620,23 +601,15 @@ export class PaymentController {
       );
     }
 
-    const results: Array<{
-      item_id: string;
-      payout_id: string;
-      success: boolean;
-      error?: string;
-    }> = [];
-    for (const item of validItems) {
-      const payout_id = item.payout_id!;
+    // Process unique payouts to avoid duplicate operations
+    const uniquePayoutIds = [...new Set(payout_ids)];
+    const processedPayouts: Set<string> = new Set();
+
+    for (const payout_id of uniquePayoutIds) {
       try {
         const payout = await this.payoutService.findById(payout_id);
         if (!payout) {
-          results.push({
-            item_id: item.item_id || item.id,
-            payout_id,
-            success: false,
-            error: 'Payout not found',
-          });
+          this.logger.error(`Payout ${payout_id} not found`);
           continue;
         }
 
@@ -674,30 +647,52 @@ export class PaymentController {
               );
             }
           }
-        }
 
-        if (payout.status === 'scanned') {
-          results.push({
-            item_id: item.item_id || item.id,
-            payout_id,
-            success: true,
-          });
+          processedPayouts.add(payout_id);
         } else {
+          this.logger.warn(
+            `Payout ${payout_id} status is ${payout.status}, not scanned`,
+          );
+        }
+      } catch (error) {
+        this.logger.error(`Failed to process payout ${payout_id}`, error);
+      }
+    }
+
+    const results: Array<{
+      item_id: string;
+      payout_id: string;
+      success: boolean;
+      error?: string;
+    }> = [];
+    for (const item of validItems) {
+      const payout_id = item.payout_id!;
+      if (processedPayouts.has(payout_id)) {
+        results.push({
+          item_id: item.item_id || item.id,
+          payout_id,
+          success: true,
+        });
+      } else {
+        // Check current status for error message
+        try {
+          const payout = await this.payoutService.findById(payout_id);
           results.push({
             item_id: item.item_id || item.id,
             payout_id,
             success: false,
-            error: `Payout status is ${payout.status}, not scanned`,
+            error: payout
+              ? `Payout status is ${payout.status}, not scanned`
+              : 'Payout not found',
+          });
+        } catch (error) {
+          results.push({
+            item_id: item.item_id || item.id,
+            payout_id,
+            success: false,
+            error: `Internal server error: ${error}`,
           });
         }
-      } catch (error) {
-        this.logger.error(`Failed to verify payout ${payout_id}`, error);
-        results.push({
-          item_id: item.item_id || item.id,
-          payout_id,
-          success: false,
-          error: 'Internal server error',
-        });
       }
     }
 
