@@ -162,8 +162,8 @@ func (h *FarmHandler) CreateFarm(c fiber.Ctx) error {
 }
 
 func (h *FarmHandler) UpdateFarm(c fiber.Ctx) error {
-	var farm models.Farm
-	if err := c.Bind().JSON(&farm); err != nil {
+	var req models.UpdateFarmRequest
+	if err := c.Bind().JSON(&req); err != nil {
 		slog.Error("error parsing request", "error", err)
 		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "Invalid request body"))
 	}
@@ -177,20 +177,17 @@ func (h *FarmHandler) UpdateFarm(c fiber.Ctx) error {
 	// Get farm ID from params
 	farmID := c.Params("id")
 
-	// Validate harvest date if provided
-	if farm.ExpectedHarvestDate != nil {
-		if farm.PlantingDate == nil {
-			return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "planting_date is required when expected_harvest_date is provided"))
-		}
-		if *farm.ExpectedHarvestDate < *farm.PlantingDate {
-			return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "expected_harvest_date must be greater than or equal to planting_date"))
-		}
-	}
-
 	// Update the farm
-	if err := h.farmService.UpdateFarm(c.Context(), &farm, userID, farmID); err != nil {
+	updatedFarm, err := h.farmService.UpdateFarmPartial(c.Context(), &req, userID, farmID)
+	if err != nil {
 		if strings.Contains(err.Error(), "badrequest") {
 			return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", err.Error()))
+		}
+		if strings.Contains(err.Error(), "forbidden") {
+			return c.Status(http.StatusForbidden).JSON(utils.CreateErrorResponse("FORBIDDEN", err.Error()))
+		}
+		if strings.Contains(err.Error(), "not_found") {
+			return c.Status(http.StatusNotFound).JSON(utils.CreateErrorResponse("NOT_FOUND", err.Error()))
 		}
 		if strings.Contains(err.Error(), "unauthorized") {
 			return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", err.Error()))
@@ -198,7 +195,7 @@ func (h *FarmHandler) UpdateFarm(c fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).JSON(utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", err.Error()))
 	}
 
-	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(farm))
+	return c.Status(http.StatusOK).JSON(utils.CreateSuccessResponse(updatedFarm))
 }
 
 func (h *FarmHandler) DeleteFarm(c fiber.Ctx) error {
