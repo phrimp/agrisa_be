@@ -222,6 +222,10 @@ func (c *PaymentConsumer) processMessage(ctx context.Context, msg amqp.Delivery)
 		)
 		c.messagesFailed++
 		// Requeue the message for retry
+
+		if c.messagesFailed >= 10 {
+			msg.Ack(false)
+		}
 		msg.Nack(false, true)
 		return
 	}
