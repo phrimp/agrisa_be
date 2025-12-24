@@ -68,6 +68,11 @@ func (o *PolicyRenewalOrchestrator) PrepareRenewal(
 		slog.Warn("No registered policy found", "base_policy_id", basePolicy.ID)
 	}
 
+	if basePolicy.Status == models.BasePolicyPaymentDue {
+		time.Sleep(5 * time.Minute) // change to 24 hour
+		return o.PrepareRenewal(ctx, basePolicyID)
+	}
+
 	if basePolicy.Status == models.BasePolicyArchived {
 		return nil, fmt.Errorf("base policy is archived")
 	}

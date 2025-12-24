@@ -172,6 +172,7 @@ CREATE TABLE partner_deletion_requests (
 
     -- Metadata
     updated_at TIMESTAMP DEFAULT NOW(),
+    transfer_partner_id UUID,
 
     -- Foreign key constraint
     CONSTRAINT fk_partner

@@ -5,12 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"policy-service/internal/models"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -220,6 +223,7 @@ type DefaultProfileEventHandler struct {
 	workerManager        *worker.WorkerManagerV2
 	cancelRequestService ICancelService
 	notievent            *NotificationHelper
+	redisClient          *redis.Client
 }
 
 // NewDefaultPaymentEventHandler creates a new default payment event handler
@@ -230,6 +234,7 @@ func NewDefaultProfileEventHandler(
 	cancelRequestRepo *repository.CancelRequestRepository,
 	cancelRequestService ICancelService,
 	notievent *NotificationHelper,
+	redisClient *redis.Client,
 ) *DefaultProfileEventHandler {
 	return &DefaultProfileEventHandler{
 		registeredPolicyRepo: registeredPolicyRepo,
@@ -238,6 +243,7 @@ func NewDefaultProfileEventHandler(
 		cancelRequestRepo:    cancelRequestRepo,
 		cancelRequestService: cancelRequestService,
 		notievent:            notievent,
+		redisClient:          redisClient,
 	}
 }
 
@@ -273,7 +279,36 @@ func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Cont
 	if err != nil {
 		return err
 	}
+	basePolicies, err := h.basePolicyRepo.GetBasePoliciesByProvider(event.ProfileID)
+	if err != nil {
+		return err
+	}
+	policies, err := h.registeredPolicyRepo.GetByInsuranceProviderIDAndStatus(event.ProfileID, models.PolicyPendingPayment)
+	if err != nil {
+		return err
+	}
 
+	basePolicyIDs := []uuid.UUID{}
+	policyIDs := []uuid.UUID{}
+
+	for _, basePolicy := range basePolicies {
+		basePolicyIDs = append(basePolicyIDs, basePolicy.ID)
+	}
+	for _, policy := range policies {
+		policyIDs = append(policyIDs, policy.ID)
+	}
+	res, err := h.registeredPolicyRepo.BulkUpdateStatusWhereProviderAndStatusIn(ctx, policyIDs, event.ProfileID, models.PolicyCancelled, []models.PolicyStatus{models.PolicyPendingPayment})
+	if err != nil {
+		return err
+	}
+	slog.Info("cancelled all pending payment policy", "count", res)
+	res, err = h.basePolicyRepo.BulkUpdateBasePolicyStatus(basePolicyIDs, models.BasePolicyClosed)
+	if err != nil {
+		return err
+	}
+	slog.Info("closed all base policy", "count", res)
+
+	h.redisClient.Set(ctx, fmt.Sprintf("Delete-Profile-%s", event.ProfileID), "true", 10000*time.Hour)
 	return nil
 }
 

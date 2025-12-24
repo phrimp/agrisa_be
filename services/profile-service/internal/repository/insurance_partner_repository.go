@@ -564,14 +564,16 @@ func (r *InsurancePartnerRepository) CreateDeletionRequest(
             requested_by_name,
             detailed_explanation,
             requested_at,
-            cancellable_until
+            cancellable_until,
+			transfer_partner_id
         ) VALUES (
             :partner_id,
             :requested_by,
             :requested_by_name,
             :detailed_explanation,
             :requested_at,
-            :cancellable_until
+            :cancellable_until,
+			:transfer_partner_id
         )
         RETURNING 
             request_id,
@@ -586,6 +588,7 @@ func (r *InsurancePartnerRepository) CreateDeletionRequest(
             reviewed_by_name,
             reviewed_at,
             review_note,
+            transfer_partner_id,
             updated_at
     `
 	rows, err := r.db.NamedQueryContext(ctx, query, req)

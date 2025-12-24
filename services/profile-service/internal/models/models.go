@@ -138,5 +138,6 @@ type PartnerDeletionRequest struct {
 	ReviewNote     *string    `json:"review_note,omitempty" db:"review_note"`
 
 	// Metadata
-	UpdatedAt time.Time `json:"updated_at" db:"updated_at"`
+	UpdatedAt         time.Time  `json:"updated_at" db:"updated_at"`
+	TransferPartnerID *uuid.UUID `json:"transfer_partner_id,omitempty" db:"transfer_partner_id"`
 }

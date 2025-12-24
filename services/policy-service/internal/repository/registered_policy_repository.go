@@ -1587,3 +1587,401 @@ func (r *RegisteredPolicyRepository) GetByStatus(status models.PolicyStatus) ([]
 
 	return policies, nil
 }
+
+// ============================================================================
+// OPTIMIZED BULK STATUS UPDATE WITH CONDITIONAL WHERE
+// ============================================================================
+
+// BulkUpdateStatusWhere updates status for multiple policies only if they match the current status
+// Uses single query with ANY clause for optimal performance (~100x faster than loops)
+func (r *RegisteredPolicyRepository) BulkUpdateStatusWhere(
+	ctx context.Context,
+	policyIDs []uuid.UUID,
+	newStatus models.PolicyStatus,
+	currentStatus models.PolicyStatus,
+) (int64, error) {
+	if len(policyIDs) == 0 {
+		slog.Warn("Empty policy IDs slice provided to BulkUpdateStatusWhere")
+		return 0, nil
+	}
+
+	slog.Info("Starting bulk status update with WHERE condition",
+		"policy_count", len(policyIDs),
+		"current_status", currentStatus,
+		"new_status", newStatus)
+	start := time.Now()
+
+	// Convert UUIDs to strings for PostgreSQL array
+	policyIDStrs := make([]string, len(policyIDs))
+	for i, id := range policyIDs {
+		policyIDStrs[i] = id.String()
+	}
+
+	query := `
+		UPDATE registered_policy
+		SET status = $1, updated_at = NOW()
+		WHERE id = ANY($2) AND status = $3`
+
+	result, err := r.db.ExecContext(ctx, query, newStatus, policyIDStrs, currentStatus)
+	if err != nil {
+		slog.Error("Failed to execute bulk status update with WHERE",
+			"policy_count", len(policyIDs),
+			"current_status", currentStatus,
+			"new_status", newStatus,
+			"error", err)
+		return 0, fmt.Errorf("failed to bulk update status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		slog.Error("Failed to get rows affected", "error", err)
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	slog.Info("Bulk status update with WHERE completed",
+		"policy_count", len(policyIDs),
+		"rows_affected", rowsAffected,
+		"current_status", currentStatus,
+		"new_status", newStatus,
+		"duration", time.Since(start))
+
+	if rowsAffected != int64(len(policyIDs)) {
+		slog.Warn("Some policies were not updated (status mismatch or not found)",
+			"requested", len(policyIDs),
+			"updated", rowsAffected,
+			"skipped", len(policyIDs)-int(rowsAffected))
+	}
+
+	return rowsAffected, nil
+}
+
+// BulkUpdateStatusWhereIn updates status for policies matching any of the provided current statuses
+// Useful for state transitions like: (PendingReview OR PendingPayment) → Active
+func (r *RegisteredPolicyRepository) BulkUpdateStatusWhereIn(
+	ctx context.Context,
+	policyIDs []uuid.UUID,
+	newStatus models.PolicyStatus,
+	currentStatuses []models.PolicyStatus,
+) (int64, error) {
+	if len(policyIDs) == 0 {
+		slog.Warn("Empty policy IDs slice provided to BulkUpdateStatusWhereIn")
+		return 0, nil
+	}
+
+	if len(currentStatuses) == 0 {
+		slog.Warn("Empty current statuses slice provided to BulkUpdateStatusWhereIn")
+		return 0, nil
+	}
+
+	slog.Info("Starting bulk status update with WHERE IN condition",
+		"policy_count", len(policyIDs),
+		"current_statuses", currentStatuses,
+		"new_status", newStatus)
+	start := time.Now()
+
+	// Convert UUIDs to strings for PostgreSQL array
+	policyIDStrs := make([]string, len(policyIDs))
+	for i, id := range policyIDs {
+		policyIDStrs[i] = id.String()
+	}
+
+	// Convert statuses to strings for PostgreSQL array
+	statusStrs := make([]string, len(currentStatuses))
+	for i, status := range currentStatuses {
+		statusStrs[i] = string(status)
+	}
+
+	query := `
+		UPDATE registered_policy
+		SET status = $1, updated_at = NOW()
+		WHERE id = ANY($2) AND status = ANY($3)`
+
+	result, err := r.db.ExecContext(ctx, query, newStatus, policyIDStrs, statusStrs)
+	if err != nil {
+		slog.Error("Failed to execute bulk status update with WHERE IN",
+			"policy_count", len(policyIDs),
+			"current_statuses", currentStatuses,
+			"new_status", newStatus,
+			"error", err)
+		return 0, fmt.Errorf("failed to bulk update status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		slog.Error("Failed to get rows affected", "error", err)
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	slog.Info("Bulk status update with WHERE IN completed",
+		"policy_count", len(policyIDs),
+		"rows_affected", rowsAffected,
+		"current_statuses", currentStatuses,
+		"new_status", newStatus,
+		"duration", time.Since(start))
+
+	if rowsAffected != int64(len(policyIDs)) {
+		slog.Warn("Some policies were not updated (status mismatch or not found)",
+			"requested", len(policyIDs),
+			"updated", rowsAffected,
+			"skipped", len(policyIDs)-int(rowsAffected))
+	}
+
+	return rowsAffected, nil
+}
+
+// BulkUpdateStatusWithTx updates status for multiple policies in a transaction with WHERE condition
+func (r *RegisteredPolicyRepository) BulkUpdateStatusWithTx(
+	tx *sqlx.Tx,
+	policyIDs []uuid.UUID,
+	newStatus models.PolicyStatus,
+	currentStatus models.PolicyStatus,
+) (int64, error) {
+	if len(policyIDs) == 0 {
+		return 0, nil
+	}
+
+	slog.Info("Starting bulk status update with WHERE in transaction",
+		"policy_count", len(policyIDs),
+		"current_status", currentStatus,
+		"new_status", newStatus)
+	start := time.Now()
+
+	// Convert UUIDs to strings for PostgreSQL array
+	policyIDStrs := make([]string, len(policyIDs))
+	for i, id := range policyIDs {
+		policyIDStrs[i] = id.String()
+	}
+
+	query := `
+		UPDATE registered_policy
+		SET status = $1, updated_at = NOW()
+		WHERE id = ANY($2) AND status = $3`
+
+	result, err := tx.Exec(query, newStatus, policyIDStrs, currentStatus)
+	if err != nil {
+		slog.Error("Failed to execute bulk status update with WHERE in transaction",
+			"policy_count", len(policyIDs),
+			"current_status", currentStatus,
+			"new_status", newStatus,
+			"error", err)
+		return 0, fmt.Errorf("failed to bulk update status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	slog.Info("Bulk status update with WHERE in transaction completed",
+		"policy_count", len(policyIDs),
+		"rows_affected", rowsAffected,
+		"duration", time.Since(start))
+
+	return rowsAffected, nil
+}
+
+// BulkUpdateStatusWhereProviderAndStatus updates status for multiple policies with provider and status conditions
+// Only updates policies that match BOTH the insurance_provider_id AND current status
+func (r *RegisteredPolicyRepository) BulkUpdateStatusWhereProviderAndStatus(
+	ctx context.Context,
+	policyIDs []uuid.UUID,
+	providerID string,
+	newStatus models.PolicyStatus,
+	currentStatus models.PolicyStatus,
+) (int64, error) {
+	if len(policyIDs) == 0 {
+		return 0, nil
+	}
+
+	slog.Info("Starting bulk status update with provider and status WHERE conditions",
+		"policy_count", len(policyIDs),
+		"provider_id", providerID,
+		"current_status", currentStatus,
+		"new_status", newStatus)
+	start := time.Now()
+
+	// Convert UUIDs to strings for PostgreSQL array
+	policyIDStrs := make([]string, len(policyIDs))
+	for i, id := range policyIDs {
+		policyIDStrs[i] = id.String()
+	}
+
+	query := `
+		UPDATE registered_policy
+		SET status = $1, updated_at = NOW()
+		WHERE id = ANY($2)
+		  AND insurance_provider_id = $3
+		  AND status = $4`
+
+	result, err := r.db.ExecContext(ctx, query, newStatus, policyIDStrs, providerID, currentStatus)
+	if err != nil {
+		slog.Error("Failed to execute bulk status update with provider and status WHERE",
+			"policy_count", len(policyIDs),
+			"provider_id", providerID,
+			"current_status", currentStatus,
+			"new_status", newStatus,
+			"error", err)
+		return 0, fmt.Errorf("failed to bulk update status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected != int64(len(policyIDs)) {
+		slog.Warn("Bulk status update affected different number of rows than requested",
+			"requested", len(policyIDs),
+			"affected", rowsAffected,
+			"provider_id", providerID,
+			"current_status", currentStatus,
+			"reason", "some policies may not match provider_id or current status")
+	}
+
+	slog.Info("Bulk status update with provider and status WHERE completed",
+		"policy_count", len(policyIDs),
+		"rows_affected", rowsAffected,
+		"provider_id", providerID,
+		"duration", time.Since(start))
+
+	return rowsAffected, nil
+}
+
+// BulkUpdateStatusWhereProviderAndStatusIn updates status for multiple policies with provider and multiple status conditions
+// Only updates policies that match insurance_provider_id AND current status is in the list
+func (r *RegisteredPolicyRepository) BulkUpdateStatusWhereProviderAndStatusIn(
+	ctx context.Context,
+	policyIDs []uuid.UUID,
+	providerID string,
+	newStatus models.PolicyStatus,
+	currentStatuses []models.PolicyStatus,
+) (int64, error) {
+	if len(policyIDs) == 0 {
+		return 0, nil
+	}
+
+	slog.Info("Starting bulk status update with provider and status IN WHERE conditions",
+		"policy_count", len(policyIDs),
+		"provider_id", providerID,
+		"current_statuses", currentStatuses,
+		"new_status", newStatus)
+	start := time.Now()
+
+	// Convert UUIDs to strings for PostgreSQL array
+	policyIDStrs := make([]string, len(policyIDs))
+	for i, id := range policyIDs {
+		policyIDStrs[i] = id.String()
+	}
+
+	// Convert statuses to strings for PostgreSQL array
+	statusStrs := make([]string, len(currentStatuses))
+	for i, status := range currentStatuses {
+		statusStrs[i] = string(status)
+	}
+
+	query := `
+		UPDATE registered_policy
+		SET status = $1, updated_at = NOW()
+		WHERE id = ANY($2)
+		  AND insurance_provider_id = $3
+		  AND status = ANY($4)`
+
+	result, err := r.db.ExecContext(ctx, query, newStatus, policyIDStrs, providerID, statusStrs)
+	if err != nil {
+		slog.Error("Failed to execute bulk status update with provider and status IN WHERE",
+			"policy_count", len(policyIDs),
+			"provider_id", providerID,
+			"current_statuses", currentStatuses,
+			"new_status", newStatus,
+			"error", err)
+		return 0, fmt.Errorf("failed to bulk update status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected != int64(len(policyIDs)) {
+		slog.Warn("Bulk status update affected different number of rows than requested",
+			"requested", len(policyIDs),
+			"affected", rowsAffected,
+			"provider_id", providerID,
+			"current_statuses", currentStatuses,
+			"reason", "some policies may not match provider_id or current statuses")
+	}
+
+	slog.Info("Bulk status update with provider and status IN WHERE completed",
+		"policy_count", len(policyIDs),
+		"rows_affected", rowsAffected,
+		"provider_id", providerID,
+		"duration", time.Since(start))
+
+	return rowsAffected, nil
+}
+
+// BulkUpdateStatusWhereProviderAndStatusTx updates status for multiple policies in transaction with provider and status conditions
+func (r *RegisteredPolicyRepository) BulkUpdateStatusWhereProviderAndStatusTx(
+	tx *sqlx.Tx,
+	policyIDs []uuid.UUID,
+	providerID string,
+	newStatus models.PolicyStatus,
+	currentStatus models.PolicyStatus,
+) (int64, error) {
+	if len(policyIDs) == 0 {
+		return 0, nil
+	}
+
+	slog.Info("Starting bulk status update with provider and status WHERE in transaction",
+		"policy_count", len(policyIDs),
+		"provider_id", providerID,
+		"current_status", currentStatus,
+		"new_status", newStatus)
+	start := time.Now()
+
+	// Convert UUIDs to strings for PostgreSQL array
+	policyIDStrs := make([]string, len(policyIDs))
+	for i, id := range policyIDs {
+		policyIDStrs[i] = id.String()
+	}
+
+	query := `
+		UPDATE registered_policy
+		SET status = $1, updated_at = NOW()
+		WHERE id = ANY($2)
+		  AND insurance_provider_id = $3
+		  AND status = $4`
+
+	result, err := tx.Exec(query, newStatus, policyIDStrs, providerID, currentStatus)
+	if err != nil {
+		slog.Error("Failed to execute bulk status update with provider and status WHERE in transaction",
+			"policy_count", len(policyIDs),
+			"provider_id", providerID,
+			"current_status", currentStatus,
+			"new_status", newStatus,
+			"error", err)
+		return 0, fmt.Errorf("failed to bulk update status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected != int64(len(policyIDs)) {
+		slog.Warn("Bulk status update in transaction affected different number of rows than requested",
+			"requested", len(policyIDs),
+			"affected", rowsAffected,
+			"provider_id", providerID,
+			"current_status", currentStatus,
+			"reason", "some policies may not match provider_id or current status")
+	}
+
+	slog.Info("Bulk status update with provider and status WHERE in transaction completed",
+		"policy_count", len(policyIDs),
+		"rows_affected", rowsAffected,
+		"provider_id", providerID,
+		"duration", time.Since(start))
+
+	return rowsAffected, nil
+}

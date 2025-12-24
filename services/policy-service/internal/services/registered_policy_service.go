@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"policy-service/internal/ai/gemini"
 	"policy-service/internal/database/minio"
+	"policy-service/internal/database/redis"
 	"policy-service/internal/event"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
@@ -32,6 +33,7 @@ type RegisteredPolicyService struct {
 	minioClient            *minio.MinioClient
 	notievent              *event.NotificationHelper
 	geminiSelector         *gemini.GeminiClientSelector
+	redisClient            *redis.Client
 }
 
 // NewRegisteredPolicyService creates a new registered policy service
@@ -47,6 +49,7 @@ func NewRegisteredPolicyService(
 	minioClient *minio.MinioClient,
 	notievent *event.NotificationHelper,
 	geminiSelector *gemini.GeminiClientSelector,
+	redisClient *redis.Client,
 ) *RegisteredPolicyService {
 	return &RegisteredPolicyService{
 		registeredPolicyRepo:   registeredPolicyRepo,
@@ -60,6 +63,7 @@ func NewRegisteredPolicyService(
 		minioClient:            minioClient,
 		notievent:              notievent,
 		geminiSelector:         geminiSelector,
+		redisClient:            redisClient,
 	}
 }
 
@@ -791,6 +795,14 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 		"policy_id", policyID,
 		"underwriting_status", req.UnderwritingStatus,
 		"validated_by", validatedBy)
+
+	res, err := s.redisClient.GetClient().Get(ctx, fmt.Sprintf("Delete-Profile-%s", validatedBy)).Result()
+	if err != nil {
+		slog.Error("error check profile in deletion failed", "error", err)
+	}
+	if res == "true" {
+		return nil, fmt.Errorf("profile is in deletion state")
+	}
 
 	// 1. Get the policy to verify it exists and get required info
 	policy, err := s.registeredPolicyRepo.GetByID(policyID)

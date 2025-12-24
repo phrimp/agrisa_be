@@ -158,10 +158,10 @@ func main() {
 	// Initialize services
 	dataTierService := services.NewDataTierService(dataTierRepo)
 	dataSourceService := services.NewDataSourceService(dataSourceRepo, cfg)
-	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, gemini.GeminiClients, registeredPolicyRepo, notificationHelper, cancelRepo)
+	basePolicyService := services.NewBasePolicyService(basePolicyRepo, dataSourceRepo, dataTierRepo, minioClient, gemini.GeminiClients, registeredPolicyRepo, notificationHelper, cancelRepo, redisClient)
 	farmService := services.NewFarmService(farmRepo, cfg, minioClient, workerManager)
 	pdfDocumentService := services.NewPDFService(minioClient, minio.Storage.PolicyDocuments)
-	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, notificationHelper, geminiSelector)
+	registeredPolicyService := services.NewRegisteredPolicyService(registeredPolicyRepo, basePolicyRepo, basePolicyService, farmService, workerManager, pdfDocumentService, dataSourceRepo, farmMonitoringDataRepo, minioClient, notificationHelper, geminiSelector, redisClient)
 	expirationService := services.NewPolicyExpirationService(redisClient.GetClient(), basePolicyService, minioClient, registeredPolicyRepo, basePolicyRepo, notificationHelper, workerManager, cancelRepo)
 	basePolicyTriggerService := services.NewBasePolicyTriggerService(basePolicyTriggerRepo)
 	riskAnalysisService := services.NewRiskAnalysisCRUDService(registeredPolicyRepo)
@@ -189,7 +189,7 @@ func main() {
 	} else {
 		log.Println("Payment event consumer started successfully")
 	}
-	profileEventHandler := event.NewDefaultProfileEventHandler(registeredPolicyRepo, basePolicyRepo, workerManager, cancelRepo, cancelRequestService, notificationHelper)
+	profileEventHandler := event.NewDefaultProfileEventHandler(registeredPolicyRepo, basePolicyRepo, workerManager, cancelRepo, cancelRequestService, notificationHelper, redisClient.GetClient())
 	profileConsumer := event.NewProfileConsumer(rabbitConn, profileEventHandler)
 	if err := profileConsumer.Start(ctx); err != nil {
 		log.Printf("error starting profile consumer: %v", err)
