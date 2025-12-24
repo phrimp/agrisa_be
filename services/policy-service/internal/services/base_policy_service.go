@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"policy-service/internal/ai/gemini"
 	"policy-service/internal/database/minio"
+	"policy-service/internal/database/redis"
 	"policy-service/internal/event"
 	"policy-service/internal/models"
 	"policy-service/internal/repository"
@@ -28,9 +29,10 @@ type BasePolicyService struct {
 	registerPolicyRepo *repository.RegisteredPolicyRepository
 	notievent          *event.NotificationHelper
 	cancelRequestRepo  *repository.CancelRequestRepository
+	redisClient        *redis.Client
 }
 
-func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient, geminiClients []gemini.GeminiClient, registerPolicyRepo *repository.RegisteredPolicyRepository, notievent *event.NotificationHelper, cancelRequestRepo *repository.CancelRequestRepository) *BasePolicyService {
+func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataSourceRepo *repository.DataSourceRepository, dataTierRepo *repository.DataTierRepository, minioClient *minio.MinioClient, geminiClients []gemini.GeminiClient, registerPolicyRepo *repository.RegisteredPolicyRepository, notievent *event.NotificationHelper, cancelRequestRepo *repository.CancelRequestRepository, redisClient *redis.Client) *BasePolicyService {
 	return &BasePolicyService{
 		basePolicyRepo:     basePolicyRepo,
 		dataSourceRepo:     dataSourceRepo,
@@ -40,6 +42,7 @@ func NewBasePolicyService(basePolicyRepo *repository.BasePolicyRepository, dataS
 		registerPolicyRepo: registerPolicyRepo,
 		notievent:          notievent,
 		cancelRequestRepo:  cancelRequestRepo,
+		redisClient:        redisClient,
 	}
 }
 
@@ -405,6 +408,13 @@ func (s *BasePolicyService) CreateCompletePolicy(ctx context.Context, request *m
 		"product_name", request.BasePolicy.ProductName,
 		"condition_count", len(request.Conditions))
 	start := time.Now()
+	res, err := s.redisClient.GetClient().Get(ctx, fmt.Sprintf("Delete-Profile-%s", request.BasePolicy.InsuranceProviderID)).Result()
+	if err != nil {
+		slog.Error("error check profile in deletion failed", "error", err)
+	}
+	if res == "true" {
+		return nil, fmt.Errorf("profile is in deletion state")
+	}
 
 	// Generate IDs and establish relationships
 	basePolicyID := uuid.New()

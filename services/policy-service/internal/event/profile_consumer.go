@@ -11,6 +11,7 @@ import (
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -220,6 +221,7 @@ type DefaultProfileEventHandler struct {
 	workerManager        *worker.WorkerManagerV2
 	cancelRequestService ICancelService
 	notievent            *NotificationHelper
+	redisClient          *redis.Client
 }
 
 // NewDefaultPaymentEventHandler creates a new default payment event handler
@@ -230,6 +232,7 @@ func NewDefaultProfileEventHandler(
 	cancelRequestRepo *repository.CancelRequestRepository,
 	cancelRequestService ICancelService,
 	notievent *NotificationHelper,
+	redisClient *redis.Client,
 ) *DefaultProfileEventHandler {
 	return &DefaultProfileEventHandler{
 		registeredPolicyRepo: registeredPolicyRepo,
@@ -238,6 +241,7 @@ func NewDefaultProfileEventHandler(
 		cancelRequestRepo:    cancelRequestRepo,
 		cancelRequestService: cancelRequestService,
 		notievent:            notievent,
+		redisClient:          redisClient,
 	}
 }
 
@@ -283,5 +287,6 @@ func (h *DefaultProfileEventHandler) handleProfileCancelDelete(ctx context.Conte
 	if err != nil {
 		return err
 	}
+	h.redisClient.Set(ctx, fmt.Sprintf("Delete-Profile-%s", event.ProfileID), "true", 1000*time.Hour)
 	return nil
 }
