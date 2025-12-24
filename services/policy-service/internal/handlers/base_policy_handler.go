@@ -48,7 +48,7 @@ func (bph *BasePolicyHandler) Register(app *fiber.App) {
 	policyGroup.Post("/validate", bph.ValidatePolicy)                              // POST /base-policies/validate - Validate policy & auto-commit
 	policyGroup.Post("/commit", bph.CommitPolicies)                                // POST /base-policies/commit - Manual commit policies to DB
 	policyGroup.Get("/active", bph.GetAllActivePolicy)
-	policyGroup.Get("/all", bph.GetAllBasePolicies) // GET /base-policies/all - Get all base policies
+	policyGroup.Get("/all", bph.GetAllBasePolicies)         // GET /base-policies/all - Get all base policies
 	policyGroup.Get("/detail", bph.GetCompletePolicyDetail) // GET  /base-policies/detail - Get complete policy details with PDF
 	policyGroup.Get("/by-provider", bph.GetByProvider)
 	policyGroup.Put("/cancel/:id", bph.CancelBasePolicy)
