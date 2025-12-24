@@ -11,7 +11,6 @@ import (
 
 	"github.com/gofiber/fiber/v3"
 	"github.com/google/uuid"
-	"github.com/robfig/cron/v3"
 )
 
 type DataBillHandler struct {
@@ -26,19 +25,7 @@ func NewDataBillHandler(basePolicyService *services.BasePolicyService, notificat
 		notificationHelper:      notificationHelper,
 		registeredPolicyService: registeredPolicyService,
 	}
-	handler.startCron()
 	return handler
-}
-
-func (h *DataBillHandler) startCron() {
-	c := cron.New()
-	c.AddFunc("@monthly", func() {
-		err := h.MarkPoliciesForPayment(context.Background())
-		if err != nil {
-			// Log error, but since no logger, just ignore or print
-		}
-	})
-	c.Start()
 }
 
 func (h *DataBillHandler) MarkPoliciesForPayment(ctx context.Context) error {
