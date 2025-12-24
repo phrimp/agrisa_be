@@ -439,3 +439,14 @@ func (c *CancelRequestService) CreateTransferRequest(ctx context.Context, create
 	}
 	return nil
 }
+
+func (c *CancelRequestService) RevokeAllTransferRequest(ctx context.Context, createdBy string, fromProvider string) error {
+	requests, err := c.cancelRequestRepo.GetAllByProviderIDWithStatusAndType(ctx, fromProvider, models.CancelRequestStatusPendingReview, models.CancelRequestTransferContract)
+	if err != nil {
+		return err
+	}
+	for _, request := range requests {
+		request.Status = models.CancelRequestStatusCancelled
+	}
+	return nil
+}

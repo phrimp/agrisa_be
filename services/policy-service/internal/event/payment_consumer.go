@@ -256,6 +256,7 @@ type DefaultPaymentEventHandler struct {
 	payoutRepo           *repository.PayoutRepository
 	cancelRequestRepo    *repository.CancelRequestRepository
 	notievent            *NotificationHelper
+	cancelRequestService ICancelService
 }
 
 // NewDefaultPaymentEventHandler creates a new default payment event handler
@@ -267,6 +268,7 @@ func NewDefaultPaymentEventHandler(
 	payoutRepo *repository.PayoutRepository,
 	notievent *NotificationHelper,
 	cancelRequestRepo *repository.CancelRequestRepository,
+	canRequestService ICancelService,
 ) *DefaultPaymentEventHandler {
 	return &DefaultPaymentEventHandler{
 		registeredPolicyRepo: registeredPolicyRepo,
@@ -276,6 +278,7 @@ func NewDefaultPaymentEventHandler(
 		payoutRepo:           payoutRepo,
 		notievent:            notievent,
 		cancelRequestRepo:    cancelRequestRepo,
+		cancelRequestService: canRequestService,
 	}
 }
 
