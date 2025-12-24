@@ -60,3 +60,11 @@ type FarmStatsOverview struct {
 	FarmActiveCount       int `json:"farm_active_count"`
 	FarmInactiveCount     int `json:"farm_inactive_count"`
 }
+
+type UpdateFarmRequest struct {
+	FarmName            *string `json:"farm_name,omitempty"`
+	PlantingDate        *int64  `json:"planting_date,omitempty"`
+	ExpectedHarvestDate *int64  `json:"expected_harvest_date,omitempty"`
+	HasIrrigation       *bool   `json:"has_irrigation,omitempty"`
+	IrrigationType      *string `json:"irrigation_type,omitempty"`
+}
