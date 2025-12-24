@@ -270,7 +270,7 @@ func (s *ClaimService) ValidateClaim(ctx context.Context, claimID uuid.UUID, req
 	claim.Status = request.Status
 	claim.PartnerDecision = &request.PartnerDecision
 	claim.PartnerNotes = &request.PartnerNotes
-	claim.ReviewedBy = &request.ReviewedBy
+	claim.ReviewedBy = &partnerID
 	err = s.claimRepo.UpdateTx(tx, claim)
 	if err != nil {
 		tx.Rollback()

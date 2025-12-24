@@ -263,11 +263,9 @@ func (h *DefaultProfileEventHandler) HandleProfileEvent(ctx context.Context, eve
 	default:
 		return &PaymentValidationError{
 			PaymentID: event.ID,
-			Reason:    fmt.Sprintf("unsupported payment type: %s", event.EventType),
+			Reason:    fmt.Sprintf("unsupported profile type: %s", event.EventType),
 		}
 	}
-
-	return nil
 }
 
 func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Context, event ProfileEvent) error {
