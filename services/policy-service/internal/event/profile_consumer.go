@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
+	"sync"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -194,7 +195,14 @@ func (c *ProfileConsumer) processMessage(ctx context.Context, msg amqp.Delivery)
 		)
 		c.messagesFailed++
 		// Requeue the message for retry
-		msg.Nack(false, true)
+		var mu sync.Mutex
+		mu.Lock()
+		if c.messagesFailed >= 10 {
+			msg.Ack(false)
+		} else {
+			msg.Nack(false, true)
+		}
+		mu.Unlock()
 		return
 	}
 
