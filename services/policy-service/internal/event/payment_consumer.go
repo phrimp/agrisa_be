@@ -22,6 +22,7 @@ const (
 
 type ICancelService interface {
 	CreateTransferRequest(ctx context.Context, createdBy string, fromProvider, toProvider string) error
+	RevokeAllTransferRequest(ctx context.Context, createdBy string, fromProvider string) error
 }
 
 // PaymentEvent represents the payment event data from payment-service

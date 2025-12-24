@@ -38,9 +38,18 @@ func (h *NotificationHelper) NotifyPolicyCancelRequestCreated(ctx context.Contex
 
 func (h *NotificationHelper) NotifyPolicyRegisteredPartner(ctx context.Context, userIDs []string, basePolicyNumber string) error {
 	event := NotificationEventPushModel{
-		Title:      "Policy Registered Successfully",
-		Body:       fmt.Sprintf("Your base policy %s has been registered and is now waiting for underwriting.", basePolicyNumber),
+		Title:      "Đăng Ký Gói Bảo Hiểm",
+		Body:       fmt.Sprintf("Gói bảo hiểm mã số %s đã được đăng ký và đang chờ duyệt", basePolicyNumber),
 		LstUserIds: userIDs,
+	}
+	return h.publisher.PublishNotification(ctx, event)
+}
+
+func (h *NotificationHelper) NotifyBasePolicyReviewed(ctx context.Context, userID string, basePolicyNumber string) error {
+	event := NotificationEventPushModel{
+		Title:      "Duyệt Gói Bảo Hiểm",
+		Body:       fmt.Sprintf("Gói bảo hiểm mã số %s đã được duyệt", basePolicyNumber),
+		LstUserIds: []string{userID},
 	}
 	return h.publisher.PublishNotification(ctx, event)
 }
@@ -119,6 +128,15 @@ func (h *NotificationHelper) NotifyClaimApproved(ctx context.Context, userID, po
 	event := NotificationEventPushModel{
 		Title:      "Sự Kiện Bảo Hiểm Đã Được Chấp Thuận",
 		Body:       fmt.Sprintf("Sự kiện bảo hiểm cho hợp đồng %s đã được chấp thuận. Số tiền nhận được %v.", policyNumber, payoutAmount),
+		LstUserIds: []string{userID},
+	}
+	return h.publisher.PublishNotification(ctx, event)
+}
+
+func (h *NotificationHelper) NotifyTransferPolicyRequest(ctx context.Context, userID, policyNumber string, newProvider string) error {
+	event := NotificationEventPushModel{
+		Title:      "Yêu Cầu Chuyển Giao Hợp Đồng Bảo Hiểm",
+		Body:       fmt.Sprintf("Hợp đồng bảo hiểm %s được yêu cầu chuyển giao cho công ty %s.", policyNumber, newProvider),
 		LstUserIds: []string{userID},
 	}
 	return h.publisher.PublishNotification(ctx, event)

@@ -121,8 +121,8 @@ func (s *BasePolicyService) DataSelection(selectedTriggerConditions []*models.Ba
 	return nil
 }
 
-func (s *BasePolicyService) GetBasePolicyCount() (int, error) {
-	count, err := s.basePolicyRepo.GetBasePolicyCount()
+func (s *BasePolicyService) GetBasePolicyCount(providerID string) (int, error) {
+	count, err := s.basePolicyRepo.GetBasePolicyCount(providerID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get base policy count: %w", err)
 	}
@@ -130,12 +130,12 @@ func (s *BasePolicyService) GetBasePolicyCount() (int, error) {
 	return count, nil
 }
 
-func (s *BasePolicyService) GetBasePolicyCountByStatus(status models.BasePolicyStatus) (int, error) {
+func (s *BasePolicyService) GetBasePolicyCountByStatus(status models.BasePolicyStatus, providerID string) (int, error) {
 	if !s.isValidBasePolicyStatus(status) {
 		return 0, fmt.Errorf("invalid base policy status: %s", status)
 	}
 
-	count, err := s.basePolicyRepo.GetBasePolicyCountByStatus(status)
+	count, err := s.basePolicyRepo.GetBasePolicyCountByStatus(status, providerID)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get base policy count by status: %w", err)
 	}

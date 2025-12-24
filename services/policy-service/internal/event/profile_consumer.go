@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"policy-service/internal/repository"
 	"policy-service/internal/worker"
+	"sync"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -25,10 +26,11 @@ const (
 )
 
 type ProfileEvent struct {
-	ID        string           `json:"id"`
-	EventType ProfileEventType `json:"event_type"`
-	UserID    string           `json:"user_id"`
-	ProfileID string           `json:"profile_id"`
+	ID         string           `json:"id"`
+	EventType  ProfileEventType `json:"event_type"`
+	UserID     string           `json:"user_id"`
+	ProfileID  string           `json:"profile_id"`
+	Additional map[string]any   `json:"additional"`
 }
 
 type ProfileConsumer struct {
@@ -193,7 +195,14 @@ func (c *ProfileConsumer) processMessage(ctx context.Context, msg amqp.Delivery)
 		)
 		c.messagesFailed++
 		// Requeue the message for retry
-		msg.Nack(false, true)
+		var mu sync.Mutex
+		mu.Lock()
+		if c.messagesFailed >= 10 {
+			msg.Ack(false)
+		} else {
+			msg.Nack(false, true)
+		}
+		mu.Unlock()
 		return
 	}
 
@@ -209,6 +218,8 @@ type DefaultProfileEventHandler struct {
 	cancelRequestRepo    *repository.CancelRequestRepository
 	basePolicyRepo       *repository.BasePolicyRepository
 	workerManager        *worker.WorkerManagerV2
+	cancelRequestService ICancelService
+	notievent            *NotificationHelper
 }
 
 // NewDefaultPaymentEventHandler creates a new default payment event handler
@@ -217,12 +228,16 @@ func NewDefaultProfileEventHandler(
 	basePolicyRepo *repository.BasePolicyRepository,
 	workerManager *worker.WorkerManagerV2,
 	cancelRequestRepo *repository.CancelRequestRepository,
+	cancelRequestService ICancelService,
+	notievent *NotificationHelper,
 ) *DefaultProfileEventHandler {
 	return &DefaultProfileEventHandler{
 		registeredPolicyRepo: registeredPolicyRepo,
 		basePolicyRepo:       basePolicyRepo,
 		workerManager:        workerManager,
 		cancelRequestRepo:    cancelRequestRepo,
+		cancelRequestService: cancelRequestService,
+		notievent:            notievent,
 	}
 }
 
@@ -236,6 +251,7 @@ func (h *DefaultProfileEventHandler) HandleProfileEvent(ctx context.Context, eve
 	}
 	switch event.EventType {
 	case ProfleConfirmDelete:
+		return h.handleProfileConfirmDelete(ctx, event)
 	case ProfileCancelDelete:
 	default:
 		return &PaymentValidationError{
@@ -249,5 +265,23 @@ func (h *DefaultProfileEventHandler) HandleProfileEvent(ctx context.Context, eve
 
 func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Context, event ProfileEvent) error {
 	slog.Info("CONFIRM DELETE PROFILE EVENT", "event", event)
+	toProvider, ok := event.Additional["toProvider"].(string)
+	if !ok {
+		return fmt.Errorf("to provider is null")
+	}
+	err := h.cancelRequestService.CreateTransferRequest(ctx, event.UserID, event.ProfileID, toProvider)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (h *DefaultProfileEventHandler) handleProfileCancelDelete(ctx context.Context, event ProfileEvent) error {
+	slog.Info("Cancel profile deletion event", "event", event)
+	err := h.cancelRequestService.RevokeAllTransferRequest(ctx, event.UserID, event.ProfileID)
+	if err != nil {
+		return err
+	}
 	return nil
 }
