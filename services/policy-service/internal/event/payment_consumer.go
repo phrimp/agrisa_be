@@ -292,20 +292,23 @@ func (h *DefaultPaymentEventHandler) HandlePaymentCompleted(ctx context.Context,
 		}
 	}
 
-	// Verify payment status - CRITICAL: must return error to retry
-	// This could be a timing issue where event was sent before payment completed
-	if event.Status != "paid" && event.Status != "completed" {
-		return &PaymentValidationError{
-			PaymentID: event.ID,
-			Reason:    fmt.Sprintf("payment not in paid/completed status: %s", event.Status),
+	// For data bill payments, skip status check as they may have different status
+	if models.PaymentType(*event.Type) != models.PaymentTypeDataBill {
+		// Verify payment status - CRITICAL: must return error to retry
+		// This could be a timing issue where event was sent before payment completed
+		if event.Status != "paid" && event.Status != "completed" {
+			return &PaymentValidationError{
+				PaymentID: event.ID,
+				Reason:    fmt.Sprintf("payment not in paid/completed status: %s", event.Status),
+			}
 		}
-	}
 
-	// Validate payment has PaidAt timestamp (common validation for all payment types)
-	if event.PaidAt == nil {
-		return &PaymentValidationError{
-			PaymentID: event.ID,
-			Reason:    "payment missing paid_at timestamp",
+		// Validate payment has PaidAt timestamp (common validation for all payment types)
+		if event.PaidAt == nil {
+			return &PaymentValidationError{
+				PaymentID: event.ID,
+				Reason:    "payment missing paid_at timestamp",
+			}
 		}
 	}
 
