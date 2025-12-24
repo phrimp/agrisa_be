@@ -39,13 +39,30 @@ func NewGenAIClient(apiKey, flashModelName, proModelName string) (*GeminiClient,
 func (g *GeminiClient) SendAIWithPDF(ctx context.Context, prompt string, data map[string]any) (map[string]any, error) {
 	fileData := data["pdf"].([]byte)
 
-	resp, err := g.ProModel.GenerateContent(ctx,
-		genai.Text(prompt),
+	var resp *genai.GenerateContentResponse
+	var err error
+
+	resp, err = g.ProModel.GenerateContent(ctx, genai.Text(prompt),
 		genai.Blob{
 			MIMEType: "application/pdf",
 			Data:     fileData,
 		},
 	)
+	if err != nil {
+		if strings.Contains(err.Error(), "Error 429") {
+			resp, err = g.FlashModel.GenerateContent(ctx, genai.Text(prompt),
+				genai.Blob{
+					MIMEType: "application/pdf",
+					Data:     fileData,
+				},
+			)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate content with images: %w", err)
+			}
+		}
+		return nil, fmt.Errorf("failed to generate content with images: %w", err)
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate content: %w", err)
 	}
@@ -118,8 +135,17 @@ func (g *GeminiClient) SendAIWithImages(ctx context.Context, prompt string, imag
 		"prompt_length", len(prompt),
 		"image_count", len(parts)-1) // -1 for the text prompt
 
-	resp, err := g.ProModel.GenerateContent(ctx, parts...)
+	var resp *genai.GenerateContentResponse
+	var err error
+
+	resp, err = g.ProModel.GenerateContent(ctx, parts...)
 	if err != nil {
+		if strings.Contains(err.Error(), "Error 429") {
+			resp, err = g.FlashModel.GenerateContent(ctx, parts...)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate content with images: %w", err)
+			}
+		}
 		return nil, fmt.Errorf("failed to generate content with images: %w", err)
 	}
 

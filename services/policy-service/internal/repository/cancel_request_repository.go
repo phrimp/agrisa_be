@@ -265,3 +265,25 @@ func (r *CancelRequestRepository) GetAllRequestsByProviderID(ctx context.Context
 
 	return requests, nil
 }
+
+func (r *CancelRequestRepository) GetAllByProviderIDWithStatusAndType(ctx context.Context, providerID string, status models.CancelRequestStatus, requestType models.CancelRequestType) ([]models.CancelRequest, error) {
+	var requests []models.CancelRequest
+	query := `
+    SELECT 
+        cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, 
+        requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, 
+        paid, paid_at, during_notice_period,
+        cr.created_at, cr.updated_at
+    FROM cancel_request cr 
+    JOIN registered_policy rp ON cr.registered_policy_id = rp.id
+    WHERE rp.insurance_provider_id = $1 AND cancel_request_type = $2 AND cr.status = $3
+    ORDER BY cr.requested_at DESC
+`
+
+	err := r.db.SelectContext(ctx, &requests, query, providerID, requestType, status)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list cancel requests by provider ID: %w", err)
+	}
+
+	return requests, nil
+}
