@@ -153,7 +153,7 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 		slog.Error("error retriving cancel request", "error", err)
 		return "", err
 	}
-	if request.Status != models.CancelRequestStatusPendingReview {
+	if request.Status != models.CancelRequestStatusPendingReview && request.CancelRequestType != models.CancelRequestTransferContract {
 		return "", fmt.Errorf("cancel request status invalid")
 	}
 	if request.RequestedBy == review.ReviewedBy {
