@@ -202,9 +202,10 @@ const (
 type DataSourceAPIAddress string
 
 const (
-	SatelliteNDVI   DataSourceAPIAddress = "/satellite/public/ndvi/batch"
-	SatelliteNDMI   DataSourceAPIAddress = "/satellite/public/ndmi/batch"
-	WeatherRainFall DataSourceAPIAddress = "/weather/public/api/v2/precipitation/polygon"
+	SatelliteNDVI          DataSourceAPIAddress = "/satellite/public/ndvi/batch"
+	SatelliteNDMI          DataSourceAPIAddress = "/satellite/public/ndmi/batch"
+	WeatherRainFall        DataSourceAPIAddress = "/weather/public/api/v2/precipitation/polygon"
+	WeatherCurrentPolygon  DataSourceAPIAddress = "/weather/public/api/v2/current/polygon"
 )
 
 type DataSourceParameterName string

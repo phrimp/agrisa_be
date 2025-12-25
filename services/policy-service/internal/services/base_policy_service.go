@@ -1515,6 +1515,13 @@ func (s *BasePolicyService) CancelBasePolicy(ctx context.Context, basePolicyID u
 }
 
 func (s *BasePolicyService) UpdateBasePolicyStatus(ctx context.Context, basePolicyID uuid.UUID, status models.BasePolicyStatus) error {
+	basePolicy, err := s.basePolicyRepo.GetBasePolicyByID(basePolicyID)
+	if err != nil {
+		return err
+	}
+	if basePolicy.Status != models.BasePolicyActive {
+		return fmt.Errorf("base policy status is not active, current status=%s", basePolicy.Status)
+	}
 	return s.basePolicyRepo.UpdateStatus(basePolicyID, status)
 }
 

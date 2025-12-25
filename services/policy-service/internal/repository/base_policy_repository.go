@@ -224,6 +224,30 @@ func (r *BasePolicyRepository) GetBasePoliciesByProvider(providerID string) ([]m
 	return policies, nil
 }
 
+func (r *BasePolicyRepository) GetBasePoliciesByProviderUpdatedAt(providerID string) ([]models.BasePolicy, error) {
+	var policies []models.BasePolicy
+	query := `
+		SELECT
+			id, insurance_provider_id, product_name, product_code, product_description,
+			crop_type, coverage_currency, coverage_duration_days, fix_premium_amount,
+			is_per_hectare, premium_base_rate, max_premium_payment_prolong, fix_payout_amount, is_payout_per_hectare,
+			over_threshold_multiplier, payout_base_rate, payout_cap, enrollment_start_day,
+			enrollment_end_day, auto_renewal, renewal_discount_rate, base_policy_invalid_date,
+			insurance_valid_from_day, insurance_valid_to_day, status, template_document_url,
+			document_validation_status, document_validation_score, document_tags, important_additional_information,
+			created_at, updated_at, created_by
+		FROM base_policy
+		WHERE insurance_provider_id = $1
+		ORDER BY updated_at DESC`
+
+	err := r.db.Select(&policies, query, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get base policies by provider: %w", err)
+	}
+
+	return policies, nil
+}
+
 func (r *BasePolicyRepository) GetBasePoliciesByStatus(status models.BasePolicyStatus) ([]models.BasePolicy, error) {
 	var policies []models.BasePolicy
 	query := `

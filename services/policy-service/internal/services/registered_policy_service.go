@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"policy-service/internal/ai/gemini"
 	"policy-service/internal/database/minio"
@@ -472,7 +473,7 @@ func (s *RegisteredPolicyService) calculateFarmerPremium(areasqm, basePremiumRat
 		fixPremiumAmount = 1
 	}
 
-	return areasqm * basePremiumRate * float64(fixPremiumAmount)
+	return math.Round(areasqm*basePremiumRate*float64(fixPremiumAmount)*100) / 100
 }
 
 // GetPolicyStats retrieves policy statistics (optionally filtered by provider)

@@ -19,6 +19,7 @@ type CancelRequestService struct {
 	cancelRequestRepo *repository.CancelRequestRepository
 	notievent         *event.NotificationHelper
 	redisClient       *redis.Client
+	claimRepo         *repository.ClaimRepository
 }
 
 func NewCancelRequestService(
@@ -26,12 +27,14 @@ func NewCancelRequestService(
 	cancelRequestRepo *repository.CancelRequestRepository,
 	notievent *event.NotificationHelper,
 	redisClient *redis.Client,
+	claimRepo *repository.ClaimRepository,
 ) *CancelRequestService {
 	return &CancelRequestService{
 		cancelRequestRepo: cancelRequestRepo,
 		policyRepo:        policyRepo,
 		notievent:         notievent,
 		redisClient:       redisClient,
+		claimRepo:         claimRepo,
 	}
 }
 
@@ -46,6 +49,17 @@ func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID
 		models.PolicyActive:         true,
 		models.PolicyPendingPayment: true,
 		models.PolicyPendingReview:  true,
+	}
+	if req.CancelRequestType != models.CancelRequestTransferContract {
+		claims, err := c.claimRepo.GetByRegisteredPolicyID(ctx, policy.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, claim := range claims {
+			if claim.Status == models.ClaimPendingPartnerReview {
+				return nil, fmt.Errorf("there are existing pending review claim")
+			}
+		}
 	}
 
 	if createdBy != policy.FarmerID && createdBy != policy.InsuranceProviderID {
@@ -159,7 +173,7 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 	if request.RequestedBy == review.ReviewedBy {
 		return "", fmt.Errorf("cannot review your own request")
 	}
-	if now.Compare(request.CreatedAt.Add(1*time.Hour)) == -1 {
+	if now.Compare(request.CreatedAt.Add(2*time.Minute)) == -1 && request.CancelRequestType != models.CancelRequestTransferContract {
 		return "", fmt.Errorf("cannot review newly created request")
 	}
 
@@ -186,7 +200,7 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 	request.ReviewedAt = &now
 	request.ReviewNotes = &review.ReviewNote
 
-	if policy.Status != models.PolicyPendingCancel {
+	if policy.Status != models.PolicyPendingCancel && request.CancelRequestType != models.CancelRequestTransferContract {
 		return "", fmt.Errorf("policy status invalid for review: expected PendingCancel, got %s", policy.Status)
 	}
 
@@ -459,10 +473,14 @@ func (c *CancelRequestService) RevokeAllTransferRequest(ctx context.Context, cre
 	if err != nil {
 		return err
 	}
-	updatedRequest := []models.CancelRequest{}
+	requestIDs := []uuid.UUID{}
 	for _, request := range requests {
-		request.Status = models.CancelRequestStatusCancelled
-		updatedRequest = append(updatedRequest, request)
+		requestIDs = append(requestIDs, request.ID)
 	}
+	res, err := c.cancelRequestRepo.BulkUpdateStatusWhereProviderStatusAndType(ctx, requestIDs, fromProvider, models.CancelRequestStatusPendingReview, models.CancelRequestTransferContract, models.CancelRequestStatusCancelled)
+	if err != nil {
+		return err
+	}
+	slog.Info("revoke all transfer request", "count", res)
 	return nil
 }

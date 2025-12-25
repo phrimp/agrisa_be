@@ -154,7 +154,7 @@ type DataRequest struct {
 	DataSource        models.DataSource
 	FarmID            uuid.UUID
 	FarmCoordinates   [][]float64 // GeoJSON polygon coordinates (first ring only)
-	AgroPolygonID     string
+	AgroPolygonID     *string
 	StartDate         string // YYYY-MM-DD format
 	EndDate           string // YYYY-MM-DD format
 	DataSourceID      uuid.UUID
@@ -523,18 +523,6 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 						"claim_amount", claim.ClaimAmount,
 						"policy_id", policyID)
 
-					go func() {
-						for {
-							err := s.notievent.NotifyClaimGenerated(context.Background(), policy.FarmerID, policy.PolicyNumber)
-							if err == nil {
-								slog.Info("claim generated notification sent", "policy id", policy.ID)
-								return
-							}
-							slog.Error("error sending claim generated notification", "error", err)
-							time.Sleep(10 * time.Second)
-						}
-					}()
-
 					for _, tc := range triggeredConditions {
 						slog.Info("Triggered condition details",
 							"claim_id", claim.ID,
@@ -565,6 +553,11 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	if farm.Boundary == nil {
 		return fmt.Errorf("farm boundary is required for monitoring data fetch")
 	}
+
+	slog.Info("Farm loaded for monitoring data fetch",
+		"farm_id", farmID,
+		"agro_polygon_id", farm.AgroPolygonID,
+		"has_boundary", farm.Boundary != nil)
 
 	// Extract coordinates from GeoJSON polygon (first ring only)
 	farmCoordinates := extractPolygonCoordinates(farm.Boundary)
@@ -628,6 +621,13 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 		// Convert adjusted start date to string format
 		paramStartDateStr := unixToDateString(paramStartDate)
+
+		slog.Info("Enqueueing data fetch job",
+			"data_source", cds.DataSource.ParameterName,
+			"farm_id", farmID,
+			"agro_polygon_id", farm.AgroPolygonID,
+			"start_date", paramStartDateStr,
+			"end_date", endDateStr)
 
 		jobs <- DataRequest{
 			DataSource:        cds.DataSource,
@@ -729,9 +729,9 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	}
 
 	// Update farm's AgroPolygonID if we received one from weather API
-	if agroPolygonID != "" && farm.AgroPolygonID != agroPolygonID {
+	if agroPolygonID != "" && farm.AgroPolygonID != &agroPolygonID {
 		// Update farm with new polygon ID
-		farm.AgroPolygonID = agroPolygonID
+		farm.AgroPolygonID = &agroPolygonID
 		if err := s.farmService.UpdateFarm(ctx, farm, "system", farmID.String()); err != nil {
 			// Log error but don't fail the entire job
 			slog.Error("Failed to update farm AgroPolygonID",
@@ -827,18 +827,6 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 				// ================================================================
 				// TODO: Send notification to farmer about claim generation
 				// notification.SendToFarmer(claim.FarmerID, NotificationClaimGenerated, claim)
-
-				go func() {
-					for {
-						err := s.notievent.NotifyClaimGenerated(context.Background(), policy.FarmerID, policy.PolicyNumber)
-						if err == nil {
-							slog.Info("claim generated notification sent", "policy id", policy.ID)
-							return
-						}
-						slog.Error("error sending claim generated notification", "error", err)
-						time.Sleep(10 * time.Second)
-					}
-				}()
 
 				// TODO: Send notification to insurance provider for review
 				// notification.SendToProvider(policy.InsuranceProviderID, NotificationClaimPendingReview, claim)
@@ -990,6 +978,17 @@ func (s *RegisteredPolicyService) generateClaimFromTrigger(
 		"total_payout", totalPayout,
 		"over_threshold_value", overThresholdValue)
 
+	go func() {
+		for {
+			err := s.notievent.NotifyClaimGenerated(context.Background(), policy.FarmerID, policy.PolicyNumber)
+			if err == nil {
+				slog.Info("claim generated notification sent", "policy id", policy.ID)
+				return
+			}
+			slog.Error("error sending claim generated notification", "error", err)
+			time.Sleep(10 * time.Second)
+		}
+	}()
 	return claim, nil
 }
 
@@ -1123,6 +1122,16 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 				"trigger_id", trigger.ID,
 				"error", err)
 			continue
+		}
+		for _, condition := range conditions {
+			windowStartDate := currentTime.Add(-time.Duration(condition.AggregationWindowDays) * 24 * time.Hour)
+			if windowStartDate.Unix() < policy.CoverageStartDate {
+				slog.Info("  Trigger SKIPPED: in aggregation window not satisfied",
+					"trigger_id", trigger.ID,
+					"current_time", currentTime,
+					"aggregation window start day", windowStartDate)
+				continue
+			}
 		}
 
 		slog.Info("  Retrieved conditions for trigger",
@@ -2007,7 +2016,16 @@ func fetchWeatherData(client *http.Client,
 	}
 	params.Set("start", strconv.FormatInt(startTime.Unix(), 10))
 	params.Set("end", strconv.FormatInt(endTime.Unix(), 10))
-	params.Set("polygon_id", req.AgroPolygonID)
+	if req.AgroPolygonID != nil {
+		params.Set("polygon_id", *req.AgroPolygonID)
+	}
+
+	slog.Info("Preparing weather API request",
+		"parameter", req.DataSource.ParameterName,
+		"farm_id", req.FarmID,
+		"polygon_id", req.AgroPolygonID,
+		"start", startTime.Unix(),
+		"end", endTime.Unix())
 
 	// Create HTTP request
 	fullURL := endpoint + "?" + params.Encode()
@@ -2074,14 +2092,9 @@ func fetchWeatherData(client *http.Client,
 	for _, dataPoint := range apiResp.Data {
 		// Determine data quality based on measurement count
 		dataQuality := models.DataQualityGood
-		if dataPoint.Count < 5 {
-			dataQuality = models.DataQualityPoor
-		} else if dataPoint.Count < 10 {
-			dataQuality = models.DataQualityAcceptable
-		}
 
 		// Calculate confidence score based on data count
-		confidenceScore := math.Min(1.0, float64(dataPoint.Count)/20.0)
+		confidenceScore := 0.9
 
 		// Build component data
 		componentData := utils.JSONMap{

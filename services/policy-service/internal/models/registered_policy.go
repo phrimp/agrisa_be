@@ -17,7 +17,7 @@ import (
 //)
 
 const (
-	NoticePeriod   = 30 * time.Minute
+	NoticePeriod   = 3 * time.Minute
 	RevokeDeadline = 0.01
 )
 

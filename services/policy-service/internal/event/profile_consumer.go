@@ -259,14 +259,13 @@ func (h *DefaultProfileEventHandler) HandleProfileEvent(ctx context.Context, eve
 	case ProfleConfirmDelete:
 		return h.handleProfileConfirmDelete(ctx, event)
 	case ProfileCancelDelete:
+		return h.handleProfileCancelDelete(ctx, event)
 	default:
 		return &PaymentValidationError{
 			PaymentID: event.ID,
-			Reason:    fmt.Sprintf("unsupported payment type: %s", event.EventType),
+			Reason:    fmt.Sprintf("unsupported profile type: %s", event.EventType),
 		}
 	}
-
-	return nil
 }
 
 func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Context, event ProfileEvent) error {
@@ -292,7 +291,9 @@ func (h *DefaultProfileEventHandler) handleProfileConfirmDelete(ctx context.Cont
 	policyIDs := []uuid.UUID{}
 
 	for _, basePolicy := range basePolicies {
-		basePolicyIDs = append(basePolicyIDs, basePolicy.ID)
+		if basePolicy.Status == models.BasePolicyActive {
+			basePolicyIDs = append(basePolicyIDs, basePolicy.ID)
+		}
 	}
 	for _, policy := range policies {
 		policyIDs = append(policyIDs, policy.ID)
@@ -318,5 +319,23 @@ func (h *DefaultProfileEventHandler) handleProfileCancelDelete(ctx context.Conte
 	if err != nil {
 		return err
 	}
+	basePolicies, err := h.basePolicyRepo.GetBasePoliciesByProviderUpdatedAt(event.ProfileID)
+	if err != nil {
+		return err
+	}
+	lastestUpdatedAt := basePolicies[0].UpdatedAt
+
+	basePolicyIDs := []uuid.UUID{}
+	for _, basePolicy := range basePolicies {
+		if basePolicy.Status == models.BasePolicyClosed && basePolicy.UpdatedAt.Compare(lastestUpdatedAt) == 0 {
+			basePolicyIDs = append(basePolicyIDs, basePolicy.ID)
+		}
+	}
+	res, err := h.basePolicyRepo.BulkUpdateBasePolicyStatus(basePolicyIDs, models.BasePolicyActive)
+	if err != nil {
+		return err
+	}
+	slog.Info("re open all base policy", "count", res)
+	h.redisClient.Del(ctx, fmt.Sprintf("Delete-Profile-%s", event.ProfileID))
 	return nil
 }

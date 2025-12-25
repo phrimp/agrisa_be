@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 type CancelRequestRepository struct {
@@ -185,7 +186,7 @@ func (r *CancelRequestRepository) GetAllRequestsByFarmerID(ctx context.Context, 
     FROM cancel_request cr 
     JOIN registered_policy rp ON cr.registered_policy_id = rp.id
     WHERE rp.farmer_id = $1 
-    AND NOT (cr.requested_by != rp.farmer_id AND cr.created_at > NOW() - INTERVAL '1 minute') OR cancel_request_type = 'transfer_contract'
+    AND NOT ((cr.requested_by != rp.farmer_id AND cr.created_at > NOW() - INTERVAL '2 minute') OR cancel_request_type = 'transfer_contract')
     ORDER BY cr.requested_at DESC
 `
 
@@ -254,7 +255,7 @@ func (r *CancelRequestRepository) GetAllRequestsByProviderID(ctx context.Context
     FROM cancel_request cr 
     JOIN registered_policy rp ON cr.registered_policy_id = rp.id
     WHERE rp.insurance_provider_id = $1 
-    AND NOT (cr.requested_by != rp.insurance_provider_id AND cr.created_at > NOW() - INTERVAL '1 minute') OR cancel_request_type = 'transfer_contract'
+    AND NOT ((cr.requested_by != rp.insurance_provider_id AND cr.created_at > NOW() - INTERVAL '2 minute') OR cancel_request_type = 'transfer_contract')
     ORDER BY cr.requested_at DESC
 `
 
@@ -286,4 +287,121 @@ func (r *CancelRequestRepository) GetAllByProviderIDWithStatusAndType(ctx contex
 	}
 
 	return requests, nil
+}
+
+// BulkUpdateStatusWhereProviderStatusAndType updates status for multiple cancel requests with provider, status, and type conditions
+// Only updates cancel requests that match insurance_provider_id AND current status AND cancel_request_type
+func (r *CancelRequestRepository) BulkUpdateStatusWhereProviderStatusAndType(
+	ctx context.Context,
+	requestIDs []uuid.UUID,
+	providerID string,
+	currentStatus models.CancelRequestStatus,
+	requestType models.CancelRequestType,
+	newStatus models.CancelRequestStatus,
+) (int64, error) {
+	if len(requestIDs) == 0 {
+		return 0, nil
+	}
+
+	fmt.Printf("Starting bulk status update for cancel requests with provider, status, and type WHERE conditions\n"+
+		"request_count=%d, provider_id=%s, current_status=%s, request_type=%s, new_status=%s\n",
+		len(requestIDs), providerID, currentStatus, requestType, newStatus)
+	start := time.Now()
+
+	// Convert UUIDs to strings for PostgreSQL array
+	requestIDStrs := make([]string, len(requestIDs))
+	for i, id := range requestIDs {
+		requestIDStrs[i] = id.String()
+	}
+
+	query := `
+		UPDATE cancel_request cr
+		SET status = $1, updated_at = NOW()
+		FROM registered_policy rp
+		WHERE cr.id = ANY($2)
+		  AND cr.registered_policy_id = rp.id
+		  AND rp.insurance_provider_id = $3
+		  AND cr.status = $4
+		  AND cr.cancel_request_type = $5`
+
+	result, err := r.db.ExecContext(ctx, query, newStatus, pq.Array(requestIDStrs), providerID, currentStatus, requestType)
+	if err != nil {
+		fmt.Printf("Failed to execute bulk status update for cancel requests: error=%v\n", err)
+		return 0, fmt.Errorf("failed to bulk update cancel request status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected != int64(len(requestIDs)) {
+		fmt.Printf("Bulk status update affected different number of rows than requested\n"+
+			"requested=%d, affected=%d, provider_id=%s, current_status=%s, request_type=%s\n"+
+			"reason=some requests may not match provider_id, current status, or request type\n",
+			len(requestIDs), rowsAffected, providerID, currentStatus, requestType)
+	}
+
+	fmt.Printf("Bulk status update for cancel requests completed: request_count=%d, rows_affected=%d, provider_id=%s, duration=%v\n",
+		len(requestIDs), rowsAffected, providerID, time.Since(start))
+
+	return rowsAffected, nil
+}
+
+// BulkUpdateStatusWhereProviderStatusAndTypeTx updates status for multiple cancel requests in transaction
+func (r *CancelRequestRepository) BulkUpdateStatusWhereProviderStatusAndTypeTx(
+	tx *sqlx.Tx,
+	requestIDs []uuid.UUID,
+	providerID string,
+	currentStatus models.CancelRequestStatus,
+	requestType models.CancelRequestType,
+	newStatus models.CancelRequestStatus,
+) (int64, error) {
+	if len(requestIDs) == 0 {
+		return 0, nil
+	}
+
+	fmt.Printf("Starting bulk status update for cancel requests in transaction with provider, status, and type WHERE conditions\n"+
+		"request_count=%d, provider_id=%s, current_status=%s, request_type=%s, new_status=%s\n",
+		len(requestIDs), providerID, currentStatus, requestType, newStatus)
+	start := time.Now()
+
+	// Convert UUIDs to strings for PostgreSQL array
+	requestIDStrs := make([]string, len(requestIDs))
+	for i, id := range requestIDs {
+		requestIDStrs[i] = id.String()
+	}
+
+	query := `
+		UPDATE cancel_request cr
+		SET status = $1, updated_at = NOW()
+		FROM registered_policy rp
+		WHERE cr.id = ANY($2)
+		  AND cr.registered_policy_id = rp.id
+		  AND rp.insurance_provider_id = $3
+		  AND cr.status = $4
+		  AND cr.cancel_request_type = $5`
+
+	result, err := tx.Exec(query, newStatus, pq.Array(requestIDStrs), providerID, currentStatus, requestType)
+	if err != nil {
+		fmt.Printf("Failed to execute bulk status update for cancel requests in transaction: error=%v\n", err)
+		return 0, fmt.Errorf("failed to bulk update cancel request status: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected != int64(len(requestIDs)) {
+		fmt.Printf("Bulk status update in transaction affected different number of rows than requested\n"+
+			"requested=%d, affected=%d, provider_id=%s, current_status=%s, request_type=%s\n"+
+			"reason=some requests may not match provider_id, current status, or request type\n",
+			len(requestIDs), rowsAffected, providerID, currentStatus, requestType)
+	}
+
+	fmt.Printf("Bulk status update for cancel requests in transaction completed: request_count=%d, rows_affected=%d, provider_id=%s, duration=%v\n",
+		len(requestIDs), rowsAffected, providerID, time.Since(start))
+
+	return rowsAffected, nil
 }

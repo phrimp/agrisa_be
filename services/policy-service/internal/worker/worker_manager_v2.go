@@ -300,7 +300,7 @@ func (m *WorkerManagerV2) CreateAIWorkerInfrastructure(ctx context.Context) (*uu
 	pool := NewWorkingPool(
 		3,
 		poolName,
-		5*time.Minute,
+		1*time.Minute,
 		goRedisClient,
 		0.083,
 		1,
