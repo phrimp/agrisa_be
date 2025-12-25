@@ -699,13 +699,13 @@ export class PaymentController {
     return results;
   }
 
-  @Get('protected/orders/admin/:id')
-  async getOrderByIdAdmin(@Param('id') id: string) {
-    return await this.paymentService.getOrderByIdAdmin(id);
-  }
-
   @Get('protected/orders/admin/all')
   async getAllOrdersAdmin() {
     return await this.paymentService.getAllOrdersAdmin();
+  }
+
+  @Get('protected/order/admin/:id')
+  async getOrderByIdAdmin(@Param('id') id: string) {
+    return await this.paymentService.getOrderByIdAdmin(id);
   }
 }

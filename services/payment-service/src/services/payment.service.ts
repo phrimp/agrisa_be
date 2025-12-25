@@ -22,5 +22,5 @@ export interface PaymentService {
   getTotalAmountByUserAndType(user_id: string, type: string): Promise<number>;
   getTotalAmountByType(type: string): Promise<number>;
   getAllOrdersAdmin();
-  getOrderByIdAdmin(id: string): Promise<Payment | null>;
+  getOrderByIdAdmin(id: string);
 }
