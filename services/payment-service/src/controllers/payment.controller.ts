@@ -698,4 +698,26 @@ export class PaymentController {
 
     return results;
   }
+
+  @Get('protected/orders/admin/:id')
+  async getOrderByIdAdmin(@Param('id') id: string) {
+    return await this.paymentService.getOrderByIdAdmin(id);
+  }
+
+  @Get('protected/orders/admin/all')
+  async getAllOrdersAdmin() {
+    try {
+      const payments = await this.paymentService.getAllOrdersAdmin();
+      this.logger.log(`Found ${payments.length} payments`);
+      return {
+        payments: z.array(paymentViewSchema).parse(payments),
+      };
+    } catch (error) {
+      this.logger.error('Failed to get all orders admin', error);
+      throw new HttpException(
+        'Lỗi khi lấy danh sách đơn hàng admin',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }
