@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { PaymentRepository } from '../repositories/payment.repository';
 import { Payment } from '../entities/payment.entity';
+import { PaymentRepository } from '../repositories/payment.repository';
 import { PaymentService } from './payment.service';
 
 @Injectable()
@@ -69,5 +69,9 @@ export class ImplPaymentService implements PaymentService {
 
   async getTotalAmountByType(type: string): Promise<number> {
     return this.paymentRepository.getTotalAmountByType(type);
+  }
+
+  async getAllOrdersAdmin(): Promise<Payment[]> {
+    return this.paymentRepository.getAllOrdersAdmin();
   }
 }

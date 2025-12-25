@@ -698,4 +698,9 @@ export class PaymentController {
 
     return results;
   }
+
+  @Get('protected/orders/admin/all')
+  async getAllOrdersAdmin() {
+    return await this.paymentService.getAllOrdersAdmin();
+  }
 }

@@ -150,4 +150,11 @@ export class PaymentRepository {
     });
     return result || 0;
   }
+
+  async getAllOrdersAdmin(): Promise<Payment[]> {
+    return await this.paymentRepo.find({
+      relations: ['items'],
+      order: { created_at: 'DESC' },
+    });
+  }
 }
