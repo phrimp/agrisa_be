@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
+	"github.com/lib/pq"
 )
 
 type CancelRequestRepository struct {
@@ -323,7 +324,7 @@ func (r *CancelRequestRepository) BulkUpdateStatusWhereProviderStatusAndType(
 		  AND cr.status = $4
 		  AND cr.cancel_request_type = $5`
 
-	result, err := r.db.ExecContext(ctx, query, newStatus, requestIDStrs, providerID, currentStatus, requestType)
+	result, err := r.db.ExecContext(ctx, query, newStatus, pq.Array(requestIDStrs), providerID, currentStatus, requestType)
 	if err != nil {
 		fmt.Printf("Failed to execute bulk status update for cancel requests: error=%v\n", err)
 		return 0, fmt.Errorf("failed to bulk update cancel request status: %w", err)
@@ -381,7 +382,7 @@ func (r *CancelRequestRepository) BulkUpdateStatusWhereProviderStatusAndTypeTx(
 		  AND cr.status = $4
 		  AND cr.cancel_request_type = $5`
 
-	result, err := tx.Exec(query, newStatus, requestIDStrs, providerID, currentStatus, requestType)
+	result, err := tx.Exec(query, newStatus, pq.Array(requestIDStrs), providerID, currentStatus, requestType)
 	if err != nil {
 		fmt.Printf("Failed to execute bulk status update for cancel requests in transaction: error=%v\n", err)
 		return 0, fmt.Errorf("failed to bulk update cancel request status: %w", err)
