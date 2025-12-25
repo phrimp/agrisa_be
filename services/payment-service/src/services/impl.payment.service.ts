@@ -71,7 +71,7 @@ export class ImplPaymentService implements PaymentService {
     return this.paymentRepository.getTotalAmountByType(type);
   }
 
-  async getAllOrdersAdmin(): Promise<Payment[]> {
+  async getAllOrdersAdmin() {
     return this.paymentRepository.getAllOrdersAdmin();
   }
 
