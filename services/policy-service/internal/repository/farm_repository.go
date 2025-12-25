@@ -85,8 +85,9 @@ func (r *FarmRepository) Create(farm *models.Farm) error {
 
 func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Farm, error) {
 	query := `
-		SELECT 
+		SELECT
 			f.id, owner_id, farm_name, farm_code,
+			agro_polygon_id,
 			area_sqm, province, district, commune, address,
 			crop_type, planting_date, expected_harvest_date,
 			crop_type_verified, crop_type_verified_at,
@@ -102,7 +103,7 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 			photo_url,
 			photo_type,
 			taken_at
-		FROM farm f left join farm_photo fp on f.id = fp.farm_id 
+		FROM farm f left join farm_photo fp on f.id = fp.farm_id
 		WHERE f.id = $1
 	`
 
@@ -127,6 +128,7 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 		OwnerID:                 rows[0].OwnerID,
 		FarmName:                rows[0].FarmName,
 		FarmCode:                rows[0].FarmCode,
+		AgroPolygonID:           rows[0].AgroPolygonID,
 		AreaSqm:                 rows[0].AreaSqm,
 		Province:                rows[0].Province,
 		District:                rows[0].District,
@@ -173,8 +175,9 @@ func (r *FarmRepository) GetFarmByID(ctx context.Context, id string) (*models.Fa
 
 func (r *FarmRepository) GetAll(ctx context.Context) ([]models.Farm, error) {
 	query := `
-		SELECT 
+		SELECT
 			id, owner_id, farm_name, farm_code,
+			agro_polygon_id,
 			area_sqm, province, district, commune, address,
 			crop_type, planting_date, expected_harvest_date,
 			crop_type_verified, crop_type_verified_at,
@@ -185,7 +188,7 @@ func (r *FarmRepository) GetAll(ctx context.Context) ([]models.Farm, error) {
 			status, created_at, updated_at,
 			ST_AsBinary(boundary) as boundary_wkb,
 			ST_AsBinary(center_location) as center_wkb
-		FROM farm 
+		FROM farm
 		ORDER BY created_at DESC
 	`
 
@@ -213,8 +216,9 @@ func (r *FarmRepository) GetAll(ctx context.Context) ([]models.Farm, error) {
 func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]models.Farm, error) {
 	var rows []farmRow
 	query := `
-		SELECT 
+		SELECT
 			f.id, owner_id, farm_name, farm_code,
+			agro_polygon_id,
 			area_sqm, province, district, commune, address,
 			crop_type, planting_date, expected_harvest_date,
 			crop_type_verified, crop_type_verified_at,
@@ -230,7 +234,7 @@ func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]mo
 			photo_url,
 			photo_type,
 			taken_at
-		FROM farm f left join farm_photo fp on f.id = fp.farm_id 
+		FROM farm f left join farm_photo fp on f.id = fp.farm_id
 		WHERE f.owner_id = $1
 	`
 
@@ -253,6 +257,7 @@ func (r *FarmRepository) GetByOwnerID(ctx context.Context, ownerID string) ([]mo
 				OwnerID:                 row.OwnerID,
 				FarmName:                row.FarmName,
 				FarmCode:                row.FarmCode,
+				AgroPolygonID:           row.AgroPolygonID,
 				AreaSqm:                 row.AreaSqm,
 				Province:                row.Province,
 				District:                row.District,

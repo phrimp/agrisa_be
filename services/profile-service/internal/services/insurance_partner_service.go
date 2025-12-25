@@ -1072,6 +1072,7 @@ func (s *InsurancePartnerService) CreatePartnerDeletionRequest(req *models.Partn
 	req.RequestedByName = userProfile.FullName
 	req.Status = models.DeletionRequestPending
 	req.RequestedAt = time.Now()
+	slog.Info("profile cancel request", "detail", req)
 
 	res, err := s.repo.CreateDeletionRequest(context.Background(), req)
 	if err != nil {
