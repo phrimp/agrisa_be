@@ -351,6 +351,7 @@ services:
             - WEATHER_API_KEY=${WEATHER_API_KEY}
             - XWEATHER_CLIENT_ID=${XWEATHER_CLIENT_ID}
             - XWEATHER_CLIENT_SECRET=${XWEATHER_CLIENT_SECRET}
+            - AGRO_API_KEY=${AGRO_API_KEY}
         volumes:
             - ./logs/weather-service:/agrisa/log/weather_service
         networks:

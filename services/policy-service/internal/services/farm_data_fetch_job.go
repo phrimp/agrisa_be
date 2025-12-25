@@ -566,6 +566,11 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 		return fmt.Errorf("farm boundary is required for monitoring data fetch")
 	}
 
+	slog.Info("Farm loaded for monitoring data fetch",
+		"farm_id", farmID,
+		"agro_polygon_id", farm.AgroPolygonID,
+		"has_boundary", farm.Boundary != nil)
+
 	// Extract coordinates from GeoJSON polygon (first ring only)
 	farmCoordinates := extractPolygonCoordinates(farm.Boundary)
 	if len(farmCoordinates) < 3 {
@@ -628,6 +633,13 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 
 		// Convert adjusted start date to string format
 		paramStartDateStr := unixToDateString(paramStartDate)
+
+		slog.Info("Enqueueing data fetch job",
+			"data_source", cds.DataSource.ParameterName,
+			"farm_id", farmID,
+			"agro_polygon_id", farm.AgroPolygonID,
+			"start_date", paramStartDateStr,
+			"end_date", endDateStr)
 
 		jobs <- DataRequest{
 			DataSource:        cds.DataSource,
@@ -2008,6 +2020,13 @@ func fetchWeatherData(client *http.Client,
 	params.Set("start", strconv.FormatInt(startTime.Unix(), 10))
 	params.Set("end", strconv.FormatInt(endTime.Unix(), 10))
 	params.Set("polygon_id", req.AgroPolygonID)
+
+	slog.Info("Preparing weather API request",
+		"parameter", req.DataSource.ParameterName,
+		"farm_id", req.FarmID,
+		"polygon_id", req.AgroPolygonID,
+		"start", startTime.Unix(),
+		"end", endTime.Unix())
 
 	// Create HTTP request
 	fullURL := endpoint + "?" + params.Encode()
