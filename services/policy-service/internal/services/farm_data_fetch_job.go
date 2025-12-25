@@ -645,7 +645,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 			DataSource:        cds.DataSource,
 			FarmID:            farmID,
 			FarmCoordinates:   farmCoordinates,
-			AgroPolygonID:     farm.AgroPolygonID,
+			AgroPolygonID:     *farm.AgroPolygonID,
 			StartDate:         paramStartDateStr,
 			EndDate:           endDateStr,
 			DataSourceID:      cds.DataSource.ID,
@@ -741,9 +741,9 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 	}
 
 	// Update farm's AgroPolygonID if we received one from weather API
-	if agroPolygonID != "" && farm.AgroPolygonID != agroPolygonID {
+	if agroPolygonID != "" && farm.AgroPolygonID != &agroPolygonID {
 		// Update farm with new polygon ID
-		farm.AgroPolygonID = agroPolygonID
+		farm.AgroPolygonID = &agroPolygonID
 		if err := s.farmService.UpdateFarm(ctx, farm, "system", farmID.String()); err != nil {
 			// Log error but don't fail the entire job
 			slog.Error("Failed to update farm AgroPolygonID",
