@@ -155,8 +155,8 @@ func (c *CancelRequestService) GetAllProviderCancelRequests(ctx context.Context,
 	return c.cancelRequestRepo.GetAllRequestsByProviderID(ctx, providerID)
 }
 
-func (c *CancelRequestService) GetFarmerTransferContract(ctx context.Context, farmerID string) ([]models.CancelRequest, error) {
-	return c.cancelRequestRepo.GetLatestTransferRequestByFarmer(ctx, farmerID)
+func (c *CancelRequestService) GetFarmerTransferContract(ctx context.Context, farmerID string, policyID uuid.UUID) ([]models.CancelRequest, error) {
+	return c.cancelRequestRepo.GetLatestTransferRequestByFarmer(ctx, farmerID, policyID)
 }
 
 // confirm the decision, update the request, start the notice period, and flag the payment process

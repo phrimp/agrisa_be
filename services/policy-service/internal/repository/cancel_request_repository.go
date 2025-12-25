@@ -198,7 +198,7 @@ func (r *CancelRequestRepository) GetAllRequestsByFarmerID(ctx context.Context, 
 	return requests, nil
 }
 
-func (r *CancelRequestRepository) GetLatestTransferRequestByFarmer(ctx context.Context, farmerID string) ([]models.CancelRequest, error) {
+func (r *CancelRequestRepository) GetLatestTransferRequestByFarmer(ctx context.Context, farmerID string, policyID uuid.UUID) ([]models.CancelRequest, error) {
 	var requests []models.CancelRequest
 	query := `
     SELECT 
@@ -208,12 +208,12 @@ func (r *CancelRequestRepository) GetLatestTransferRequestByFarmer(ctx context.C
         cr.created_at, cr.updated_at
     FROM cancel_request cr 
     JOIN registered_policy rp ON cr.registered_policy_id = rp.id
-    WHERE rp.farmer_id = $1 AND cancel_request_type = 'transfer_contract'
+    WHERE rp.farmer_id = $1 AND cancel_request_type = 'transfer_contract' AND rp.id = $2
 		ORDER BY cr.created_at DESC
 		LIMIT 1
 `
 
-	err := r.db.SelectContext(ctx, &requests, query, farmerID)
+	err := r.db.SelectContext(ctx, &requests, query, farmerID, policyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list cancel requests by farmer ID: %w", err)
 	}
