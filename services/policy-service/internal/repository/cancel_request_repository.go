@@ -185,7 +185,7 @@ func (r *CancelRequestRepository) GetAllRequestsByFarmerID(ctx context.Context, 
     FROM cancel_request cr 
     JOIN registered_policy rp ON cr.registered_policy_id = rp.id
     WHERE rp.farmer_id = $1 
-    AND NOT ((cr.requested_by != rp.farmer_id AND cr.created_at > NOW() - INTERVAL '1 minute') OR cancel_request_type = 'transfer_contract')
+    AND NOT ((cr.requested_by != rp.farmer_id AND cr.created_at > NOW() - INTERVAL '2 minute') OR cancel_request_type = 'transfer_contract')
     ORDER BY cr.requested_at DESC
 `
 
@@ -254,7 +254,7 @@ func (r *CancelRequestRepository) GetAllRequestsByProviderID(ctx context.Context
     FROM cancel_request cr 
     JOIN registered_policy rp ON cr.registered_policy_id = rp.id
     WHERE rp.insurance_provider_id = $1 
-    AND NOT ((cr.requested_by != rp.insurance_provider_id AND cr.created_at > NOW() - INTERVAL '1 minute') OR cancel_request_type = 'transfer_contract')
+    AND NOT ((cr.requested_by != rp.insurance_provider_id AND cr.created_at > NOW() - INTERVAL '2 minute') OR cancel_request_type = 'transfer_contract')
     ORDER BY cr.requested_at DESC
 `
 
