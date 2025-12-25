@@ -173,7 +173,7 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 	if request.RequestedBy == review.ReviewedBy {
 		return "", fmt.Errorf("cannot review your own request")
 	}
-	if now.Compare(request.CreatedAt.Add(2*time.Minute)) == -1 {
+	if now.Compare(request.CreatedAt.Add(2*time.Minute)) == -1 && request.CancelRequestType != models.CancelRequestTransferContract {
 		return "", fmt.Errorf("cannot review newly created request")
 	}
 
