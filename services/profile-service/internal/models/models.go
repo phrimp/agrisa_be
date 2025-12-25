@@ -7,7 +7,7 @@ import (
 	"github.com/lib/pq"
 )
 
-const NoticePeriod = 1
+const NoticePeriod = 10
 
 // InsurancePartner
 type InsurancePartner struct {

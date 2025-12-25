@@ -1126,7 +1126,7 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 
 	if request.Status == models.DeletionRequestApproved {
 		// update status of partner profile
-		noticePeriod := now.Add(models.NoticePeriod * time.Hour)
+		noticePeriod := now.Add(models.NoticePeriod * time.Minute)
 		// run cronj
 		go func(noticePeriod time.Time, partnerID uuid.UUID, reviewedByID, reviewedByName string) {
 			for {
@@ -1143,6 +1143,21 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 				time.Sleep(1 * time.Second)
 			}
 		}(noticePeriod, existDeletionRequest.PartnerID, request.ReviewedByID, request.ReviewedByName)
+	} else {
+		go func() {
+			eventPayload := event.ProfileEvent{
+				ID:        uuid.NewString(),
+				EventType: event.ProfileCancelDelete,
+				UserID:    request.ReviewedByID,
+				ProfileID: existDeletionRequest.PartnerID.String(),
+			}
+			err := s.profilePublisher.PublishEvent(context.Background(), eventPayload)
+			if err != nil {
+				slog.Error("error publishing event", "error", err)
+				return
+			}
+			slog.Info("profile event published", "event", eventPayload)
+		}()
 	}
 	return s.repo.ProcessRequestReview(request)
 }
