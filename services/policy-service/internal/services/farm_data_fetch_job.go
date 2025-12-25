@@ -828,18 +828,6 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 				// TODO: Send notification to farmer about claim generation
 				// notification.SendToFarmer(claim.FarmerID, NotificationClaimGenerated, claim)
 
-				go func() {
-					for {
-						err := s.notievent.NotifyClaimGenerated(context.Background(), policy.FarmerID, policy.PolicyNumber)
-						if err == nil {
-							slog.Info("claim generated notification sent", "policy id", policy.ID)
-							return
-						}
-						slog.Error("error sending claim generated notification", "error", err)
-						time.Sleep(10 * time.Second)
-					}
-				}()
-
 				// TODO: Send notification to insurance provider for review
 				// notification.SendToProvider(policy.InsuranceProviderID, NotificationClaimPendingReview, claim)
 
