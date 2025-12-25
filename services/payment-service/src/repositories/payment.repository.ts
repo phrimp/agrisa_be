@@ -40,7 +40,7 @@ export class PaymentRepository {
     return { items, total };
   }
 
-  async findById(id: string): Promise<Payment | null> {
+  async findById(id: string) {
     return await this.paymentRepo.findOne({
       where: { id },
       relations: ['items'],

@@ -703,4 +703,9 @@ export class PaymentController {
   async getAllOrdersAdmin() {
     return await this.paymentService.getAllOrdersAdmin();
   }
+
+  @Get('protected/order/admin/:id')
+  async getOrderByIdAdmin(@Param('id') id: string) {
+    return await this.paymentService.getOrderByIdAdmin(id);
+  }
 }

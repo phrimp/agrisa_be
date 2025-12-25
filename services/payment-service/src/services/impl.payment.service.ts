@@ -75,7 +75,7 @@ export class ImplPaymentService implements PaymentService {
     return this.paymentRepository.getAllOrdersAdmin();
   }
 
-  async getOrderByIdAdmin(id: string): Promise<Payment | null> {
+  async getOrderByIdAdmin(id: string) {
     return this.paymentRepository.findById(id);
   }
 }
