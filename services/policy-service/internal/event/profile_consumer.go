@@ -331,10 +331,11 @@ func (h *DefaultProfileEventHandler) handleProfileCancelDelete(ctx context.Conte
 			basePolicyIDs = append(basePolicyIDs, basePolicy.ID)
 		}
 	}
-	res, err := h.basePolicyRepo.BulkUpdateBasePolicyStatus(basePolicyIDs, models.BasePolicyClosed)
+	res, err := h.basePolicyRepo.BulkUpdateBasePolicyStatus(basePolicyIDs, models.BasePolicyActive)
 	if err != nil {
 		return err
 	}
 	slog.Info("re open all base policy", "count", res)
+	h.redisClient.Del(ctx, fmt.Sprintf("Delete-Profile-%s", event.ProfileID))
 	return nil
 }
