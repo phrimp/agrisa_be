@@ -19,7 +19,8 @@ type AgroService struct {
 type IAgroService interface {
 	CreatePolygon(name string, coordinates [][2]float64) (*models.AgroPolygonResponse, error)
 	GetPolygon(polygonID string) (*models.AgroPolygonResponse, error)
-	GetAccumulatedPrecipitation(polygonID string, start, end int64) ([]models.PrecipitationDataPoint, error)
+	GetForecastPrecipitation(polygonID string) ([]models.PrecipitationDataPoint, error)
+	GetCurrentWeather(polygonID string) (*models.CurrentWeatherResponse, error)
 	CreatePolygonAndGetPrecipitation(coordinates [][2]float64, start, end int64) (*models.UnifiedAPIResponse, error)
 	GetPrecipitationWithPolygonID(polygonID string, coordinates [][2]float64, start, end int64) (*models.UnifiedAPIResponse, error)
 }
@@ -150,21 +151,22 @@ func (a *AgroService) GetPolygon(polygonID string) (*models.AgroPolygonResponse,
 	return &polygonResp, nil
 }
 
-// GetAccumulatedPrecipitation fetches precipitation data for a polygon
-func (a *AgroService) GetAccumulatedPrecipitation(polygonID string, start, end int64) ([]models.PrecipitationDataPoint, error) {
+// GetForecastPrecipitation fetches forecast precipitation data for a polygon (free tier)
+// Returns precipitation data from 5-day forecast (available with free API key)
+func (a *AgroService) GetForecastPrecipitation(polygonID string) ([]models.PrecipitationDataPoint, error) {
 	if a.cfg.AgroAPIKey == "" {
 		log.Println("Agro API key not configured")
 		return nil, fmt.Errorf("Agro API key not configured")
 	}
 
-	url := fmt.Sprintf("%s/weather/history/accumulated_precipitation?polyid=%s&start=%d&end=%d&appid=%s",
-		a.cfg.AgroAPIBaseURL, polygonID, start, end, a.cfg.AgroAPIKey)
+	url := fmt.Sprintf("%s/weather/forecast?polyid=%s&appid=%s",
+		a.cfg.AgroAPIBaseURL, polygonID, a.cfg.AgroAPIKey)
 
 	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
-		log.Printf("Error fetching precipitation data: %v", err)
-		return nil, fmt.Errorf("failed to fetch precipitation data")
+		log.Printf("Error fetching forecast data: %v", err)
+		return nil, fmt.Errorf("failed to fetch forecast data")
 	}
 	defer resp.Body.Close()
 
@@ -179,16 +181,82 @@ func (a *AgroService) GetAccumulatedPrecipitation(polygonID string, start, end i
 		return nil, fmt.Errorf("Agro API error: %s", string(body))
 	}
 
-	var precipData []models.PrecipitationDataPoint
-	if err := json.Unmarshal(body, &precipData); err != nil {
-		log.Printf("Error unmarshaling precipitation data: %v", err)
+	var forecastData []models.ForecastWeatherResponse
+	if err := json.Unmarshal(body, &forecastData); err != nil {
+		log.Printf("Error unmarshaling forecast data: %v", err)
 		return nil, fmt.Errorf("failed to parse response")
 	}
 
+	// Convert forecast data to precipitation data points
+	precipData := make([]models.PrecipitationDataPoint, 0)
+	for _, forecast := range forecastData {
+		var precipitation float64
+
+		// Check for rain data (in mm for 3-hour period)
+		if forecast.Rain != nil && forecast.Rain["3h"] > 0 {
+			precipitation += forecast.Rain["3h"]
+		}
+
+		// Check for snow data (in mm for 3-hour period)
+		if forecast.Snow != nil && forecast.Snow["3h"] > 0 {
+			precipitation += forecast.Snow["3h"]
+		}
+
+		// Only include data points with actual precipitation
+		if precipitation > 0 {
+			precipData = append(precipData, models.PrecipitationDataPoint{
+				Dt:    forecast.Dt,
+				Rain:  precipitation,
+				Count: 1, // Single forecast data point
+			})
+		}
+	}
+
+	log.Printf("Retrieved %d precipitation data points from forecast", len(precipData))
 	return precipData, nil
 }
 
+// GetCurrentWeather fetches current weather data for a polygon (free tier)
+func (a *AgroService) GetCurrentWeather(polygonID string) (*models.CurrentWeatherResponse, error) {
+	if a.cfg.AgroAPIKey == "" {
+		log.Println("Agro API key not configured")
+		return nil, fmt.Errorf("Agro API key not configured")
+	}
+
+	url := fmt.Sprintf("%s/weather?polyid=%s&appid=%s",
+		a.cfg.AgroAPIBaseURL, polygonID, a.cfg.AgroAPIKey)
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		log.Printf("Error fetching current weather: %v", err)
+		return nil, fmt.Errorf("failed to fetch current weather")
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Error reading response body: %v", err)
+		return nil, fmt.Errorf("failed to read response")
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("Agro API returned non-200 status: %d, body: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("Agro API error: %s", string(body))
+	}
+
+	var currentWeather models.CurrentWeatherResponse
+	if err := json.Unmarshal(body, &currentWeather); err != nil {
+		log.Printf("Error unmarshaling current weather data: %v", err)
+		return nil, fmt.Errorf("failed to parse response")
+	}
+
+	log.Printf("Successfully retrieved current weather for polygon: %s", polygonID)
+	return &currentWeather, nil
+}
+
 // CreatePolygonAndGetPrecipitation combines polygon creation and precipitation fetching
+// Note: Uses forecast data (free tier) instead of historical data (requires paid plan)
 func (a *AgroService) CreatePolygonAndGetPrecipitation(coordinates [][2]float64, start, end int64) (*models.UnifiedAPIResponse, error) {
 	// Generate polygon name based on timestamp
 	polygonName := fmt.Sprintf("temp_polygon_%d", time.Now().Unix())
@@ -199,23 +267,26 @@ func (a *AgroService) CreatePolygonAndGetPrecipitation(coordinates [][2]float64,
 		return nil, err
 	}
 
-	// Fetch precipitation data
-	precipData, err := a.GetAccumulatedPrecipitation(polygonResp.ID, start, end)
+	// Fetch precipitation data from forecast (free tier compatible)
+	precipData, err := a.GetForecastPrecipitation(polygonResp.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert PrecipitationDataPoint to DataPoint format
-	dataPoints := make([]models.DataPoint, len(precipData))
+	// Filter precipitation data by time range and convert to DataPoint format
+	dataPoints := make([]models.DataPoint, 0)
 	totalRainfall := 0.0
-	for i, data := range precipData {
-		dataPoints[i] = models.DataPoint{
-			Dt:    data.Dt,
-			Data:  data.Rain,
-			Count: data.Count,
-			Unit:  "mm",
+	for _, data := range precipData {
+		// Only include data points within the requested time range
+		if data.Dt >= start && data.Dt <= end {
+			dataPoints = append(dataPoints, models.DataPoint{
+				Dt:    data.Dt,
+				Data:  data.Rain,
+				Count: data.Count,
+				Unit:  "mm",
+			})
+			totalRainfall += data.Rain
 		}
-		totalRainfall += data.Rain
 	}
 
 	response := &models.UnifiedAPIResponse{
@@ -234,11 +305,14 @@ func (a *AgroService) CreatePolygonAndGetPrecipitation(coordinates [][2]float64,
 		DataPointCount: len(dataPoints),
 	}
 
+	log.Printf("Created polygon %s with %d precipitation data points (total: %.2f mm)",
+		polygonResp.ID, len(dataPoints), totalRainfall)
 	return response, nil
 }
 
 // GetPrecipitationWithPolygonID fetches precipitation data, reusing existing polygon if provided,
 // or creating a new one if polygon ID is empty or doesn't exist
+// Note: Uses forecast data (free tier) instead of historical data (requires paid plan)
 func (a *AgroService) GetPrecipitationWithPolygonID(polygonID string, coordinates [][2]float64, start, end int64) (*models.UnifiedAPIResponse, error) {
 	var polygonResp *models.AgroPolygonResponse
 	var err error
@@ -271,23 +345,26 @@ func (a *AgroService) GetPrecipitationWithPolygonID(polygonID string, coordinate
 		log.Printf("Created new polygon with ID: %s", polygonResp.ID)
 	}
 
-	// Fetch precipitation data using the polygon ID
-	precipData, err := a.GetAccumulatedPrecipitation(polygonResp.ID, start, end)
+	// Fetch precipitation data from forecast (free tier compatible)
+	precipData, err := a.GetForecastPrecipitation(polygonResp.ID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Convert PrecipitationDataPoint to DataPoint format
-	dataPoints := make([]models.DataPoint, len(precipData))
+	// Filter precipitation data by time range and convert to DataPoint format
+	dataPoints := make([]models.DataPoint, 0)
 	totalRainfall := 0.0
-	for i, data := range precipData {
-		dataPoints[i] = models.DataPoint{
-			Dt:    data.Dt,
-			Data:  data.Rain,
-			Count: data.Count,
-			Unit:  "mm",
+	for _, data := range precipData {
+		// Only include data points within the requested time range
+		if data.Dt >= start && data.Dt <= end {
+			dataPoints = append(dataPoints, models.DataPoint{
+				Dt:    data.Dt,
+				Data:  data.Rain,
+				Count: data.Count,
+				Unit:  "mm",
+			})
+			totalRainfall += data.Rain
 		}
-		totalRainfall += data.Rain
 	}
 
 	response := &models.UnifiedAPIResponse{
@@ -306,5 +383,7 @@ func (a *AgroService) GetPrecipitationWithPolygonID(polygonID string, coordinate
 		DataPointCount: len(dataPoints),
 	}
 
+	log.Printf("Retrieved %d precipitation data points for polygon %s (total: %.2f mm)",
+		len(dataPoints), polygonResp.ID, totalRainfall)
 	return response, nil
 }

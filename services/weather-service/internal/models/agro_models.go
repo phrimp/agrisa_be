@@ -81,3 +81,26 @@ type AgroErrorResponse struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 }
+
+// ForecastWeatherResponse represents the weather forecast response from Agro API
+type ForecastWeatherResponse struct {
+	Dt      int64                  `json:"dt"`
+	Main    map[string]interface{} `json:"main"`
+	Weather []map[string]interface{} `json:"weather"`
+	Clouds  map[string]interface{} `json:"clouds"`
+	Wind    map[string]interface{} `json:"wind"`
+	Rain    map[string]float64     `json:"rain,omitempty"` // Precipitation in last 3 hours
+	Snow    map[string]float64     `json:"snow,omitempty"` // Snow in last 3 hours
+	Pop     float64                `json:"pop,omitempty"`  // Probability of precipitation
+}
+
+// CurrentWeatherResponse represents the current weather response from Agro API
+type CurrentWeatherResponse struct {
+	Dt      int64                  `json:"dt"`
+	Main    map[string]interface{} `json:"main"`
+	Weather []map[string]interface{} `json:"weather"`
+	Clouds  map[string]interface{} `json:"clouds"`
+	Wind    map[string]interface{} `json:"wind"`
+	Rain    map[string]float64     `json:"rain,omitempty"` // Current rain
+	Snow    map[string]float64     `json:"snow,omitempty"` // Current snow
+}
