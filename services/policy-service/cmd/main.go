@@ -169,7 +169,7 @@ func main() {
 	claimRejectionService := services.NewClaimRejectionService(registeredPolicyRepo, claimRepo, claimRejectionRepo)
 	dashboardService := services.NewDashboardService(registeredPolicyRepo, dashboardRepo)
 	payoutServie := services.NewPayoutService(payoutRepo, registeredPolicyRepo, farmRepo)
-	cancelRequestService := services.NewCancelRequestService(registeredPolicyRepo, cancelRepo, notificationHelper, redisClient)
+	cancelRequestService := services.NewCancelRequestService(registeredPolicyRepo, cancelRepo, notificationHelper, redisClient, claimRepo)
 
 	// Expiration Listener
 	ctx, cancel := context.WithCancel(context.Background())

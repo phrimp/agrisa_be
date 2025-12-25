@@ -19,6 +19,7 @@ type CancelRequestService struct {
 	cancelRequestRepo *repository.CancelRequestRepository
 	notievent         *event.NotificationHelper
 	redisClient       *redis.Client
+	claimRepo         *repository.ClaimRepository
 }
 
 func NewCancelRequestService(
@@ -26,12 +27,14 @@ func NewCancelRequestService(
 	cancelRequestRepo *repository.CancelRequestRepository,
 	notievent *event.NotificationHelper,
 	redisClient *redis.Client,
+	claimRepo *repository.ClaimRepository,
 ) *CancelRequestService {
 	return &CancelRequestService{
 		cancelRequestRepo: cancelRequestRepo,
 		policyRepo:        policyRepo,
 		notievent:         notievent,
 		redisClient:       redisClient,
+		claimRepo:         claimRepo,
 	}
 }
 
@@ -46,6 +49,15 @@ func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID
 		models.PolicyActive:         true,
 		models.PolicyPendingPayment: true,
 		models.PolicyPendingReview:  true,
+	}
+	claims, err := c.claimRepo.GetByRegisteredPolicyID(ctx, policy.ID)
+	if err != nil {
+		return nil, err
+	}
+	for _, claim := range claims {
+		if claim.Status == models.ClaimPendingPartnerReview {
+			return nil, fmt.Errorf("there are existing pending review claim")
+		}
 	}
 
 	if createdBy != policy.FarmerID && createdBy != policy.InsuranceProviderID {
@@ -159,7 +171,7 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 	if request.RequestedBy == review.ReviewedBy {
 		return "", fmt.Errorf("cannot review your own request")
 	}
-	if now.Compare(request.CreatedAt.Add(1*time.Hour)) == -1 {
+	if now.Compare(request.CreatedAt.Add(1*time.Minute)) == -1 {
 		return "", fmt.Errorf("cannot review newly created request")
 	}
 
