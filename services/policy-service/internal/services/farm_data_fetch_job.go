@@ -1135,6 +1135,16 @@ func (s *RegisteredPolicyService) evaluateTriggerConditions(
 				"error", err)
 			continue
 		}
+		for _, condition := range conditions {
+			windowStartDate := currentTime.Add(-time.Duration(condition.AggregationWindowDays) * 24 * time.Hour)
+			if windowStartDate.Unix() < policy.CoverageStartDate {
+				slog.Info("  Trigger SKIPPED: in aggregation window not satisfied",
+					"trigger_id", trigger.ID,
+					"current_time", currentTime,
+					"aggregation window start day", windowStartDate)
+				continue
+			}
+		}
 
 		slog.Info("  Retrieved conditions for trigger",
 			"trigger_id", trigger.ID,
