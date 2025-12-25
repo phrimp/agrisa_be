@@ -50,13 +50,15 @@ func (c *CancelRequestService) CreateCancelRequest(ctx context.Context, policyID
 		models.PolicyPendingPayment: true,
 		models.PolicyPendingReview:  true,
 	}
-	claims, err := c.claimRepo.GetByRegisteredPolicyID(ctx, policy.ID)
-	if err != nil {
-		return nil, err
-	}
-	for _, claim := range claims {
-		if claim.Status == models.ClaimPendingPartnerReview {
-			return nil, fmt.Errorf("there are existing pending review claim")
+	if req.CancelRequestType != models.CancelRequestTransferContract {
+		claims, err := c.claimRepo.GetByRegisteredPolicyID(ctx, policy.ID)
+		if err != nil {
+			return nil, err
+		}
+		for _, claim := range claims {
+			if claim.Status == models.ClaimPendingPartnerReview {
+				return nil, fmt.Errorf("there are existing pending review claim")
+			}
 		}
 	}
 
