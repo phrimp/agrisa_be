@@ -1321,7 +1321,7 @@ func (r *RegisteredPolicyRepository) ResetPaymentFieldsBatch(ctx context.Context
 		policyIDStrs[i] = id.String()
 	}
 
-	result, err := r.db.ExecContext(ctx, query, policyIDStrs)
+	result, err := r.db.ExecContext(ctx, query, pq.Array(policyIDStrs))
 	if err != nil {
 		return fmt.Errorf("failed to batch reset payment fields: %w", err)
 	}
@@ -1356,7 +1356,7 @@ func (r *RegisteredPolicyRepository) UpdateStatusBatch(ctx context.Context, poli
 		policyIDStrs[i] = id.String()
 	}
 
-	result, err := r.db.ExecContext(ctx, query, status, policyIDStrs)
+	result, err := r.db.ExecContext(ctx, query, status, pq.Array(policyIDStrs))
 	if err != nil {
 		return fmt.Errorf("failed to batch update status: %w", err)
 	}
@@ -1398,7 +1398,7 @@ func (r *RegisteredPolicyRepository) UpdateStatusAndResetPaymentBatch(
 		policyIDStrs[i] = id.String()
 	}
 
-	result, err := r.db.ExecContext(ctx, query, status, policyIDStrs)
+	result, err := r.db.ExecContext(ctx, query, status, pq.Array(policyIDStrs))
 	if err != nil {
 		return fmt.Errorf("failed to batch update status and reset payment: %w", err)
 	}
@@ -1622,7 +1622,7 @@ func (r *RegisteredPolicyRepository) BulkUpdateStatusWhere(
 		SET status = $1, updated_at = NOW()
 		WHERE id = ANY($2) AND status = $3`
 
-	result, err := r.db.ExecContext(ctx, query, newStatus, policyIDStrs, currentStatus)
+	result, err := r.db.ExecContext(ctx, query, newStatus, pq.Array(policyIDStrs), currentStatus)
 	if err != nil {
 		slog.Error("Failed to execute bulk status update with WHERE",
 			"policy_count", len(policyIDs),
@@ -1696,7 +1696,7 @@ func (r *RegisteredPolicyRepository) BulkUpdateStatusWhereIn(
 		SET status = $1, updated_at = NOW()
 		WHERE id = ANY($2) AND status = ANY($3)`
 
-	result, err := r.db.ExecContext(ctx, query, newStatus, policyIDStrs, statusStrs)
+	result, err := r.db.ExecContext(ctx, query, newStatus, pq.Array(policyIDStrs), pq.Array(statusStrs))
 	if err != nil {
 		slog.Error("Failed to execute bulk status update with WHERE IN",
 			"policy_count", len(policyIDs),
@@ -1757,7 +1757,7 @@ func (r *RegisteredPolicyRepository) BulkUpdateStatusWithTx(
 		SET status = $1, updated_at = NOW()
 		WHERE id = ANY($2) AND status = $3`
 
-	result, err := tx.Exec(query, newStatus, policyIDStrs, currentStatus)
+	result, err := tx.Exec(query, newStatus, pq.Array(policyIDStrs), currentStatus)
 	if err != nil {
 		slog.Error("Failed to execute bulk status update with WHERE in transaction",
 			"policy_count", len(policyIDs),
@@ -1813,7 +1813,7 @@ func (r *RegisteredPolicyRepository) BulkUpdateStatusWhereProviderAndStatus(
 		  AND insurance_provider_id = $3
 		  AND status = $4`
 
-	result, err := r.db.ExecContext(ctx, query, newStatus, policyIDStrs, providerID, currentStatus)
+	result, err := r.db.ExecContext(ctx, query, newStatus, pq.Array(policyIDStrs), providerID, currentStatus)
 	if err != nil {
 		slog.Error("Failed to execute bulk status update with provider and status WHERE",
 			"policy_count", len(policyIDs),
@@ -1886,7 +1886,7 @@ func (r *RegisteredPolicyRepository) BulkUpdateStatusWhereProviderAndStatusIn(
 		  AND insurance_provider_id = $3
 		  AND status = ANY($4)`
 
-	result, err := r.db.ExecContext(ctx, query, newStatus, policyIDStrs, providerID, statusStrs)
+	result, err := r.db.ExecContext(ctx, query, newStatus, pq.Array(policyIDStrs), providerID, pq.Array(statusStrs))
 	if err != nil {
 		slog.Error("Failed to execute bulk status update with provider and status IN WHERE",
 			"policy_count", len(policyIDs),
@@ -1952,7 +1952,7 @@ func (r *RegisteredPolicyRepository) BulkUpdateStatusWhereProviderAndStatusTx(
 		  AND insurance_provider_id = $3
 		  AND status = $4`
 
-	result, err := tx.Exec(query, newStatus, policyIDStrs, providerID, currentStatus)
+	result, err := tx.Exec(query, newStatus, pq.Array(policyIDStrs), providerID, currentStatus)
 	if err != nil {
 		slog.Error("Failed to execute bulk status update with provider and status WHERE in transaction",
 			"policy_count", len(policyIDs),
