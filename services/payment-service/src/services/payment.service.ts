@@ -21,6 +21,6 @@ export interface PaymentService {
   findExpired(): Promise<Payment[]>;
   getTotalAmountByUserAndType(user_id: string, type: string): Promise<number>;
   getTotalAmountByType(type: string): Promise<number>;
-  getAllOrdersAdmin(): Promise<Payment[]>;
+  getAllOrdersAdmin();
   getOrderByIdAdmin(id: string): Promise<Payment | null>;
 }

@@ -151,9 +151,11 @@ export class PaymentRepository {
     return result || 0;
   }
 
-  async getAllOrdersAdmin(): Promise<Payment[]> {
+  async getAllOrdersAdmin() {
     return await this.paymentRepo.find({
-      relations: ['items'],
+      relations: {
+        items: true,
+      },
       order: { created_at: 'DESC' },
     });
   }
