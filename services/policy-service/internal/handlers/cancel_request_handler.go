@@ -70,7 +70,13 @@ func (h *CancelRequestHandler) GetLastestTranser(c fiber.Ctx) error {
 		return c.Status(http.StatusUnauthorized).JSON(
 			utils.CreateErrorResponse("UNAUTHORIZED", "User ID is required"))
 	}
-	requests, err := h.cancelRequestService.GetFarmerTransferContract(c.Context(), userID)
+	policyIDStr := c.Query("policy_id")
+	policyID, err := uuid.Parse(policyIDStr)
+	if err != nil {
+		return c.Status(fiber.ErrBadRequest.Code).JSON(utils.CreateErrorResponse("BAD_REQUEST", fmt.Sprintf("policy_id format error: %s", err)))
+	}
+
+	requests, err := h.cancelRequestService.GetFarmerTransferContract(c.Context(), userID, policyID)
 	if err != nil {
 		slog.Error("Failed to get farmer requests", "farmer_id", userID, "error", err)
 		return c.Status(http.StatusInternalServerError).JSON(
