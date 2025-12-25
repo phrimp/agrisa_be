@@ -154,7 +154,7 @@ type DataRequest struct {
 	DataSource        models.DataSource
 	FarmID            uuid.UUID
 	FarmCoordinates   [][]float64 // GeoJSON polygon coordinates (first ring only)
-	AgroPolygonID     string
+	AgroPolygonID     *string
 	StartDate         string // YYYY-MM-DD format
 	EndDate           string // YYYY-MM-DD format
 	DataSourceID      uuid.UUID
@@ -645,7 +645,7 @@ func (s *RegisteredPolicyService) FetchFarmMonitoringDataJob(params map[string]a
 			DataSource:        cds.DataSource,
 			FarmID:            farmID,
 			FarmCoordinates:   farmCoordinates,
-			AgroPolygonID:     *farm.AgroPolygonID,
+			AgroPolygonID:     farm.AgroPolygonID,
 			StartDate:         paramStartDateStr,
 			EndDate:           endDateStr,
 			DataSourceID:      cds.DataSource.ID,
@@ -2019,7 +2019,9 @@ func fetchWeatherData(client *http.Client,
 	}
 	params.Set("start", strconv.FormatInt(startTime.Unix(), 10))
 	params.Set("end", strconv.FormatInt(endTime.Unix(), 10))
-	params.Set("polygon_id", req.AgroPolygonID)
+	if req.AgroPolygonID != nil {
+		params.Set("polygon_id", *req.AgroPolygonID)
+	}
 
 	slog.Info("Preparing weather API request",
 		"parameter", req.DataSource.ParameterName,
