@@ -499,7 +499,7 @@ func (h *DefaultPaymentEventHandler) processPolicyCompensationPayment(ctx contex
 		return err
 	}
 
-	if registeredPolicy.Status != models.PolicyPendingCancel {
+	if registeredPolicy.Status != models.PolicyPendingCancel && registeredPolicy.Status != models.PolicyCancelledPendingPayment {
 		slog.Error("registered policy invalid status",
 			"policy_id", registeredPolicyID,
 			"error", err)
