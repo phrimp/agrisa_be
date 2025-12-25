@@ -18,7 +18,7 @@ type Farm struct {
 	FarmCode                *string            `json:"farm_code,omitempty" db:"farm_code"`
 	Boundary                *GeoJSONPolygon    `json:"boundary,omitempty" db:"boundary"`
 	CenterLocation          *GeoJSONPoint      `json:"center_location,omitempty" db:"center_location"`
-	AgroPolygonID           string             `json:"agro_polygon_id" db:"agro_polygon_id"`
+	AgroPolygonID           *string            `json:"agro_polygon_id" db:"agro_polygon_id"`
 	AreaSqm                 float64            `json:"area_sqm" db:"area_sqm"`
 	Province                *string            `json:"province,omitempty" db:"province"`
 	District                *string            `json:"district,omitempty" db:"district"`
