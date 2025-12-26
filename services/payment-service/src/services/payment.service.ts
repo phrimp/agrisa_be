@@ -21,6 +21,11 @@ export interface PaymentService {
   findExpired(): Promise<Payment[]>;
   getTotalAmountByUserAndType(user_id: string, type: string): Promise<number>;
   getTotalAmountByType(type: string): Promise<number>;
+  getTotalAmountByTypeAndDateRange(
+    type: string,
+    from?: Date,
+    to?: Date,
+  ): Promise<number>;
   getAllOrdersAdmin();
   getOrderByIdAdmin(id: string);
 }

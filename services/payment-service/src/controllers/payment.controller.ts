@@ -409,7 +409,7 @@ export class PaymentController {
     return {
       payout_id,
       qr: url.toString(),
-      verify_hook: `https://agrisa-api.phrimp.io.vn/payment/public/payout/scan?payout_id=${payout_id}`,
+      verify_hook: `https://agrisa-api.phrimp.io.vn/payment/public/payout/verify?payout_id=${payout_id}`,
     };
   }
 
@@ -510,20 +510,19 @@ export class PaymentController {
   }
 
   @Get('protected/total/admin')
-  getTotalPaymentsAdmin(@Query('type') type: string) {
-    return this.paymentService.getTotalAmountByType(type);
+  getTotalPaymentsAdmin(
+    @Query('type') type: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : undefined;
+    return this.paymentService.getTotalAmountByTypeAndDateRange(
+      type,
+      fromDate,
+      toDate,
+    );
   }
-
-  // @Get('protected/payout/total')
-  // getTotalPayouts(
-  //   @Headers('x-user-id') user_id: string,
-  //   @Query('type') type: string,
-  // ) {
-  //   return this.payoutService.getTotalPayoutAmountByTypeAndUserId(
-  //     type,
-  //     user_id,
-  //   );
-  // }
 
   @Get('public/payout/scan')
   async scanPayouts(@Query('payout_id') payout_id?: string) {
@@ -613,7 +612,7 @@ export class PaymentController {
           continue;
         }
 
-        if (payout.status === 'scanned') {
+        if (payout.status) {
           await this.payoutService.update(payout_id, {
             status: 'completed',
             completed_at: new Date(),
