@@ -510,20 +510,19 @@ export class PaymentController {
   }
 
   @Get('protected/total/admin')
-  getTotalPaymentsAdmin(@Query('type') type: string) {
-    return this.paymentService.getTotalAmountByType(type);
+  getTotalPaymentsAdmin(
+    @Query('type') type: string,
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ) {
+    const fromDate = from ? new Date(from) : undefined;
+    const toDate = to ? new Date(to) : undefined;
+    return this.paymentService.getTotalAmountByTypeAndDateRange(
+      type,
+      fromDate,
+      toDate,
+    );
   }
-
-  // @Get('protected/payout/total')
-  // getTotalPayouts(
-  //   @Headers('x-user-id') user_id: string,
-  //   @Query('type') type: string,
-  // ) {
-  //   return this.payoutService.getTotalPayoutAmountByTypeAndUserId(
-  //     type,
-  //     user_id,
-  //   );
-  // }
 
   @Get('public/payout/scan')
   async scanPayouts(@Query('payout_id') payout_id?: string) {

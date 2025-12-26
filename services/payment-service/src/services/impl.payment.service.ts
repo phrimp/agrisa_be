@@ -71,6 +71,18 @@ export class ImplPaymentService implements PaymentService {
     return this.paymentRepository.getTotalAmountByType(type);
   }
 
+  async getTotalAmountByTypeAndDateRange(
+    type: string,
+    from?: Date,
+    to?: Date,
+  ): Promise<number> {
+    return this.paymentRepository.getTotalAmountByTypeAndDateRange(
+      type,
+      from,
+      to,
+    );
+  }
+
   async getAllOrdersAdmin() {
     return this.paymentRepository.getAllOrdersAdmin();
   }

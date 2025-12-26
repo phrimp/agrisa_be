@@ -151,6 +151,31 @@ export class PaymentRepository {
     return result || 0;
   }
 
+  async getTotalAmountByTypeAndDateRange(
+    type: string,
+    from?: Date,
+    to?: Date,
+  ): Promise<number> {
+    const query = this.paymentRepo
+      .createQueryBuilder('payment')
+      .where('payment.type = :type', { type })
+      .andWhere('payment.status = :status', { status: 'completed' });
+
+    if (from) {
+      query.andWhere('payment.created_at >= :from', { from });
+    }
+    if (to) {
+      query.andWhere('payment.created_at <= :to', { to });
+    }
+
+    const all = await query.getMany();
+    let result = 0;
+    all.forEach((item: Payment) => {
+      result += Number(item.amount) || 0;
+    });
+    return result || 0;
+  }
+
   async getAllOrdersAdmin() {
     return await this.paymentRepo.find({
       relations: {
