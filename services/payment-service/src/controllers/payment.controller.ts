@@ -16,7 +16,7 @@ import {
 import type { Response } from 'express';
 import { publisher } from 'src/events/publisher';
 import { payosConfig } from 'src/libs/payos.config';
-import { checkPermissions, generateRandomString } from 'src/libs/utils';
+import { generateRandomString } from 'src/libs/utils';
 import type { ItemService } from 'src/services/item.service';
 import { paymentViewSchema } from 'src/types/payment.types';
 import { payoutViewSchema } from 'src/types/payout.types';
@@ -279,22 +279,15 @@ export class PaymentController {
   ) {
     const page_num = Math.max(parseInt(page, 10) || 1, 1);
     const limit_num = Math.max(parseInt(limit, 10) || 10, 1);
-    const permissions = user_permissions ? user_permissions.split(',') : [];
 
     try {
-      // Lấy payments
-      const payments_result = checkPermissions(permissions, ['view_all_orders'])
-        ? await this.paymentService.find(
-            page_num,
-            limit_num,
-            status?.split(','),
-          )
-        : await this.paymentService.findByUserId(
-            user_id,
-            page_num,
-            limit_num,
-            status?.split(','),
-          );
+      // Lấy payments của user
+      const payments_result = await this.paymentService.findByUserId(
+        user_id,
+        page_num,
+        limit_num,
+        status?.split(','),
+      );
 
       // Lấy payouts của user
       const payouts_result = await this.payoutService.findByUserId(
