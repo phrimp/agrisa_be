@@ -1211,6 +1211,7 @@ func (h *PolicyHandler) GetCancelProfileCheck(c fiber.Ctx) error {
 	res := map[string]bool{"result": false}
 	err = h.cancelRequestService.CheckProfileCancelReady(c.Context(), providerID)
 	if len(contracts) > 0 || err != nil {
+		slog.Info("DEBUG: cancel profile request", "contracts", contracts, "err", err)
 		return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(res))
 	}
 	res["result"] = true
