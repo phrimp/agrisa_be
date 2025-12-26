@@ -92,19 +92,18 @@ func (r *CancelRequestRepository) CreateNewCancelRequestTx(tx *sqlx.Tx, cancelRe
 	}
 
 	cancelRequest.CreatedAt = time.Now()
-	cancelRequest.UpdatedAt = time.Now()
 
 	query := `
 		INSERT INTO cancel_request (
 			id, registered_policy_id, cancel_request_type, reason, evidence,
 			status, requested_by, requested_at, compensate_amount,
 			reviewed_by, reviewed_at, review_notes,
-            paid, paid_at, during_notice_period, created_at, updated_at
+            paid, paid_at, during_notice_period
 		) VALUES (
 			:id, :registered_policy_id, :cancel_request_type, :reason, :evidence,
 			:status, :requested_by, :requested_at, :compensate_amount,
 			:reviewed_by, :reviewed_at, :review_notes,
-			:paid, :paid_at, :during_notice_period, :created_at, updated_at
+            :paid, :paid_at, :during_notice_period
 		)
 	`
 	_, err := tx.NamedExec(query, cancelRequest)
