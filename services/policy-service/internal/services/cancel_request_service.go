@@ -173,7 +173,7 @@ func (c *CancelRequestService) ReviewCancelRequest(ctx context.Context, review m
 	if request.RequestedBy == review.ReviewedBy {
 		return "", fmt.Errorf("cannot review your own request")
 	}
-	if now.Compare(request.CreatedAt.Add(2*time.Minute)) == -1 && request.CancelRequestType != models.CancelRequestTransferContract {
+	if now.Compare(request.CreatedAt.Add(1*time.Minute)) == -1 && request.CancelRequestType != models.CancelRequestTransferContract {
 		return "", fmt.Errorf("cannot review newly created request")
 	}
 
@@ -482,5 +482,16 @@ func (c *CancelRequestService) RevokeAllTransferRequest(ctx context.Context, cre
 		return err
 	}
 	slog.Info("revoke all transfer request", "count", res)
+	return nil
+}
+
+func (c *CancelRequestService) CheckProfileCancelReady(ctx context.Context, providerID string) error {
+	requests, err := c.cancelRequestRepo.GetAllRequestsByProviderIDWithStatusAndType(ctx, providerID)
+	if err != nil {
+		return err
+	}
+	if len(requests) > 0 {
+		return fmt.Errorf("there are existing cancel request to resolve: %v", len(requests))
+	}
 	return nil
 }

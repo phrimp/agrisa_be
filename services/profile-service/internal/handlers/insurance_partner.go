@@ -281,14 +281,14 @@ func (h *InsurancePartnerHandler) ProcessPartnerDeletionRequestReview(c *gin.Con
 		return
 	}
 
-	contracts, err := h.InsurancePartnerService.GetActiveContracts(c.GetHeader("token"), deletionRequest.PartnerID.String())
+	checkRes, err := h.InsurancePartnerService.GetActiveContracts(c.GetHeader("token"), deletionRequest.PartnerID.String())
 	if err != nil {
 		errorResponse := utils.CreateErrorResponse("INTERNAL_SERVER_ERROR", "contracts failed to load")
 		c.JSON(http.StatusBadRequest, errorResponse)
 		return
 	}
-	slog.Info("DEBUG", "data", contracts)
-	err = h.InsurancePartnerService.ProcessRequestReviewByAdmin(req, contracts)
+	slog.Info("DEBUG", "data", checkRes)
+	err = h.InsurancePartnerService.ProcessRequestReviewByAdmin(req, checkRes)
 	if err != nil {
 		log.Printf("Error processing deletion request review: %s", err.Error())
 		errorCode, httpStatus := MapErrorToHTTPStatusExtended(err.Error())
