@@ -42,7 +42,7 @@ func (r *CancelRequestRepository) GetCancelRequestByID(id uuid.UUID) (*models.Ca
 func (r *CancelRequestRepository) GetCancelRequestByPolicyID(id uuid.UUID) ([]models.CancelRequest, error) {
 	var cancelRequest []models.CancelRequest
 	query := `SELECT * FROM cancel_request WHERE registered_policy_id = $1 ORDER BY created_at DESC LIMIT 1`
-	err := r.db.Get(&cancelRequest, query, id)
+	err := r.db.Select(&cancelRequest, query, id)
 	if err != nil {
 		return nil, err
 	}
