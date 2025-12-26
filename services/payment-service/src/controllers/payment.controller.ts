@@ -409,7 +409,7 @@ export class PaymentController {
     return {
       payout_id,
       qr: url.toString(),
-      verify_hook: `https://agrisa-api.phrimp.io.vn/payment/public/payout/scan?payout_id=${payout_id}`,
+      verify_hook: `https://agrisa-api.phrimp.io.vn/payment/public/payout/verify?payout_id=${payout_id}`,
     };
   }
 
@@ -612,7 +612,7 @@ export class PaymentController {
           continue;
         }
 
-        if (payout.status === 'scanned') {
+        if (payout.status) {
           await this.payoutService.update(payout_id, {
             status: 'completed',
             completed_at: new Date(),
