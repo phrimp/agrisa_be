@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, LessThan, Not, Repository, type FindManyOptions } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 
 @Injectable()
 export class PaymentRepository {
+  private readonly logger = new Logger(PaymentRepository.name);
+
   constructor(
     @InjectRepository(Payment)
     private readonly paymentRepo: Repository<Payment>,
@@ -110,6 +112,9 @@ export class PaymentRepository {
   }
 
   async getTotalAmountByUserAndType(user_id: string, type: string) {
+    this.logger.log(
+      `Getting total amount for user_id: ${user_id}, type: ${type}`,
+    );
     const result = await this.paymentRepo
       .createQueryBuilder('payment')
       .select('SUM(payment.amount)', 'total')
@@ -117,7 +122,10 @@ export class PaymentRepository {
       .andWhere('payment.type = :type', { type })
       .andWhere('payment.status = :status', { status: 'completed' })
       .getRawOne();
-    return Number(result?.total) || 0;
+
+    const total = Number(result?.total) || 0;
+    this.logger.log(`Total amount: ${total}`);
+    return total;
   }
 
   async getTotalPayoutByUserAndType(
