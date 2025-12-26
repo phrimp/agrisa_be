@@ -82,6 +82,9 @@ export class PaymentRepository {
     limit: number,
     status: string[],
   ): Promise<{ items: Payment[]; total: number }> {
+    this.logger.log(
+      `Finding payments for user_id: ${user_id}, page: ${page}, limit: ${limit}, status: ${JSON.stringify(status)}`,
+    );
     const page_num = Math.max(1, Number(page) || 1);
     const limit_num = Math.max(1, Number(limit) || 10);
     const skip = (page_num - 1) * limit_num;
@@ -99,6 +102,7 @@ export class PaymentRepository {
     }
 
     const [items, total] = await this.paymentRepo.findAndCount(options);
+    this.logger.log(`Found ${items.length} items, total count: ${total}`);
     return { items, total };
   }
 
@@ -123,6 +127,7 @@ export class PaymentRepository {
       .andWhere('payment.status = :status', { status: 'completed' })
       .getRawOne();
 
+    this.logger.log(`Query result: ${JSON.stringify(result)}`);
     const total = Number(result?.total) || 0;
     this.logger.log(`Total amount: ${total}`);
     return total;
