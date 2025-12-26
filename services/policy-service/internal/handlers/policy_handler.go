@@ -18,13 +18,15 @@ type PolicyHandler struct {
 	registeredPolicyService *services.RegisteredPolicyService
 	basePolicyService       *services.BasePolicyService
 	riskAnalysisService     *services.RiskAnalysisCRUDService
+	cancelRequestService    *services.CancelRequestService
 }
 
-func NewPolicyHandler(registeredPolicyService *services.RegisteredPolicyService, riskAnalysisService *services.RiskAnalysisCRUDService, basePolicyService *services.BasePolicyService) *PolicyHandler {
+func NewPolicyHandler(registeredPolicyService *services.RegisteredPolicyService, riskAnalysisService *services.RiskAnalysisCRUDService, basePolicyService *services.BasePolicyService, cancelRequestService *services.CancelRequestService) *PolicyHandler {
 	return &PolicyHandler{
 		registeredPolicyService: registeredPolicyService,
 		basePolicyService:       basePolicyService,
 		riskAnalysisService:     riskAnalysisService,
+		cancelRequestService:    cancelRequestService,
 	}
 }
 
@@ -63,6 +65,7 @@ func (h *PolicyHandler) Register(app *fiber.App) {
 	partnerCreateGroup.Post("/underwriting/:id", h.CreatePartnerPolicyUnderwriting) // PATCH /policies/update-partner/underwriting/:id]
 	partnerGroup.Post("/monthly-data-cost", h.GetMonthlyDataCost)
 	partnerGroup.Get("/active", h.GetActiveContracts)
+	partnerGroup.Get("/profile-cancel/ready-check", h.GetCancelProfileCheck)
 
 	// Admin routes - full access to all policies
 	adminReadGroup := policyGroup.Group("/read-all")
@@ -1189,6 +1192,29 @@ func (h *PolicyHandler) GetActiveContracts(c fiber.Ctx) error {
 				"Failed to get active contracts"))
 	}
 	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(contracts))
+}
+
+func (h *PolicyHandler) GetCancelProfileCheck(c fiber.Ctx) error {
+	providerID := c.Query("provider")
+	if providerID == "" {
+		return c.Status(http.StatusBadRequest).JSON(utils.CreateErrorResponse("BAD_REQUEST", "provider required"))
+	}
+	contracts, err := h.registeredPolicyService.GetPoliciesWithProviderStatusActive(c.Context(), providerID)
+	if err != nil {
+		slog.Error("Failed to get active contracts",
+			"provider_id", providerID,
+			"error", err)
+		return c.Status(http.StatusInternalServerError).JSON(
+			utils.CreateErrorResponse("INTERNAL",
+				"Failed to get active contracts"))
+	}
+	res := map[string]bool{"result": false}
+	err = h.cancelRequestService.CheckProfileCancelReady(c.Context(), providerID)
+	if len(contracts) > 0 || err != nil {
+		return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(res))
+	}
+	res["result"] = true
+	return c.Status(fiber.StatusOK).JSON(utils.CreateSuccessResponse(res))
 }
 
 // Helper function to extract partner ID from authorization token

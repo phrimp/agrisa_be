@@ -245,7 +245,7 @@ func main() {
 	dataSourceHandler := handlers.NewDataSourceHandler(dataSourceService)
 	basePolicyHandler := handlers.NewBasePolicyHandler(basePolicyService, minioClient, workerManager, registeredPolicyService)
 	farmHandler := handlers.NewFarmHandler(farmService, minioClient)
-	policyHandler := handlers.NewPolicyHandler(registeredPolicyService, riskAnalysisService, basePolicyService)
+	policyHandler := handlers.NewPolicyHandler(registeredPolicyService, riskAnalysisService, basePolicyService, cancelRequestService)
 	basePolicyTriggerHandler := handlers.NewBasePolicyTriggerHandler(basePolicyTriggerService)
 	riskAnalysisHandler := handlers.NewRiskAnalysisHandler(riskAnalysisService)
 	claimHandler := handlers.NewClaimHandler(claimService, registeredPolicyService)

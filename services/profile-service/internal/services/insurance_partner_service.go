@@ -1102,7 +1102,7 @@ func (s *InsurancePartnerService) GetDeletionRequestsByRequesterID(requesterID s
 	return s.repo.GetDeletionRequestsByRequesterID(context.Background(), requesterID)
 }
 
-func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO, contracts map[string]any) error {
+func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.ProcessRequestReviewDTO, checkRes map[string]any) error {
 	now := time.Now()
 	adminID := request.ReviewedByID
 	adminProfile, err := s.userProfileRepository.GetUserProfileByUserID(adminID)
@@ -1118,8 +1118,13 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 	if err != nil {
 		return err
 	}
+	res, ok := checkRes["result"].(bool)
+	if !ok {
+		slog.Error("Cannot approve deletion request: error checking profile cancellation ready", "requestID", request.RequestID, "error", checkRes)
+		return fmt.Errorf("invalid: Lỗi không thể kiểm tra trạng thái hợp đồng và đơn yêu cầu huỷ")
+	}
 
-	if request.Status == models.DeletionRequestApproved && len(contracts) > 0 {
+	if request.Status == models.DeletionRequestApproved && !res {
 		slog.Error("Cannot approve deletion request: active contracts exist", "requestID", request.RequestID)
 		return fmt.Errorf("invalid: Không thể phê duyệt yêu cầu xóa hồ sơ đối tác bảo hiểm vì vẫn còn hợp đồng bảo hiểm đang hoạt động")
 	}
@@ -1163,7 +1168,7 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 }
 
 func (s *InsurancePartnerService) GetActiveContracts(token, providerID string) (map[string]any, error) {
-	url := fmt.Sprintf("http://policy-service:8089/policy/protected/api/v2/policies/read-partner/active?provider=%s", providerID)
+	url := fmt.Sprintf("http://policy-service:8089/policy/protected/api/v2/policies/read-partner/profile-cancel/ready-check?provider=%s", providerID)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		slog.Error("Error creating request for active contracts", "error", err)

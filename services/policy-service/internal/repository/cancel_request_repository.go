@@ -42,7 +42,7 @@ func (r *CancelRequestRepository) GetCancelRequestByID(id uuid.UUID) (*models.Ca
 func (r *CancelRequestRepository) GetCancelRequestByPolicyID(id uuid.UUID) ([]models.CancelRequest, error) {
 	var cancelRequest []models.CancelRequest
 	query := `SELECT * FROM cancel_request WHERE registered_policy_id = $1 ORDER BY created_at DESC LIMIT 1`
-	err := r.db.Get(&cancelRequest, query, id)
+	err := r.db.Select(&cancelRequest, query, id)
 	if err != nil {
 		return nil, err
 	}
@@ -92,19 +92,18 @@ func (r *CancelRequestRepository) CreateNewCancelRequestTx(tx *sqlx.Tx, cancelRe
 	}
 
 	cancelRequest.CreatedAt = time.Now()
-	cancelRequest.UpdatedAt = time.Now()
 
 	query := `
 		INSERT INTO cancel_request (
 			id, registered_policy_id, cancel_request_type, reason, evidence,
 			status, requested_by, requested_at, compensate_amount,
 			reviewed_by, reviewed_at, review_notes,
-            paid, paid_at, during_notice_period, created_at, updated_at
+            paid, paid_at, during_notice_period
 		) VALUES (
 			:id, :registered_policy_id, :cancel_request_type, :reason, :evidence,
 			:status, :requested_by, :requested_at, :compensate_amount,
 			:reviewed_by, :reviewed_at, :review_notes,
-			:paid, :paid_at, :during_notice_period, :created_at, updated_at
+            :paid, :paid_at, :during_notice_period
 		)
 	`
 	_, err := tx.NamedExec(query, cancelRequest)
@@ -257,6 +256,29 @@ func (r *CancelRequestRepository) GetAllRequestsByProviderID(ctx context.Context
     JOIN registered_policy rp ON cr.registered_policy_id = rp.id
     WHERE rp.insurance_provider_id = $1 
     AND NOT ((cr.requested_by != rp.insurance_provider_id AND cr.created_at > NOW() - INTERVAL '2 minute') OR cancel_request_type = 'transfer_contract')
+    ORDER BY cr.requested_at DESC
+`
+
+	err := r.db.SelectContext(ctx, &requests, query, providerID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list cancel requests by provider ID: %w", err)
+	}
+
+	return requests, nil
+}
+
+func (r *CancelRequestRepository) GetAllRequestsByProviderIDWithStatusAndType(ctx context.Context, providerID string) ([]models.CancelRequest, error) {
+	var requests []models.CancelRequest
+	query := `
+    SELECT 
+        cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, 
+        requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, 
+        paid, paid_at, during_notice_period,
+        cr.created_at, cr.updated_at
+    FROM cancel_request cr 
+    JOIN registered_policy rp ON cr.registered_policy_id = rp.id
+    WHERE rp.insurance_provider_id = $1 
+		AND cr.status = 'pending_review' or cr.status = 'litigation' and not cancel_request_type = 'transfer_contract';
     ORDER BY cr.requested_at DESC
 `
 

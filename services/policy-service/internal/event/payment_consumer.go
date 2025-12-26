@@ -674,7 +674,7 @@ func (h *DefaultPaymentEventHandler) processPolicyPayoutPayment(
 		return err
 	}
 
-	if registeredPolicy.Status != models.PolicyActive {
+	if registeredPolicy.Status != models.PolicyActive && registeredPolicy.Status != models.PolicyPendingCancel {
 		tx.Rollback()
 		slog.Warn("only active policy is allowed to be processed", "actual status", registeredPolicy.Status)
 		return fmt.Errorf("invalid policy status=%v", registeredPolicy.Status)
@@ -701,7 +701,6 @@ func (h *DefaultPaymentEventHandler) processPolicyPayoutPayment(
 
 	registeredPolicy.Status = models.PolicyPayout
 
-	// Update policy in transaction
 	err = h.registeredPolicyRepo.UpdateTx(tx, registeredPolicy)
 	if err != nil {
 		tx.Rollback()
