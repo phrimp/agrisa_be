@@ -99,12 +99,12 @@ func (r *CancelRequestRepository) CreateNewCancelRequestTx(tx *sqlx.Tx, cancelRe
 			id, registered_policy_id, cancel_request_type, reason, evidence,
 			status, requested_by, requested_at, compensate_amount,
 			reviewed_by, reviewed_at, review_notes,
-            paid, paid_at, during_notice_period
+            paid, paid_at, during_notice_period, created_at, updated_at
 		) VALUES (
 			:id, :registered_policy_id, :cancel_request_type, :reason, :evidence,
 			:status, :requested_by, :requested_at, :compensate_amount,
 			:reviewed_by, :reviewed_at, :review_notes,
-            :paid, :paid_at, :during_notice_period
+			:paid, :paid_at, :during_notice_period, :created_at, updated_at
 		)
 	`
 	_, err := tx.NamedExec(query, cancelRequest)
@@ -154,6 +154,7 @@ func (r *CancelRequestRepository) UpdateCancelRequestTx(tx *sqlx.Tx, cancelReque
 			reviewed_by = :reviewed_by,
 			reviewed_at = :reviewed_at,
 			review_notes = :review_notes,
+			updated_at= :updated_at,
             paid = :paid,
             paid_at = :paid_at,
             during_notice_period = :during_notice_period
@@ -302,6 +303,7 @@ func (r *CancelRequestRepository) BulkUpdateStatusWhereProviderStatusAndType(
 	if len(requestIDs) == 0 {
 		return 0, nil
 	}
+	now := time.Now()
 
 	fmt.Printf("Starting bulk status update for cancel requests with provider, status, and type WHERE conditions\n"+
 		"request_count=%d, provider_id=%s, current_status=%s, request_type=%s, new_status=%s\n",
@@ -316,7 +318,7 @@ func (r *CancelRequestRepository) BulkUpdateStatusWhereProviderStatusAndType(
 
 	query := `
 		UPDATE cancel_request cr
-		SET status = $1, updated_at = NOW()
+		SET status = $1, updated_at = $6
 		FROM registered_policy rp
 		WHERE cr.id = ANY($2)
 		  AND cr.registered_policy_id = rp.id
@@ -324,7 +326,7 @@ func (r *CancelRequestRepository) BulkUpdateStatusWhereProviderStatusAndType(
 		  AND cr.status = $4
 		  AND cr.cancel_request_type = $5`
 
-	result, err := r.db.ExecContext(ctx, query, newStatus, pq.Array(requestIDStrs), providerID, currentStatus, requestType)
+	result, err := r.db.ExecContext(ctx, query, newStatus, pq.Array(requestIDStrs), providerID, currentStatus, requestType, now)
 	if err != nil {
 		fmt.Printf("Failed to execute bulk status update for cancel requests: error=%v\n", err)
 		return 0, fmt.Errorf("failed to bulk update cancel request status: %w", err)
@@ -371,10 +373,11 @@ func (r *CancelRequestRepository) BulkUpdateStatusWhereProviderStatusAndTypeTx(
 	for i, id := range requestIDs {
 		requestIDStrs[i] = id.String()
 	}
+	now := time.Now()
 
 	query := `
 		UPDATE cancel_request cr
-		SET status = $1, updated_at = NOW()
+		SET status = $1, updated_at = $6
 		FROM registered_policy rp
 		WHERE cr.id = ANY($2)
 		  AND cr.registered_policy_id = rp.id
@@ -382,7 +385,7 @@ func (r *CancelRequestRepository) BulkUpdateStatusWhereProviderStatusAndTypeTx(
 		  AND cr.status = $4
 		  AND cr.cancel_request_type = $5`
 
-	result, err := tx.Exec(query, newStatus, pq.Array(requestIDStrs), providerID, currentStatus, requestType)
+	result, err := tx.Exec(query, newStatus, pq.Array(requestIDStrs), providerID, currentStatus, requestType, now)
 	if err != nil {
 		fmt.Printf("Failed to execute bulk status update for cancel requests in transaction: error=%v\n", err)
 		return 0, fmt.Errorf("failed to bulk update cancel request status: %w", err)
