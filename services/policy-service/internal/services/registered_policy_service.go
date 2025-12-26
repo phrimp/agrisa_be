@@ -791,13 +791,14 @@ func (s *RegisteredPolicyService) CreatePartnerPolicyUnderwriting(
 	policyID uuid.UUID,
 	req models.CreatePartnerPolicyUnderwritingRequest,
 	validatedBy string,
+	partnerID string,
 ) (*models.CreatePartnerPolicyUnderwritingResponse, error) {
 	slog.Info("Creating partner policy underwriting",
 		"policy_id", policyID,
 		"underwriting_status", req.UnderwritingStatus,
 		"validated_by", validatedBy)
 
-	res, err := s.redisClient.GetClient().Get(ctx, fmt.Sprintf("Delete-Profile-%s", validatedBy)).Result()
+	res, err := s.redisClient.GetClient().Get(ctx, fmt.Sprintf("Delete-Profile-%s", partnerID)).Result()
 	if err != nil {
 		slog.Error("error check profile in deletion failed", "error", err)
 	}

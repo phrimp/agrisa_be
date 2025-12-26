@@ -663,8 +663,9 @@ func (h *PolicyHandler) CreatePartnerPolicyUnderwriting(c fiber.Ctx) error {
 	}
 
 	profileData, ok := partnerProfileData["data"].(map[string]any)
+	partnerID := ""
 	if ok {
-		partnerID, ok := profileData["partner_id"].(string)
+		partnerID, ok = profileData["partner_id"].(string)
 		if ok {
 			if policy.InsuranceProviderID != partnerID {
 				return c.Status(http.StatusUnauthorized).JSON(utils.CreateErrorResponse("UNAUTHORIZED", "Cannot underwrite others policies"))
@@ -682,6 +683,7 @@ func (h *PolicyHandler) CreatePartnerPolicyUnderwriting(c fiber.Ctx) error {
 		policyID,
 		req,
 		userID,
+		partnerID,
 	)
 	if err != nil {
 		errMsg := err.Error()
