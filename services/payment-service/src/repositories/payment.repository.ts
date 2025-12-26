@@ -1,10 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { In, LessThan, Not, Repository, type FindManyOptions } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 
 @Injectable()
 export class PaymentRepository {
+  private readonly logger = new Logger(PaymentRepository.name);
+
   constructor(
     @InjectRepository(Payment)
     private readonly paymentRepo: Repository<Payment>,
@@ -110,42 +112,45 @@ export class PaymentRepository {
   }
 
   async getTotalAmountByUserAndType(user_id: string, type: string) {
-    const all = await this.paymentRepo.find({
-      where: { user_id: user_id, type: type, status: 'completed' },
-    });
-    let result = 0;
-    all.forEach((item: Payment) => {
-      result += Number(item.amount) || 0;
-    });
-    return result;
+    this.logger.log(
+      `Getting total amount for user_id: ${user_id}, type: ${type}`,
+    );
+    const result = await this.paymentRepo
+      .createQueryBuilder('payment')
+      .select('SUM(payment.amount)', 'total')
+      .where('payment.user_id = :user_id', { user_id })
+      .andWhere('payment.type = :type', { type })
+      .andWhere('payment.status = :status', { status: 'completed' })
+      .getRawOne();
+
+    const total = Number(result?.total) || 0;
+    this.logger.log(`Total amount: ${total}`);
+    return total;
   }
 
   async getTotalPayoutByUserAndType(
     user_id: string,
     type: string,
   ): Promise<number> {
-    const all = await this.paymentRepo.find({
-      where: { payouts: { user_id: user_id }, type: type, status: 'completed' },
-      relations: ['payouts'],
-    });
-    let result = 0;
-    all.forEach((item: Payment) => {
-      item.payouts.forEach((payout) => {
-        result += Number(payout.amount) || 0;
-      });
-    });
-    return result || 0;
+    const result = await this.paymentRepo
+      .createQueryBuilder('payment')
+      .leftJoin('payment.payouts', 'payout')
+      .select('SUM(payout.amount)', 'total')
+      .where('payment.type = :type', { type })
+      .andWhere('payment.status = :status', { status: 'completed' })
+      .andWhere('payout.user_id = :user_id', { user_id })
+      .getRawOne();
+    return Number(result?.total) || 0;
   }
 
   async getTotalAmountByType(type: string): Promise<number> {
-    const all = await this.paymentRepo.find({
-      where: { type: type, status: 'completed' },
-    });
-    let result = 0;
-    all.forEach((item: Payment) => {
-      result += Number(item.amount) || 0;
-    });
-    return result || 0;
+    const result = await this.paymentRepo
+      .createQueryBuilder('payment')
+      .select('SUM(payment.amount)', 'total')
+      .where('payment.type = :type', { type })
+      .andWhere('payment.status = :status', { status: 'completed' })
+      .getRawOne();
+    return Number(result?.total) || 0;
   }
 
   async getTotalAmountByTypeAndDateRange(
@@ -155,6 +160,7 @@ export class PaymentRepository {
   ): Promise<number> {
     const query = this.paymentRepo
       .createQueryBuilder('payment')
+      .select('SUM(payment.amount)', 'total')
       .where('payment.type = :type', { type })
       .andWhere('payment.status = :status', { status: 'completed' });
 
@@ -165,12 +171,8 @@ export class PaymentRepository {
       query.andWhere('payment.created_at <= :to', { to });
     }
 
-    const all = await query.getMany();
-    let result = 0;
-    all.forEach((item: Payment) => {
-      result += Number(item.amount) || 0;
-    });
-    return result || 0;
+    const result = await query.getRawOne();
+    return Number(result?.total) || 0;
   }
 
   async getAllOrdersAdmin() {
