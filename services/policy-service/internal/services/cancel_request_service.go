@@ -519,6 +519,7 @@ func (c *CancelRequestService) CheckProfileCancelReady(ctx context.Context, prov
 	if err != nil {
 		return err
 	}
+	slog.Info("DEBUG: check profile cancel ready", "requests", requests)
 	if len(requests) > 0 {
 		return fmt.Errorf("there are existing cancel request to resolve: %v", len(requests))
 	}

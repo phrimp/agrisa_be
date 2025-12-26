@@ -1118,7 +1118,8 @@ func (s *InsurancePartnerService) ProcessRequestReviewByAdmin(request models.Pro
 	if err != nil {
 		return err
 	}
-	res, ok := checkRes["result"].(bool)
+	data := checkRes["data"].(map[string]any)
+	res, ok := data["result"].(bool)
 	if !ok {
 		slog.Error("Cannot approve deletion request: error checking profile cancellation ready", "requestID", request.RequestID, "error", checkRes)
 		return fmt.Errorf("invalid: Lỗi không thể kiểm tra trạng thái hợp đồng và đơn yêu cầu huỷ")
