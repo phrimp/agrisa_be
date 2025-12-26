@@ -109,10 +109,7 @@ export class PaymentRepository {
     });
   }
 
-  async getTotalAmountByUserAndType(
-    user_id: string,
-    type: string,
-  ): Promise<number> {
+  async getTotalAmountByUserAndType(user_id: string, type: string) {
     const all = await this.paymentRepo.find({
       where: { user_id: user_id, type: type, status: 'completed' },
     });
@@ -120,7 +117,7 @@ export class PaymentRepository {
     all.forEach((item: Payment) => {
       result += Number(item.amount) || 0;
     });
-    return result || 0;
+    return result;
   }
 
   async getTotalPayoutByUserAndType(

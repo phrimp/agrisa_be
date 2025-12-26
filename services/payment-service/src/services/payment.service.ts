@@ -19,7 +19,7 @@ export interface PaymentService {
     status?: string[],
   ): Promise<{ items: Payment[]; total: number }>;
   findExpired(): Promise<Payment[]>;
-  getTotalAmountByUserAndType(user_id: string, type: string): Promise<number>;
+  getTotalAmountByUserAndType(user_id: string, type: string);
   getTotalAmountByType(type: string): Promise<number>;
   getTotalAmountByTypeAndDateRange(
     type: string,
