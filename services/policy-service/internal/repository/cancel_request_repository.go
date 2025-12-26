@@ -270,15 +270,16 @@ func (r *CancelRequestRepository) GetAllRequestsByProviderID(ctx context.Context
 func (r *CancelRequestRepository) GetAllRequestsByProviderIDWithStatusAndType(ctx context.Context, providerID string) ([]models.CancelRequest, error) {
 	var requests []models.CancelRequest
 	query := `
-    SELECT 
-        cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status, 
-        requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount, 
+    SELECT
+        cr.id, registered_policy_id, cancel_request_type, reason, evidence, cr.status,
+        requested_by, requested_at, reviewed_by, reviewed_at, review_notes, compensate_amount,
         paid, paid_at, during_notice_period,
         cr.created_at, cr.updated_at
-    FROM cancel_request cr 
+    FROM cancel_request cr
     JOIN registered_policy rp ON cr.registered_policy_id = rp.id
-    WHERE rp.insurance_provider_id = $1 
-		AND cr.status = 'pending_review' or cr.status = 'litigation' and not cancel_request_type = 'transfer_contract';
+    WHERE rp.insurance_provider_id = $1
+		AND (cr.status = 'pending_review' OR cr.status = 'litigation')
+		AND cancel_request_type != 'transfer_contract'
     ORDER BY cr.requested_at DESC
 `
 
