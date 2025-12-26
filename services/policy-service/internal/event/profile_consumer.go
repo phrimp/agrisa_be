@@ -323,7 +323,10 @@ func (h *DefaultProfileEventHandler) handleProfileCancelDelete(ctx context.Conte
 	if err != nil {
 		return err
 	}
-	lastestUpdatedAt := basePolicies[0].UpdatedAt
+	lastestUpdatedAt := time.Now()
+	if len(basePolicies) != 0 {
+		lastestUpdatedAt = basePolicies[0].UpdatedAt
+	}
 
 	basePolicyIDs := []uuid.UUID{}
 	for _, basePolicy := range basePolicies {
